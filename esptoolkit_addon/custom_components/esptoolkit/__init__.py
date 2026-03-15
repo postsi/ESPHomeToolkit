@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import aiohttp
@@ -98,10 +99,15 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
                 else:
                     entry = ConfigEntry(
                         version=1,
+                        minor_version=1,
                         domain=DOMAIN,
                         title="ESPToolkit",
                         data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
                         source="import",
+                        options=None,
+                        subentries_data=None,
+                        discovery_keys=MappingProxyType({}),
+                        unique_id=None,
                     )
                     hass.config_entries.async_add(entry)
                     _LOGGER.info("Created config entry from add-on config file (base_url=%s)", base_url)
