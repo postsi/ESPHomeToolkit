@@ -26,7 +26,9 @@ Use the add-on Web UI (Open Web UI from the add-on page) → **Setup** tab to ge
 
 ## Rebuilding the Designer frontend
 
-If you change the frontend source:
+**Local deploy** (`./scripts/deploy-local.sh`) builds the frontend automatically before building the add-on image (runs `npm ci`/`npm install` and `npm run build` in `frontend/`, then syncs the integration including `web/dist` into the add-on). So you don’t need to build the frontend by hand for deploy.
+
+If you only change the frontend and want to test locally without a full deploy:
 
 ```bash
 cd frontend
@@ -34,7 +36,7 @@ npm install
 npm run build
 ```
 
-The build writes to `custom_components/esptoolkit/web/dist`. Sync that into the add-on folder if you build the add-on image locally:
+The build writes to `custom_components/esptoolkit/web/dist`. To run the add-on image locally with that build, sync into the add-on folder and rebuild:
 
 ```bash
 rsync -a custom_components/esptoolkit/ esptoolkit_addon/custom_components/esptoolkit/

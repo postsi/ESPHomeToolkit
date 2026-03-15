@@ -1,7 +1,7 @@
 ---
 description: ESPHomeToolkit deployment checklist and steps; local deploy runs clean-environment first by default
 alwaysApply: false
-globs: "esptoolkit_addon/config.yaml,esptoolkit_addon/app/__init__.py,custom_components/esptoolkit/manifest.json,.github/workflows/*,scripts/deploy-local.sh,scripts/clean_environment_for_deploy.md"
+globs: "esptoolkit_addon/config.yaml,esptoolkit_addon/app/__init__.py,custom_components/esptoolkit/manifest.json,.github/workflows/*,scripts/deploy-local.sh,scripts/deploy.sh,scripts/build-base.sh,scripts/clean_environment_for_deploy.md,frontend/package.json"
 ---
 
 # ESPHomeToolkit: Deployment
@@ -44,9 +44,9 @@ When the user asks for a **local deploy** (e.g. "do local deploy", "run local de
 1. **By default, run the clean environment script first** so deploy is tested in an effectively clean HA environment:
    - Follow `scripts/clean_environment_for_deploy.md`: use the **Home Assistant MCP server** to delete `custom_components/esptoolkit/` (or its files), `.esptoolkit_addon_config.json`, and remove the `esptoolkit:` block from `configuration.yaml`.
    - If the user explicitly asks to **skip** cleanup (e.g. "local deploy without clean"), omit this step.
-2. Then run: `./scripts/deploy-local.sh <version> [message]` (e.g. `./scripts/deploy-local.sh 1.0.2 "Release message"`).
+2. Then run: `./scripts/deploy-local.sh <version> [message]` (e.g. `./scripts/deploy-local.sh 1.0.2 "Release message"`). Use `--fast` if you have a pre-built base: `./scripts/deploy-local.sh --fast 1.0.3 "Message"` (build the base once with `./scripts/build-base.sh`).
 
-The deploy script builds the container the same way as the original add-on: `docker build -f esptoolkit_addon/docker/Dockerfile esptoolkit_addon`, then tags and pushes to ghcr.io (one image for the host arch: amd64 or aarch64). Prereqs: docker; for push use `docker login ghcr.io` or set GITHUB_TOKEN.
+The deploy script **builds the Designer frontend** (when `frontend/` exists: `npm ci`/`npm install` and `npm run build`, output to `custom_components/esptoolkit/web/dist`), **syncs the integration** (including `web/dist`) into `esptoolkit_addon/custom_components/esptoolkit/`, then builds the container (`docker build -f esptoolkit_addon/docker/Dockerfile esptoolkit_addon` or Dockerfile.fast when using `--fast`), tags and pushes to ghcr.io (one image for the host arch: amd64 or aarch64). Prereqs: docker, node/npm for frontend build; for push use `docker login ghcr.io` or set GITHUB_TOKEN.
 
 ## Quick deploy (CI script)
 

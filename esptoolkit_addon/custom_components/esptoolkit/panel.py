@@ -47,17 +47,16 @@ class PanelIndexView(HomeAssistantView):
         )
 
 
-async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Register sidebar panel + HTTP views."""
-    register_api_views(hass, entry)
-
+async def async_register_designer_panel(hass: HomeAssistant) -> None:
+    """Register Designer panel and routes only (no API). Call from async_setup so panel shows even without config entry."""
+    hass.data.setdefault(DOMAIN, {})
     dist_path = str(Path(__file__).parent / "web" / "dist")
-    await hass.http.async_register_static_paths([
-        StaticPathConfig(STATIC_URL_PATH, dist_path, False),
-    ])
-
-    hass.http.register_view(PanelIndexView)
-
+    if "_designer_routes_registered" not in hass.data[DOMAIN]:
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(STATIC_URL_PATH, dist_path, False),
+        ])
+        hass.http.register_view(PanelIndexView)
+        hass.data[DOMAIN]["_designer_routes_registered"] = True
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,
@@ -68,4 +67,10 @@ async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
         config={"url": f"/{PANEL_URL_PATH}"},
         require_admin=True,
     )
-    _LOGGER.debug("Panel registered at /%s (static at %s)", PANEL_URL_PATH, STATIC_URL_PATH)
+    _LOGGER.debug("Designer panel registered at /%s", PANEL_URL_PATH)
+
+
+async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register API views and ensure Designer panel is registered (panel may already be from async_setup)."""
+    register_api_views(hass, entry)
+    await async_register_designer_panel(hass)

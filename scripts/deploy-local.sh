@@ -52,6 +52,22 @@ print('Updated', p, 'to version', sys.argv[2])
 " "$MANIFEST" "$VERSION"
 fi
 
+# Build Designer frontend so the add-on image includes the latest panel (web/dist)
+FRONTEND_DIR="$REPO_ROOT/frontend"
+INTEGRATION_WEB_DIST="$REPO_ROOT/custom_components/esptoolkit/web/dist"
+if [ -d "$FRONTEND_DIR" ] && [ -f "$FRONTEND_DIR/package.json" ]; then
+  echo "=== Building Designer frontend (npm install + npm run build) ==="
+  (cd "$FRONTEND_DIR" && (npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund)) || exit 1
+  (cd "$FRONTEND_DIR" && npm run build) || exit 1
+  if [ ! -d "$INTEGRATION_WEB_DIST" ] || [ -z "$(ls -A "$INTEGRATION_WEB_DIST" 2>/dev/null)" ]; then
+    echo "=== ERROR: Frontend build did not produce web/dist ==="
+    exit 1
+  fi
+fi
+
+echo "=== Syncing integration (including web/dist) into add-on ==="
+rsync -a --delete "$REPO_ROOT/custom_components/esptoolkit/" "$ADDON/custom_components/esptoolkit/" --exclude='.DS_Store' 2>/dev/null || true
+
 if [ "$USE_FAST" = true ]; then
   BASE_TAG=$(grep 'ARG BUILD_BASE_VERSION=' "$DOCKERFILE_FULL" | head -1 | sed 's/.*=//' | tr -d ' ')
   if ! docker image inspect "esptoolkit-base:${BASE_TAG}" >/dev/null 2>&1; then
@@ -102,6 +118,10 @@ print('Smoke OK')
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "$ADDON"
+  # Tag the 'final' stage as local base so the next deploy can use --fast (cache will be reused)
+  BASE_TAG=$(grep 'ARG BUILD_BASE_VERSION=' "$DOCKERFILE_FULL" | head -1 | sed 's/.*=//' | tr -d ' ')
+  echo "=== Tagging base image for next fast deploy (esptoolkit-base:${BASE_TAG}) ==="
+  docker build -f "$DOCKERFILE_FULL" --target final -t "esptoolkit-base:${BASE_TAG}" -t "esptoolkit-base:latest" "$ADDON" || true
 fi
 
 echo "=== Pushing to ghcr.io ==="
