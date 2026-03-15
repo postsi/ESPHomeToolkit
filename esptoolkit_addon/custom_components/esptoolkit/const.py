@@ -29,8 +29,9 @@ STORAGE_VERSION = 1
 
 # --- Panel ---
 PANEL_URL_PATH = "esptoolkit"  # sidebar panel id (frontend_url_path)
-PANEL_PAGE_URL = f"/api/{DOMAIN}/panel"  # URL that serves the Designer HTML (under /api/ for routing)
-PANEL_TITLE = "ESPToolkit Designer"
+PANEL_PAGE_URL = f"/api/{DOMAIN}/panel"  # URL for tabbed wrapper (Overview + Designer tab)
+PANEL_DESIGNER_URL = f"/api/{DOMAIN}/designer"  # URL that serves the raw Designer SPA (use as iframe or direct)
+PANEL_TITLE = "ESPToolkit"
 
 # Static assets under /api/esptoolkit/static
 STATIC_URL_PATH = f"/api/{DOMAIN}/static"

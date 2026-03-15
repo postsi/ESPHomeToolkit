@@ -214,6 +214,7 @@ def _restart_home_assistant() -> bool:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
         log.warning("SUPERVISOR_TOKEN not set; cannot restart Home Assistant")
+        log.warning(">>> Restart Home Assistant manually (Settings → System → Restart) so the Designer panel loads.")
         return False
     try:
         with httpx.Client(timeout=30.0) as client:
@@ -225,7 +226,8 @@ def _restart_home_assistant() -> bool:
         log.info("Home Assistant core restart triggered successfully")
         return True
     except Exception as e:
-        log.exception("Failed to trigger Home Assistant restart: %s", e)
+        log.warning("Failed to trigger Home Assistant restart: %s", e)
+        log.warning(">>> Restart Home Assistant manually (Settings → System → Restart) so the new integration and Designer panel load.")
         return False
 
 
@@ -273,21 +275,27 @@ def install_or_update() -> bool:
     if written:
         config_yaml_updated = _ensure_integration_loaded_via_config()
     if updated or config_yaml_updated:
-        _restart_home_assistant()
+        restarted = _restart_home_assistant()
         changes = []
         if updated:
             changes.append("copied integration")
         if config_yaml_updated:
             changes.append("added esptoolkit to configuration.yaml")
-        log.info("=== Integration install/update complete: %s, restarted HA ===", ", ".join(changes))
+        if restarted:
+            log.info("=== Integration install/update complete: %s, restarted HA ===", ", ".join(changes))
+        else:
+            log.info("=== Integration install/update complete: %s. Restart HA manually (Settings → System → Restart) to load the Designer. ===", ", ".join(changes))
         return True
     if written:
         mismatch = _integration_entry_mismatch(written[0], written[1])
         if mismatch:
             _patch_integration_config_entry(written[0], written[1])
             log.info("Integration config entry out of sync; restarting HA")
-            _restart_home_assistant()
-            log.info("=== Integration install/update complete: restarted HA for config sync ===")
+            restarted = _restart_home_assistant()
+            if restarted:
+                log.info("=== Integration install/update complete: restarted HA for config sync ===")
+            else:
+                log.info("=== Integration install/update complete: config synced. Restart HA manually to apply. ===")
         else:
             log.info("=== Integration install/update complete: no changes needed ===")
     else:
