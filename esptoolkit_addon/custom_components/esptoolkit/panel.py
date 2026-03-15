@@ -15,6 +15,20 @@ from .api.views import register_api_views
 _LOGGER = logging.getLogger(__name__)
 
 
+class PingView(HomeAssistantView):
+    """Diagnostic: GET /esptoolkit/ping - if this returns 200, the integration loaded and registers views."""
+    url = f"/{PANEL_URL_PATH}/ping"
+    name = f"{DOMAIN}:ping"
+    requires_auth = False
+
+    async def get(self, request):
+        return web.json_response({
+            "ok": True,
+            "integration": DOMAIN,
+            "message": "ESPToolkit integration is loaded. If /esptoolkit still 404s, ensure config entry exists (add-on writes .esptoolkit_addon_config.json) and restart HA.",
+        })
+
+
 class PanelCheckView(HomeAssistantView):
     """Diagnostic: GET /esptoolkit/panel-check returns whether Designer panel and web/dist are present."""
     url = f"/{PANEL_URL_PATH}/panel-check"
@@ -146,7 +160,7 @@ class PanelIndexView(HomeAssistantView):
 
 
 async def async_register_designer_panel(hass: HomeAssistant) -> None:
-    """Register Designer panel and routes only (no API). Call from async_setup so panel shows even without config entry."""
+    """Register Designer panel and HTTP views. Called from async_setup_entry (like working esphome_touch_designer)."""
     hass.data.setdefault(DOMAIN, {})
     dist_path = str(Path(__file__).parent / "web" / "dist")
     if "_designer_routes_registered" not in hass.data[DOMAIN]:
@@ -157,6 +171,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(PanelDesignerView)
         hass.http.register_view(PanelCheckView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
+        _LOGGER.info("ESPToolkit panel routes registered: %s, %s, %s/panel-check", PANEL_PAGE_URL, PANEL_DESIGNER_URL, PANEL_PAGE_URL)
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,
