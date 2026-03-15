@@ -171,7 +171,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(PanelDesignerView)
         hass.http.register_view(PanelCheckView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
-        _LOGGER.info("ESPToolkit panel routes registered: %s, %s, %s/panel-check", PANEL_PAGE_URL, PANEL_DESIGNER_URL, PANEL_PAGE_URL)
+        _LOGGER.warning("ESPToolkit panel routes registered: %s and %s — Designer should load now.", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,

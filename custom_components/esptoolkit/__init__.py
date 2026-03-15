@@ -117,7 +117,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.http.register_view(PingView)
 
     # Panel + Designer routes are registered only in async_setup_entry (like working esphome_touch_designer)
-    _LOGGER.info("ESPToolkit async_setup done. Test /esptoolkit/ping; panel registers when config entry exists.")
+    _LOGGER.warning("ESPToolkit loaded. Test https://YOUR_HA/esptoolkit/ping — panel at /esptoolkit when config entry exists.")
     return True
 
 
