@@ -244,10 +244,10 @@ def _ensure_integration_loaded_via_config() -> bool:
     if re.search(r"^\s*esptoolkit\s*:", content, re.MULTILINE):
         log.info("%s already in configuration.yaml; integration will load at startup", INTEGRATION_DOMAIN)
         return False
-    addition = "\n# ESPToolkit add-on integration (auto-added so services and Designer load)\nesptoolkit:\n"
+    addition = "\n# ESPToolkit add-on integration (required for panel and logs)\nesptoolkit:\n"
     try:
         CONFIGURATION_YAML.write_text(content.rstrip() + addition, encoding="utf-8")
-        log.info("Added %s to configuration.yaml so integration loads at startup", INTEGRATION_DOMAIN)
+        log.info("Added %s to configuration.yaml — restart Home Assistant (Settings → System → Restart) so the integration loads", INTEGRATION_DOMAIN)
         return True
     except Exception as e:
         log.warning("Could not write configuration.yaml: %s", e)
@@ -271,9 +271,8 @@ def install_or_update() -> bool:
     if updated:
         log.info("Integration files need update (missing or newer); copying...")
         _copy_tree()
-    config_yaml_updated = False
-    if written:
-        config_yaml_updated = _ensure_integration_loaded_via_config()
+    # Always ensure esptoolkit is in configuration.yaml so HA loads the integration (required for panel/logs)
+    config_yaml_updated = _ensure_integration_loaded_via_config()
     if updated or config_yaml_updated:
         restarted = _restart_home_assistant()
         changes = []
