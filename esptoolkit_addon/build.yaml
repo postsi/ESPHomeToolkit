@@ -1,0 +1,10 @@
+# https://developers.home-assistant.io/docs/add-ons/configuration#add-on-dockerfile
+# Base from ESPHome's add-on image (Alpine, Python, uv, PlatformIO, build tools); see NOTICE.
+build_from:
+  aarch64: "ghcr.io/esphome/docker-base:debian-ha-addon-2025.04.0"
+  amd64: "ghcr.io/esphome/docker-base:debian-ha-addon-2025.04.0"
+labels:
+  org.opencontainers.image.title: "Home Assistant Add-on: ESPToolkit"
+  org.opencontainers.image.description: "Runs ESPHome and exposes compile/upload/validate via REST API and MCP. Installs ESPToolkit integration (Designer + API services)."
+  org.opencontainers.image.source: "https://github.com/postsi/ESPHomeToolkit"
+  org.opencontainers.image.licenses: "MIT"

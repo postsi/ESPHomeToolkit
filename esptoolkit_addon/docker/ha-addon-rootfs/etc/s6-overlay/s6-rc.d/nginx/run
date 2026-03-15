@@ -1,0 +1,12 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Community Hass.io Add-ons: ESPHome
+# Runs the NGINX proxy
+# ==============================================================================
+
+bashio::log.info "Waiting for ESPHome API Add-on to come up..."
+bashio::net.wait_for "8099" "127.0.0.1" 300
+
+bashio::log.info "Starting NGINX..."
+exec nginx

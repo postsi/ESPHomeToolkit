@@ -1,0 +1,36 @@
+# https://developers.home-assistant.io/docs/add-ons/configuration#add-on-config
+name: ESPToolkit
+version: "1.0.0"
+slug: esptoolkit_addon
+description: Runs ESPHome and exposes compile/upload/validate via REST API and MCP. Installs the ESPToolkit integration (Designer + API services) into Home Assistant.
+url: "https://github.com/postsi/ESPHomeToolkit"
+arch:
+  - aarch64
+  - amd64
+init: false
+ports:
+  8098/tcp: 8098
+map:
+  - config:rw
+  - ssl:ro
+  - addons:rw
+  - backup:rw
+  - share:rw
+  - data:rw
+options:
+  api_token: ""
+  port: 8098
+schema:
+  api_token: str
+  port: int
+ingress: true
+ingress_port: 8098
+startup: application
+boot: auto
+host_network: false
+hassio_api: true
+hassio_role: default
+homeassistant_api: true
+auth_api: false
+full_access: false
+image: "ghcr.io/postsi/esptoolkit-addon-{arch}"

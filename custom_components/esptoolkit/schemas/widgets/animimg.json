@@ -1,0 +1,188 @@
+{
+  "type": "animimg",
+  "title": "animimg",
+  "esphome": {
+    "root_key": "animimg",
+    "props": {
+      "align": "align",
+      "hidden": "hidden",
+      "clickable": "clickable",
+      "scrollable": "scrollable",
+      "scrollbar_mode": "scrollbar_mode",
+      "scroll_dir": "scroll_dir",
+      "opacity": "opacity",
+      "group": "group",
+      "srcs": "srcs",
+      "duration": "duration"
+    },
+    "style": {
+      "bg_color": "bg_color",
+      "text_color": "text_color",
+      "border_width": "border_width",
+      "border_color": "border_color",
+      "radius": "radius"
+    },
+    "events": {
+      "on_click": "on_click"
+    }
+  },
+  "props": {
+    "align": {
+      "type": "enum",
+      "title": "Align",
+      "values": [
+        "TOP_LEFT",
+        "TOP_MID",
+        "TOP_RIGHT",
+        "BOTTOM_LEFT",
+        "BOTTOM_MID",
+        "BOTTOM_RIGHT",
+        "LEFT_MID",
+        "RIGHT_MID",
+        "CENTER"
+      ],
+      "default": "TOP_LEFT"
+    },
+    "hidden": {
+      "type": "boolean",
+      "title": "Hidden",
+      "default": false
+    },
+    "clickable": {
+      "type": "boolean",
+      "title": "Clickable",
+      "default": true
+    },
+    "scrollable": {
+      "type": "boolean",
+      "title": "Scrollable",
+      "default": true
+    },
+    "scrollbar_mode": {
+      "type": "enum",
+      "title": "Scrollbar mode",
+      "values": [
+        "OFF",
+        "ON",
+        "ACTIVE",
+        "AUTO"
+      ],
+      "default": "AUTO"
+    },
+    "scroll_dir": {
+      "type": "enum",
+      "title": "Scroll direction",
+      "values": [
+        "LEFT",
+        "RIGHT",
+        "BOTTOM",
+        "TOP",
+        "HOR",
+        "VER",
+        "ALL"
+      ],
+      "default": "ALL"
+    },
+    "opacity": {
+      "type": "number",
+      "title": "Opacity %",
+      "min": 0,
+      "max": 100,
+      "default": 100
+    },
+    "group": {
+      "type": "string",
+      "title": "Input group",
+      "default": ""
+    },
+    "srcs": {
+      "type": "string_list",
+      "title": "Frames (paths)",
+      "default": []
+    },
+    "duration": {
+      "type": "number",
+      "title": "Duration ms",
+      "default": 1000
+    }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "color.bg"
+    },
+    "text_color": {
+      "type": "color",
+      "title": "Text color",
+      "default": "color.text"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 0
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "color.border"
+    },
+    "radius": {
+      "type": "number",
+      "title": "Corner radius",
+      "min": 0,
+      "max": 60,
+      "default": 0
+    }
+  },
+  "events": {
+    "on_click": {
+      "type": "yaml_block",
+      "title": "on_click",
+      "default": ""
+    }
+  },
+  "groups": {
+    "Animimg": {
+      "section": "props",
+      "keys": [
+        "duration"
+      ]
+    },
+    "Common": {
+      "section": "props",
+      "keys": [
+        "align",
+        "hidden",
+        "clickable",
+        "scrollable",
+        "scrollbar_mode",
+        "scroll_dir",
+        "opacity",
+        "group"
+      ]
+    },
+    "Props": {
+      "section": "props",
+      "keys": [
+        "srcs"
+      ]
+    },
+    "Style": {
+      "section": "style",
+      "keys": [
+        "border_width",
+        "bg_color",
+        "radius",
+        "border_color",
+        "text_color"
+      ]
+    },
+    "Events": {
+      "section": "events",
+      "keys": ["on_click"]
+    }
+  }
+}

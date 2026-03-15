@@ -1,0 +1,22 @@
+{
+  "domain": "esptoolkit",
+  "name": "ESPToolkit",
+  "documentation": "https://github.com/postsi/ESPHomeToolkit",
+  "issue_tracker": "https://github.com/postsi/ESPHomeToolkit/issues",
+  "configuration_url": "/esptoolkit",
+  "version": "1.0.0",
+  "after_dependencies": [
+    "http",
+    "frontend"
+  ],
+  "codeowners": [
+    "@postsi"
+  ],
+  "config_flow": false,
+  "iot_class": "local_push",
+  "integration_type": "hub",
+  "requirements": [],
+  "loggers": [
+    "custom_components.esptoolkit"
+  ]
+}

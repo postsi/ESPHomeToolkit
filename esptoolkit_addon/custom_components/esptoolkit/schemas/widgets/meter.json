@@ -1,0 +1,178 @@
+{
+  "type": "meter",
+  "title": "meter",
+  "esphome": {
+    "root_key": "meter",
+    "props": {
+      "align": "align",
+      "hidden": "hidden",
+      "clickable": "clickable",
+      "scrollable": "scrollable",
+      "scrollbar_mode": "scrollbar_mode",
+      "scroll_dir": "scroll_dir",
+      "opacity": "opacity",
+      "group": "group",
+      "scales": "scales"
+    },
+    "style": {
+      "bg_color": "bg_color",
+      "text_color": "text_color",
+      "border_width": "border_width",
+      "border_color": "border_color",
+      "radius": "radius"
+    },
+    "events": {}
+  },
+  "props": {
+    "align": {
+      "type": "enum",
+      "title": "Align",
+      "values": [
+        "TOP_LEFT",
+        "TOP_MID",
+        "TOP_RIGHT",
+        "BOTTOM_LEFT",
+        "BOTTOM_MID",
+        "BOTTOM_RIGHT",
+        "LEFT_MID",
+        "RIGHT_MID",
+        "CENTER"
+      ],
+      "default": "TOP_LEFT"
+    },
+    "hidden": {
+      "type": "boolean",
+      "title": "Hidden",
+      "default": false
+    },
+    "clickable": {
+      "type": "boolean",
+      "title": "Clickable",
+      "default": true
+    },
+    "scrollable": {
+      "type": "boolean",
+      "title": "Scrollable",
+      "default": true
+    },
+    "scrollbar_mode": {
+      "type": "enum",
+      "title": "Scrollbar mode",
+      "values": [
+        "OFF",
+        "ON",
+        "ACTIVE",
+        "AUTO"
+      ],
+      "default": "AUTO"
+    },
+    "scroll_dir": {
+      "type": "enum",
+      "title": "Scroll direction",
+      "values": [
+        "LEFT",
+        "RIGHT",
+        "BOTTOM",
+        "TOP",
+        "HOR",
+        "VER",
+        "ALL"
+      ],
+      "default": "ALL"
+    },
+    "opacity": {
+      "type": "number",
+      "title": "Opacity %",
+      "min": 0,
+      "max": 100,
+      "default": 100
+    },
+    "group": {
+      "type": "string",
+      "title": "Input group",
+      "default": ""
+    },
+    "scales": {
+      "type": "yaml_block",
+      "title": "Scales (YAML)",
+      "default": "range_from: 0\nrange_to: 100\nangle_range: 240\nrotation: 150\nticks:\n  count: 11\n  length: 3\nindicators:\n  - line:\n      id: needle\n      width: 2\n      color: 0xFF0000\n      r_mod: -4",
+      "compiler_emit_default": true,
+      "description": "Meter scale(s): range_from, range_to, angle_range, rotation, ticks, indicators"
+    }
+  },
+  "main": {
+    "bg_color": { "type": "color", "title": "Background", "default": "" },
+    "text_color": { "type": "color", "title": "Text color", "default": "" }
+  },
+  "indicator": {
+    "bg_color": { "type": "color", "title": "Indicator color", "default": "" }
+  },
+  "ticks": {
+    "bg_color": { "type": "color", "title": "Ticks color", "default": "" }
+  },
+  "items": {
+    "bg_color": { "type": "color", "title": "Items color", "default": "" }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "color.bg"
+    },
+    "text_color": {
+      "type": "color",
+      "title": "Text color",
+      "default": "color.text"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 0
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "color.border"
+    },
+    "radius": {
+      "type": "number",
+      "title": "Corner radius",
+      "min": 0,
+      "max": 60,
+      "default": 0
+    }
+  },
+  "events": {},
+  "groups": {
+    "Common": {
+      "section": "props",
+      "keys": [
+        "align",
+        "hidden",
+        "clickable",
+        "scrollable",
+        "scrollbar_mode",
+        "scroll_dir",
+        "opacity",
+        "group"
+      ]
+    },
+    "Meter": {
+      "section": "props",
+      "keys": ["scales"],
+      "defaultCollapsed": true
+    },
+    "Style": {
+      "section": "style",
+      "keys": [
+        "border_width",
+        "bg_color",
+        "radius",
+        "border_color",
+        "text_color"
+      ]
+    }
+  }
+}

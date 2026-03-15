@@ -1,0 +1,72 @@
+:root { --bg:#0b0f14; --card:#111827; --border:#1f2937; --text:#e5e7eb; --muted:#9ca3af; --ok:#10b981; --err:#ef4444; }
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+.app{padding:16px;max-width:1400px;margin:0 auto}
+.header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+h1{margin:0;font-size:24px} h2{margin:0 0 12px 0;font-size:18px}
+.muted{color:var(--muted);font-size:13px}
+.pill{border:1px solid var(--border);border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.03);display:flex;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:1fr 1fr 2fr;gap:12px}
+@media(max-width:1200px){.grid{grid-template-columns:1fr}}
+/* Three-column designer layout: palette | canvas | inspector */
+.designerLayout{display:grid;grid-template-columns:200px 1fr 260px;gap:0;min-height:0;height:calc(100vh - 120px);max-height:calc(100vh - 120px)}
+@media(max-width:1000px){.designerLayout{grid-template-columns:1fr}}
+.designerPanel{border:1px solid var(--border);background:var(--card);overflow-y:auto;min-height:0;max-height:100%}
+.designerPanelLeft{border-right:none;border-radius:8px 0 0 8px}
+.designerPanelRight{border-left:none;border-radius:0 8px 8px 0}
+.designerPanelCenter{flex:1;min-width:0;display:flex;flex-direction:column;padding:12px}
+.panelTabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.panelTab{padding:8px 12px;font-size:13px;cursor:pointer;border-radius:8px 8px 0 0;border:1px solid transparent;background:transparent;color:var(--muted)}
+.panelTab:hover{color:var(--text)}
+.panelTab.active{background:var(--card);color:var(--text);border-color:var(--border);border-bottom-color:var(--card);margin-bottom:-1px}
+.panelContent{padding:12px;flex:1;overflow-y:auto}
+/* Inspector legibility: ensure inputs and labels have clear contrast */
+.panelContent .fieldLabel,.panelContent .inspectorWidgetIdLabel{color:#b8bfc9;font-size:13px}
+.panelContent .sectionTitle{color:#e5e7eb}
+.panelContent input,.panelContent select,.panelContent textarea{background:#1e293b;color:#e5e7eb;border-color:#334155}
+.panelContent input::placeholder,.panelContent textarea::placeholder{color:#94a3b8}
+.panelContent .muted{color:#94a3b8}
+.panelContent code{color:#c7d2fe}
+.canvasAxis{display:flex;flex-direction:column;align-items:center;gap:0;padding:8px}
+.canvasAxisY{display:flex;flex-direction:column;align-items:flex-end;font-size:11px;color:var(--muted);padding-right:4px}
+.canvasAxisX{display:flex;gap:4px;font-size:11px;color:var(--muted);padding-top:4px}
+.card{border:1px solid var(--border);background:var(--card);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.label{display:block;margin-top:10px;margin-bottom:6px;font-size:13px;color:var(--muted)}
+input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text)}
+input[type=checkbox],input[type=radio]{width:auto;min-width:1em;flex-shrink:0}
+textarea{resize:vertical}
+button{margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+button:hover{background:rgba(255,255,255,.10)} button:disabled{opacity:.5;cursor:not-allowed}
+button.secondary{margin-top:0} button.danger{margin-top:0;border-color:rgba(239,68,68,.5)}
+.toast{border:1px solid var(--border);border-left-width:6px;border-radius:12px;padding:10px 12px;margin:12px 0;cursor:pointer}
+.toast.ok{border-left-color:var(--ok)} .toast.error{border-left-color:var(--err)}
+.list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+.list.compact{gap:6px;margin-top:8px}
+.row{display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px;border:1px solid transparent}
+.row.selected{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+.grow{flex:1} .title{font-weight:600} .clickable{cursor:pointer}
+.bar{display:flex;gap:8px;align-items:center} .bar select{flex:1} .bar button{padding:10px 10px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:1200px){.split{grid-template-columns:1fr}}
+.section{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.sectionTitle{font-weight:700;margin-bottom:8px}
+.field{margin-bottom:10px}
+.fieldLabel{font-size:13px;color:var(--muted);margin-bottom:6px}
+
+
+.palette{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.paletteItem{background:#111827;border:1px solid #374151;border-radius:10px;padding:10px;cursor:grab;user-select:none;color:#e5e7eb;font-size:13px}
+.paletteItem:active{cursor:grabbing}
+
+/* v0.22: Modal overlay used by the control-template post-drop wizard */
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:9999}
+.modal{width:min(680px,calc(100vw - 32px));background:#0b0f14;border:1px solid #1f2937;border-radius:12px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+.modalHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+button.ghost{margin-top:0;background:transparent}
+
+.paletteGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;}
+.paletteItem{padding:8px;border:1px solid #444;border-radius:6px;cursor:grab;user-select:none;}
+
+/* Entity combobox in template wizard */
+.dropdownOption:hover{background:rgba(255,255,255,.08)}

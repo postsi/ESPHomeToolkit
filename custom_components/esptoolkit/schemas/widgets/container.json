@@ -1,0 +1,207 @@
+{
+  "type": "container",
+  "title": "container",
+  "esphome": {
+    "root_key": "container",
+    "props": {
+      "align": "align",
+      "hidden": "hidden",
+      "clickable": "clickable",
+      "scrollable": "scrollable",
+      "scrollbar_mode": "scrollbar_mode",
+      "scroll_dir": "scroll_dir",
+      "opacity": "opacity",
+      "group": "group"
+    },
+    "style": {
+      "bg_color": "bg_color",
+      "text_color": "text_color",
+      "border_width": "border_width",
+      "border_color": "border_color",
+      "radius": "radius",
+      "pad_top": "pad_top",
+      "pad_bottom": "pad_bottom",
+      "pad_left": "pad_left",
+      "pad_right": "pad_right",
+      "shadow_width": "shadow_width",
+      "shadow_color": "shadow_color"
+    },
+    "events": {}
+  },
+  "props": {
+    "align": {
+      "type": "enum",
+      "title": "Align",
+      "values": [
+        "TOP_LEFT",
+        "TOP_MID",
+        "TOP_RIGHT",
+        "BOTTOM_LEFT",
+        "BOTTOM_MID",
+        "BOTTOM_RIGHT",
+        "LEFT_MID",
+        "RIGHT_MID",
+        "CENTER"
+      ],
+      "default": "TOP_LEFT"
+    },
+    "hidden": {
+      "type": "boolean",
+      "title": "Hidden",
+      "default": false
+    },
+    "clickable": {
+      "type": "boolean",
+      "title": "Clickable",
+      "default": true
+    },
+    "scrollable": {
+      "type": "boolean",
+      "title": "Scrollable",
+      "default": true
+    },
+    "scrollbar_mode": {
+      "type": "enum",
+      "title": "Scrollbar mode",
+      "values": [
+        "OFF",
+        "ON",
+        "ACTIVE",
+        "AUTO"
+      ],
+      "default": "AUTO"
+    },
+    "scroll_dir": {
+      "type": "enum",
+      "title": "Scroll direction",
+      "values": [
+        "LEFT",
+        "RIGHT",
+        "BOTTOM",
+        "TOP",
+        "HOR",
+        "VER",
+        "ALL"
+      ],
+      "default": "ALL"
+    },
+    "opacity": {
+      "type": "number",
+      "title": "Opacity %",
+      "min": 0,
+      "max": 100,
+      "default": 100
+    },
+    "group": {
+      "type": "string",
+      "title": "Input group",
+      "default": ""
+    },
+    "layout": {
+      "type": "enum",
+      "title": "Layout",
+      "values": [
+        "NONE",
+        "FLEX",
+        "GRID"
+      ],
+      "default": "NONE"
+    },
+    "clip_children": {
+      "type": "boolean",
+      "title": "Clip children (designer preview)",
+      "default": false
+    }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "color.bg"
+    },
+    "text_color": {
+      "type": "color",
+      "title": "Text color",
+      "default": "color.text"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 0
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "color.border"
+    },
+    "radius": {
+      "type": "number",
+      "default": 0
+    },
+    "pad_top": {
+      "type": "number",
+      "default": 0
+    },
+    "pad_bottom": {
+      "type": "number",
+      "default": 0
+    },
+    "pad_left": {
+      "type": "number",
+      "default": 0
+    },
+    "pad_right": {
+      "type": "number",
+      "default": 0
+    },
+    "shadow_width": {
+      "type": "number",
+      "default": 0
+    },
+    "shadow_color": {
+      "type": "color",
+      "default": "#000000"
+    }
+  },
+  "events": {},
+  "groups": {
+    "Common": {
+      "section": "props",
+      "keys": [
+        "align",
+        "hidden",
+        "clickable",
+        "scrollable",
+        "scrollbar_mode",
+        "scroll_dir",
+        "opacity",
+        "group"
+      ]
+    },
+    "Props": {
+      "section": "props",
+      "keys": [
+        "clip_children",
+        "layout"
+      ]
+    },
+    "Style": {
+      "section": "style",
+      "keys": [
+        "bg_color",
+        "shadow_width",
+        "radius",
+        "pad_bottom",
+        "shadow_color",
+        "border_color",
+        "pad_left",
+        "text_color",
+        "border_width",
+        "pad_right",
+        "pad_top"
+      ]
+    }
+  }
+}

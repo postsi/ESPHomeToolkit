@@ -1,0 +1,8 @@
+# Minimal ESP32-IDF config used only at Docker build time to pull tool-cmake into the image.
+esphome:
+  name: minimal
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+logger: {}

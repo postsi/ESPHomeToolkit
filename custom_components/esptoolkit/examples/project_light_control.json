@@ -1,0 +1,26 @@
+{
+  "hardware": {"recipe_id": "sunton_2432s028r_320x240"},
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {"id": "lbl_title", "type": "label", "x": 10, "y": 10, "w": 300, "h": 30, "props": {"text": "Light Demo"}},
+        {"id": "btn1", "type": "button", "x": 10, "y": 50, "w": 220, "h": 60, "props": {"text": "Kitchen", "checkable": true},
+          "events": {"on_click": "then:\n  - homeassistant.action:\n      action: light.toggle\n      data:\n        entity_id: light.kitchen"}
+        },
+        {"id": "sld1", "type": "slider", "x": 10, "y": 120, "w": 300, "h": 40, "props": {"min": 0, "max": 255},
+          "events": {"on_value": "then:\n  - homeassistant.action:\n      action: light.turn_on\n      data:\n        entity_id: light.kitchen\n        brightness: !lambda return (int)x;"}
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {"entity_id": "light.kitchen", "kind": "binary"},
+    {"entity_id": "light.kitchen", "kind": "attribute_number", "attribute": "brightness"}
+  ],
+  "links": [
+    {"source": {"entity_id": "light.kitchen", "kind": "binary"}, "target": {"widget_id": "btn1", "action": "widget_checked"}},
+    {"source": {"entity_id": "light.kitchen", "kind": "attribute_number", "attribute": "brightness"}, "target": {"widget_id": "sld1", "action": "slider_value", "scale": 1.0}}
+  ]
+}

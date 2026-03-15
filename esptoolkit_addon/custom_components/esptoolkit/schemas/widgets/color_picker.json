@@ -1,0 +1,73 @@
+{
+  "type": "color_picker",
+  "title": "Colour picker",
+  "description": "Coloured button that opens a picker (gradient + sliders). Tap to select colour; picker closes on select.",
+  "esphome": {
+    "root_key": "button",
+    "props": {},
+    "style": {
+      "bg_color": "bg_color"
+    },
+    "events": {
+      "on_click": "on_click"
+    }
+  },
+  "props": {
+    "value": {
+      "type": "color",
+      "title": "Colour",
+      "default": "0x4080FF"
+    }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "0x4080FF"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 2
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "0x606060"
+    },
+    "radius": {
+      "type": "number",
+      "title": "Radius",
+      "min": 0,
+      "max": 60,
+      "default": 8
+    }
+  },
+  "events": {
+    "on_click": {
+      "type": "yaml_block",
+      "title": "on_click",
+      "default": ""
+    }
+  },
+  "groups": {
+    "Colour picker": {
+      "section": "props",
+      "keys": ["value"]
+    },
+    "Common": {
+      "section": "props",
+      "keys": ["align", "hidden", "clickable", "scrollable", "scrollbar_mode", "scroll_dir", "opacity", "group"]
+    },
+    "Style": {
+      "section": "style",
+      "keys": ["bg_color", "border_width", "border_color", "radius"]
+    },
+    "Events": {
+      "section": "events",
+      "keys": ["on_click"]
+    }
+  }
+}

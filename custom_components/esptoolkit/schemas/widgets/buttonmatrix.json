@@ -1,0 +1,224 @@
+{
+  "type": "buttonmatrix",
+  "title": "buttonmatrix",
+  "esphome": {
+    "root_key": "buttonmatrix",
+    "props": {
+      "align": "align",
+      "hidden": "hidden",
+      "clickable": "clickable",
+      "scrollable": "scrollable",
+      "scrollbar_mode": "scrollbar_mode",
+      "scroll_dir": "scroll_dir",
+      "opacity": "opacity",
+      "group": "group",
+      "map": "map",
+      "control": "control",
+      "width": "width",
+      "one_checked": "one_checked",
+      "pad_row": "pad_row",
+      "pad_column": "pad_column"
+    },
+    "style": {
+      "bg_color": "bg_color",
+      "text_color": "text_color",
+      "border_width": "border_width",
+      "border_color": "border_color",
+      "radius": "radius"
+    },
+    "events": {
+      "on_button": "on_button"
+    }
+  },
+  "props": {
+    "align": {
+      "type": "enum",
+      "title": "Align",
+      "values": [
+        "TOP_LEFT",
+        "TOP_MID",
+        "TOP_RIGHT",
+        "BOTTOM_LEFT",
+        "BOTTOM_MID",
+        "BOTTOM_RIGHT",
+        "LEFT_MID",
+        "RIGHT_MID",
+        "CENTER"
+      ],
+      "default": "TOP_LEFT"
+    },
+    "hidden": {
+      "type": "boolean",
+      "title": "Hidden",
+      "default": false
+    },
+    "clickable": {
+      "type": "boolean",
+      "title": "Clickable",
+      "default": true
+    },
+    "scrollable": {
+      "type": "boolean",
+      "title": "Scrollable",
+      "default": true
+    },
+    "scrollbar_mode": {
+      "type": "enum",
+      "title": "Scrollbar mode",
+      "values": [
+        "OFF",
+        "ON",
+        "ACTIVE",
+        "AUTO"
+      ],
+      "default": "AUTO"
+    },
+    "scroll_dir": {
+      "type": "enum",
+      "title": "Scroll direction",
+      "values": [
+        "LEFT",
+        "RIGHT",
+        "BOTTOM",
+        "TOP",
+        "HOR",
+        "VER",
+        "ALL"
+      ],
+      "default": "ALL"
+    },
+    "opacity": {
+      "type": "number",
+      "title": "Opacity %",
+      "min": 0,
+      "max": 100,
+      "default": 100
+    },
+    "group": {
+      "type": "string",
+      "title": "Input group",
+      "default": ""
+    },
+    "map": {
+      "type": "string_list",
+      "title": "Buttons",
+      "default": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    "control": {
+      "type": "string",
+      "title": "Control (YAML)",
+      "default": "",
+      "description": "Per-button flags: checkable, popover, disabled, recolor (row per line)"
+    },
+    "width": {
+      "type": "string",
+      "title": "Column widths",
+      "default": "",
+      "description": "Space-separated weights, e.g. 1 1 1"
+    },
+    "one_checked": {
+      "type": "boolean",
+      "title": "One checked (radio)",
+      "default": false
+    },
+    "pad_row": {
+      "type": "number",
+      "title": "Pad row (px)",
+      "min": 0,
+      "max": 50,
+      "default": 0
+    },
+    "pad_column": {
+      "type": "number",
+      "title": "Pad column (px)",
+      "min": 0,
+      "max": 50,
+      "default": 0
+    }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "color.bg"
+    },
+    "text_color": {
+      "type": "color",
+      "title": "Text color",
+      "default": "color.text"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 0
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "color.border"
+    },
+    "radius": {
+      "type": "number",
+      "title": "Corner radius",
+      "min": 0,
+      "max": 60,
+      "default": 0
+    }
+  },
+  "events": {
+    "on_button": {
+      "type": "yaml_block",
+      "title": "on_button",
+      "default": ""
+    }
+  },
+  "groups": {
+    "Common": {
+      "section": "props",
+      "keys": [
+        "align",
+        "hidden",
+        "clickable",
+        "scrollable",
+        "scrollbar_mode",
+        "scroll_dir",
+        "opacity",
+        "group"
+      ]
+    },
+    "Props": {
+      "section": "props",
+      "keys": [
+        "map",
+        "control",
+        "width",
+        "one_checked",
+        "pad_row",
+        "pad_column"
+      ]
+    },
+    "Style": {
+      "section": "style",
+      "keys": [
+        "border_width",
+        "bg_color",
+        "radius",
+        "border_color",
+        "text_color"
+      ]
+    },
+    "Events": {
+      "section": "events",
+      "keys": [
+        "on_button"
+      ]
+    }
+  }
+}

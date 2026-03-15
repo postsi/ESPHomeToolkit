@@ -1,0 +1,38 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# ESPHome API Add-on: main service (same env as official ESPHome add-on, then our app)
+# ==============================================================================
+readonly pio_cache_base=/data/cache/platformio
+
+export ESPHOME_IS_HA_ADDON=true
+export PLATFORMIO_GLOBALLIB_DIR=/piolibs
+export PLATFORMIO_PLATFORMS_DIR="${pio_cache_base}/platforms"
+export PLATFORMIO_PACKAGES_DIR="${pio_cache_base}/packages"
+export PLATFORMIO_CACHE_DIR="${pio_cache_base}/cache"
+
+mkdir -p "${pio_cache_base}"
+mkdir -p /config/esphome
+
+# Seed PlatformIO cache from image when tool-cmake is missing (e.g. first run or empty /data).
+# Build-time install put espressif32 platform + tool-cmake in /opt/platformio-preinstalled.
+if [ ! -f "${pio_cache_base}/packages/tool-cmake/bin/cmake" ]; then
+    bashio::log.info "Seeding PlatformIO cache from image..."
+    mkdir -p "${pio_cache_base}/platforms" "${pio_cache_base}/packages" "${pio_cache_base}/cache"
+    for subdir in platforms packages cache; do
+        [ -d "/opt/platformio-preinstalled/${subdir}" ] && cp -a "/opt/platformio-preinstalled/${subdir}"/* "${pio_cache_base}/${subdir}/" 2>/dev/null || true
+    done
+    bashio::log.info "PlatformIO cache seed complete."
+fi
+
+# App listens on 8099; nginx binds to ingress port 8098 and proxies to us
+export ESPHOME_API_LISTEN_PORT=8099
+
+# Copy/update custom integration into /config/custom_components (restarts HA if updated)
+bashio::log.info "Running integration install/update..."
+cd /app
+python3 -c "from app.install_integration import install_or_update; install_or_update()" || true
+bashio::log.info "Integration install/update complete."
+
+bashio::log.info "Starting ESPHome API Add-on..."
+exec python3 -m app.main

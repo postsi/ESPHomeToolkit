@@ -1,0 +1,117 @@
+compile:
+  name: Compile
+  description: Compile an ESPHome config via the add-on (file or inline YAML).
+  fields:
+    filename:
+      name: Filename
+      description: Config filename (e.g. hallway.yaml). Use one of filename, config_name, or yaml.
+      selector:
+        text:
+    config_name:
+      name: Config name
+      description: Config name without .yaml (e.g. hallway).
+      selector:
+        text:
+    yaml:
+      name: YAML
+      description: Inline YAML config (used when no filename/config_name).
+      selector:
+        text:
+
+upload:
+  name: Upload
+  description: Compile and upload firmware via the add-on (file or inline YAML).
+  fields:
+    filename:
+      name: Filename
+      description: Config filename.
+      selector:
+        text:
+    config_name:
+      name: Config name
+      description: Config name without .yaml.
+      selector:
+        text:
+    yaml:
+      name: YAML
+      description: Inline YAML config.
+      selector:
+        text:
+
+validate:
+  name: Validate
+  description: Validate (config-check) an ESPHome config via the add-on.
+  fields:
+    filename:
+      name: Filename
+      description: Config filename.
+      selector:
+        text:
+    config_name:
+      name: Config name
+      description: Config name without .yaml.
+      selector:
+        text:
+    yaml:
+      name: YAML
+      description: Inline YAML config.
+      selector:
+        text:
+
+run:
+  name: Run
+  description: Validate, compile and upload (full run) via the add-on.
+  fields:
+    filename:
+      name: Filename
+      description: Config filename.
+      selector:
+        text:
+    config_name:
+      name: Config name
+      description: Config name without .yaml.
+      selector:
+        text:
+    yaml:
+      name: YAML
+      description: Inline YAML config.
+      selector:
+        text:
+
+set_light_rgb:
+  name: Set light RGB
+  description: Set a light's colour from red/green/blue (for ESPHome colour picker).
+  fields:
+    entity_id:
+      selector:
+        entity:
+          domain: light
+    red:
+      selector:
+        number:
+          min: 0
+          max: 255
+    green:
+      selector:
+        number:
+          min: 0
+          max: 255
+    blue:
+      selector:
+        number:
+          min: 0
+          max: 255
+
+set_light_color_temp:
+  name: Set light color temp
+  description: Set a light's white temperature in mireds (for ESPHome white picker).
+  fields:
+    entity_id:
+      selector:
+        entity:
+          domain: light
+    color_temp:
+      selector:
+        number:
+          min: 1
+          max: 1000

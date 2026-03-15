@@ -1,0 +1,59 @@
+---
+description: ESPHomeToolkit deployment checklist and steps; local deploy runs clean-environment first by default
+alwaysApply: false
+globs: "esptoolkit_addon/config.yaml,esptoolkit_addon/app/__init__.py,custom_components/esptoolkit/manifest.json,.github/workflows/*,scripts/deploy-local.sh,scripts/clean_environment_for_deploy.md"
+---
+
+# ESPHomeToolkit: Deployment
+
+When deploying a new release, follow this order. Run from repo root.
+
+## 1. Pre-deploy (optional but recommended)
+
+- Run tests in Docker: `./esptoolkit_addon/scripts/test_in_docker.sh` (if present).
+- Fix any failing tests before proceeding.
+
+## 2. Version bump (required)
+
+Bump in **all** of these so HA, the add-on API, and the integration report the same version:
+
+- **`esptoolkit_addon/config.yaml`** — update `version: "X.Y.Z"` (Supervisor uses this for "Update available").
+- **`esptoolkit_addon/app/__init__.py`** — update `__version__ = "X.Y.Z"` (API `/api/version` and MCP use this).
+- **`custom_components/esptoolkit/manifest.json`** — update `"version": "X.Y.Z"` (add-on uses this when copying the integration).
+
+Use semantic versioning: patch for fixes (1.0.1 → 1.0.2), minor for features, major for breaking changes.
+
+## 3. Git commit and push (required)
+
+- Stage all changes: `git add -A`
+- Commit with a clear message, e.g.: `Release v1.0.2: panel path fix, deploy script`
+- Push to `main`: `git push origin main`
+
+## 4. After push
+
+If you used `./scripts/deploy.sh` without `--no-wait`, it will have already waited for the build to complete. Otherwise run `./scripts/wait-for-build.sh` to poll until the latest run finishes.
+
+## 5. Install/update in HA
+
+Once the build is green: **Settings → Add-ons** → reload if needed; install or update **ESPToolkit** from the **ESPHomeToolkit** repository.
+
+## Local deploy (default: clean first)
+
+When the user asks for a **local deploy** (e.g. "do local deploy", "run local deploy", or to run `./scripts/deploy-local.sh`):
+
+1. **By default, run the clean environment script first** so deploy is tested in an effectively clean HA environment:
+   - Follow `scripts/clean_environment_for_deploy.md`: use the **Home Assistant MCP server** to delete `custom_components/esptoolkit/` (or its files), `.esptoolkit_addon_config.json`, and remove the `esptoolkit:` block from `configuration.yaml`.
+   - If the user explicitly asks to **skip** cleanup (e.g. "local deploy without clean"), omit this step.
+2. Then run: `./scripts/deploy-local.sh <version> [message]` (e.g. `./scripts/deploy-local.sh 1.0.2 "Release message"`).
+
+The deploy script builds the container the same way as the original add-on: `docker build -f esptoolkit_addon/docker/Dockerfile esptoolkit_addon`, then tags and pushes to ghcr.io (one image for the host arch: amd64 or aarch64). Prereqs: docker; for push use `docker login ghcr.io` or set GITHUB_TOKEN.
+
+## Quick deploy (CI script)
+
+From repo root:
+
+```bash
+./scripts/deploy.sh 1.0.2 "Short description of changes"
+```
+
+The deploy script bumps version (config, app, integration manifest), commits, pushes, then **polls GitHub Actions every 10s until the build completes** (so the command only returns when the build is done). To skip waiting, pass `--no-wait` at the end. Run tests first manually if desired.

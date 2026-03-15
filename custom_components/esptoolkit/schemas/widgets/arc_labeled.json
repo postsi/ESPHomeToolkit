@@ -1,0 +1,76 @@
+{
+  "type": "arc_labeled",
+  "title": "Arc with scale labels",
+  "description": "Arc with integer tick labels on the outside. On device: arc + line widgets (ticks) + label widgets (numbers) are emitted in a container.",
+  "esphome": {
+    "root_key": "arc",
+    "props": {
+      "value": "value",
+      "min_value": "min_value",
+      "max_value": "max_value",
+      "start_angle": "start_angle",
+      "end_angle": "end_angle",
+      "rotation": "rotation",
+      "adjustable": "adjustable",
+      "mode": "mode",
+      "change_rate": "change_rate"
+    },
+    "style": {
+      "bg_color": "bg_color",
+      "border_width": "border_width",
+      "border_color": "border_color",
+      "radius": "radius"
+    },
+    "events": {
+      "on_value": "on_value",
+      "on_release": "on_release"
+    }
+  },
+  "props": {
+    "value": { "type": "number", "title": "Value", "default": 50 },
+    "min_value": { "type": "number", "title": "Min value", "default": 0 },
+    "max_value": { "type": "number", "title": "Max value", "default": 100 },
+    "start_angle": { "type": "number", "title": "Start angle (°)", "min": 0, "max": 360, "default": 135 },
+    "end_angle": { "type": "number", "title": "End angle (°)", "min": 0, "max": 360, "default": 45 },
+    "rotation": { "type": "number", "title": "Rotation (°)", "min": -360, "max": 360, "default": 0 },
+    "adjustable": { "type": "boolean", "title": "Adjustable", "default": false },
+    "mode": { "type": "enum", "title": "Mode", "values": ["NORMAL", "REVERSE", "SYMMETRICAL"], "default": "NORMAL" },
+    "change_rate": { "type": "number", "title": "Change rate", "min": 1, "max": 7200, "default": 720 }
+  },
+  "style": {
+    "bg_color": { "type": "color", "title": "Background", "default": "color.bg" },
+    "border_width": { "type": "number", "title": "Border width", "min": 0, "max": 20, "default": 0 },
+    "border_color": { "type": "color", "title": "Border color", "default": "color.border" },
+    "radius": { "type": "number", "title": "Corner radius", "min": 0, "max": 60, "default": 0 },
+    "label_text_color": { "type": "color", "title": "Tick label color", "default": "color.text" },
+    "label_text_font": { "type": "string", "title": "Tick label font", "default": "", "description": "ESPHome font id" },
+    "label_font_size": { "type": "number", "title": "Tick label size (px)", "min": 0, "max": 48, "default": 0, "description": "0 = auto from font / widget size" },
+    "tick_interval": { "type": "number", "title": "Tick interval", "min": 1, "max": 100, "default": 1, "description": "Tick mark every N values (on device: line widgets)" },
+    "label_interval": { "type": "number", "title": "Numbering interval", "min": 1, "max": 100, "default": 2, "description": "Numeric label every N values (on device: label widgets)" }
+  },
+  "knob": {
+    "bg_color": { "type": "color", "title": "Background", "default": "" },
+    "radius": { "type": "number", "title": "Radius", "min": 0, "max": 127, "default": 0 },
+    "width": { "type": "number", "title": "Width (px)", "min": 0, "max": 255, "default": 0 },
+    "height": { "type": "number", "title": "Height (px or %)", "min": 0, "max": 255, "default": 0 },
+    "pad_right": { "type": "number", "title": "Pad right", "min": 0, "max": 50, "default": 5 }
+  },
+  "indicator": {
+    "bg_color": { "type": "color", "title": "Indicator color", "default": "" },
+    "radius": { "type": "number", "title": "Radius", "min": 0, "max": 127, "default": 0 }
+  },
+  "events": {
+    "on_value": { "type": "yaml_block", "title": "on_value", "default": "" },
+    "on_release": { "type": "yaml_block", "title": "on_release", "default": "" }
+  },
+  "groups": {
+    "Value & range": { "section": "props", "keys": ["min_value", "max_value", "value", "adjustable"] },
+    "Arc angles": { "section": "props", "keys": ["rotation", "start_angle", "end_angle", "mode", "change_rate"] },
+    "Tick labels": { "section": "style", "keys": ["tick_interval", "label_interval", "label_font_size", "label_text_color", "label_text_font"] },
+    "Knob": { "section": "knob", "keys": ["bg_color", "radius", "width", "height", "pad_right"] },
+    "Indicator": { "section": "indicator", "keys": ["bg_color", "radius"] },
+    "Common": { "section": "props", "keys": ["align", "hidden", "clickable", "scrollable", "scrollbar_mode", "scroll_dir", "opacity", "group"] },
+    "Style": { "section": "style", "keys": ["bg_color", "radius", "border_color", "border_width"] },
+    "Events": { "section": "events", "keys": ["on_value", "on_release"] }
+  }
+}

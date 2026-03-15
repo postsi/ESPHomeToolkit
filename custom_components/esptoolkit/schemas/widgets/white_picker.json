@@ -1,0 +1,75 @@
+{
+  "type": "white_picker",
+  "title": "White picker",
+  "description": "Button that opens a warm/cool white temperature picker. Tap to select; Apply sends color_temp (mireds) to a bound light.",
+  "esphome": {
+    "root_key": "button",
+    "props": {},
+    "style": {
+      "bg_color": "bg_color"
+    },
+    "events": {
+      "on_click": "on_click"
+    }
+  },
+  "props": {
+    "value": {
+      "type": "number",
+      "title": "White temp (mireds)",
+      "min": 153,
+      "max": 500,
+      "default": 326
+    }
+  },
+  "style": {
+    "bg_color": {
+      "type": "color",
+      "title": "Background",
+      "default": "0xFFF5E6"
+    },
+    "border_width": {
+      "type": "number",
+      "title": "Border width",
+      "min": 0,
+      "max": 20,
+      "default": 2
+    },
+    "border_color": {
+      "type": "color",
+      "title": "Border color",
+      "default": "0x606060"
+    },
+    "radius": {
+      "type": "number",
+      "title": "Radius",
+      "min": 0,
+      "max": 60,
+      "default": 8
+    }
+  },
+  "events": {
+    "on_click": {
+      "type": "yaml_block",
+      "title": "on_click",
+      "default": ""
+    }
+  },
+  "groups": {
+    "White picker": {
+      "section": "props",
+      "keys": ["value"]
+    },
+    "Common": {
+      "section": "props",
+      "keys": ["align", "hidden", "clickable", "scrollable", "scrollbar_mode", "scroll_dir", "opacity", "group"]
+    },
+    "Style": {
+      "section": "style",
+      "keys": ["bg_color", "border_width", "border_color", "radius"]
+    },
+    "Events": {
+      "section": "events",
+      "keys": ["on_click"]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+# Waveshare ESP32-P4-WIFI6-Touch-LCD-4C (720x720)
+# Source: Waveshare ESP32-P4-WIFI6-Touch-LCD-XC BSP (pins, timing defaults, JD9365 init-seq structure)
+# Touch: GT911 (0x5D primary, 0x14 fallback). Touch interrupt is NC on XC family boards (polling).
+# NOTE: ESPHome does not currently document a dedicated `model:` preset for this board. Use `model: CUSTOM` in mipi_dsi.
+
+esphome:
+  name: __ETD_DEVICE_NAME__
+  min_version: 2025.1.0
+
+id: waveshare_esp32_p4_wifi6_touch_lcd_4c_720x720
+label: "Waveshare • ESP32-P4-WIFI6-Touch-LCD-4C • 720x720"
+vendor: Waveshare
+model: "ESP32-P4-WIFI6-Touch-LCD-4C"
+resolution:
+  width: 720
+  height: 720
+
+mcu:
+  platform: esp32
+  variant: esp32p4
+  framework: esp-idf
+
+pins:
+  i2c:
+    sda: 7
+    scl: 8
+  display:
+    reset: 27
+    backlight_pwm: 26
+  touch:
+    reset: 23
+    interrupt: null
+
+display_defaults:
+  bus: mipi_dsi
+  lanes: 2
+  pclk_frequency: 80MHz
+  hsync_back_porch: 20
+  hsync_pulse_width: 20
+  hsync_front_porch: 40
+  vsync_back_porch: 12
+  vsync_pulse_width: 4
+  vsync_front_porch: 24
+
+touch_defaults:
+  type: gt911
+  addresses:
+    primary: 0x5D
+    fallback: 0x14
