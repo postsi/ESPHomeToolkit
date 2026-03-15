@@ -15,6 +15,27 @@ from .api.views import register_api_views
 _LOGGER = logging.getLogger(__name__)
 
 
+class PanelCheckView(HomeAssistantView):
+    """Diagnostic: GET /api/esptoolkit/panel-check returns whether Designer panel and web/dist are present."""
+    url = f"/api/{DOMAIN}/panel-check"
+    name = f"{DOMAIN}:panel_check"
+    requires_auth = False
+
+    async def get(self, request):
+        index_path = Path(__file__).parent / "web" / "dist" / "index.html"
+        dist_dir = Path(__file__).parent / "web" / "dist"
+        web_dist_exists = index_path.is_file()
+        assets_dir = dist_dir / "assets"
+        assets_count = len(list(assets_dir.glob("*"))) if assets_dir.is_dir() else 0
+        return web.json_response({
+            "panel": "esptoolkit",
+            "web_dist_exists": web_dist_exists,
+            "web_dist_path": str(dist_dir),
+            "assets_count": assets_count,
+            "message": "Designer panel and assets OK" if web_dist_exists and assets_count else "web/dist missing or empty — reinstall add-on or update to latest",
+        })
+
+
 def _unregister_panel(hass: HomeAssistant) -> None:
     """Remove the panel (call from async_unload_entry)."""
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
@@ -56,6 +77,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
             StaticPathConfig(STATIC_URL_PATH, dist_path, False),
         ])
         hass.http.register_view(PanelIndexView)
+        hass.http.register_view(PanelCheckView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(

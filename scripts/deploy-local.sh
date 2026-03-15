@@ -76,21 +76,24 @@ if [ "$USE_FAST" = true ]; then
   fi
   echo "=== Building production image (fast: FROM esptoolkit-base) ==="
   docker build \
+    --progress=plain \
     -f "$DOCKERFILE_FAST" \
     --build-arg BUILD_VERSION="$VERSION" \
     --build-arg BASE_TAG="$BASE_TAG" \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "$ADDON"
-  echo "=== Quick smoke test ==="
+  echo "=== Fast build done. Running quick smoke test ==="
   docker run --rm --entrypoint python3 "${IMAGE_NAME}:${VERSION}" -c "
 from app.main import app
 print('version', app.version)
 print('Smoke OK')
 "
+  echo "=== Smoke test done. Pushing image ==="
 else
   echo "=== Running tests locally (Docker) ==="
   docker build \
+    --progress=plain \
     -f "$DOCKERFILE_FULL" \
     --target test \
     -t esptoolkit-addon-test \
@@ -113,6 +116,7 @@ print('Smoke OK')
 
   echo "=== Building production image (full: from ESPHome base) ==="
   docker build \
+    --progress=plain \
     -f "$DOCKERFILE_FULL" \
     --build-arg BUILD_VERSION="$VERSION" \
     -t "${IMAGE_NAME}:${VERSION}" \
@@ -129,8 +133,8 @@ if [ -n "${GITHUB_TOKEN:-}" ] || [ -f "$REPO_ROOT/.github-token" ]; then
   [ -z "${GITHUB_TOKEN:-}" ] && GITHUB_TOKEN="$(head -1 "$REPO_ROOT/.github-token" 2>/dev/null | tr -d '\r\n')"
   echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${GITHUB_USER:-postsi}" --password-stdin 2>/dev/null || true
 fi
-docker push "${IMAGE_NAME}:${VERSION}"
-docker push "${IMAGE_NAME}:latest" 2>/dev/null || true
+docker push "${IMAGE_NAME}:${VERSION}" && echo "=== Pushed ${IMAGE_NAME}:${VERSION} ==="
+docker push "${IMAGE_NAME}:latest" 2>/dev/null && echo "=== Pushed :latest ===" || true
 
 echo "=== Staging and committing (with [skip build] so CI skips build job) ==="
 git rm -r --cached esptoolkit_addon/esphome 2>/dev/null || true
@@ -140,6 +144,6 @@ git status -s
 git commit -m "Release v$VERSION: $MSG [skip build]"
 
 echo "=== Pushing to origin main ==="
-git push origin main
+git push origin main && echo "=== Git push done ==="
 
 echo "=== Done. Image ${IMAGE_NAME}:${VERSION} pushed (arch: ${ARCH}). Home Assistant can pick up v$VERSION from the repo. ==="
