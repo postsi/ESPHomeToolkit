@@ -52,6 +52,13 @@ rsync -a custom_components/esptoolkit/ esptoolkit_addon/custom_components/esptoo
   `./scripts/deploy-local.sh <version> [message]`  
   Prereqs: docker, jq; set `GITHUB_TOKEN` (and optionally `GITHUB_USER`) for ghcr.io. Optionally run the clean-environment steps first (see `scripts/clean_environment_for_deploy.md`) so the add-on installs into a clean HA.
 
+- **Fast local deploy** (reuses a pre-built base image so only app + integration are rebuilt):  
+  1. Build the base once (takes a long time; run when the ESPHome base or deps change):  
+     `./scripts/build-base.sh`  
+  2. Deploy with:  
+     `./scripts/deploy-local.sh --fast <version> [message]`  
+  The base is tagged `esptoolkit-base:2025.04.0` (and `latest`). Re-run `build-base.sh` if you change `BUILD_BASE_VERSION` or the ESPHome ref in the main Dockerfile.
+
 - **CI deploy** (bump version, push, wait for GitHub Actions to build):  
   `./scripts/deploy.sh <version> [message]`  
   Use `--no-wait` to skip waiting for the build.

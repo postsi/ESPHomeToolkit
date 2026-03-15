@@ -29,7 +29,7 @@ STORAGE_VERSION = 1
 
 # --- Panel ---
 PANEL_URL_PATH = "esptoolkit"
-PANEL_TITLE = "ESPToolkit"
+PANEL_TITLE = "ESPToolkit Designer"
 
 # Static assets under /api/esptoolkit/static
 STATIC_URL_PATH = f"/api/{DOMAIN}/static"

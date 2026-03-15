@@ -4,20 +4,30 @@
 # then tag, push to ghcr.io, and push code to git.
 # Prereqs: docker. For push: docker login ghcr.io (or set GITHUB_TOKEN and we log in).
 #
-# Usage: ./scripts/deploy-local.sh <version> [message]
-# Example: ./scripts/deploy-local.sh 1.0.1 "Initial ESPHomeToolkit release"
+# Usage: ./scripts/deploy-local.sh [--fast] <version> [message]
+#   --fast  Use pre-built esptoolkit-base (build it once with ./scripts/build-base.sh).
+# Example: ./scripts/deploy-local.sh 1.0.1 "Release"
+# Example: ./scripts/deploy-local.sh --fast 1.0.2 "Quick fix"
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-VERSION="${1:?Usage: $0 <version> [message]}"
+USE_FAST=false
+if [ "${1:-}" = "--fast" ]; then
+  USE_FAST=true
+  shift
+fi
+
+VERSION="${1:?Usage: $0 [--fast] <version> [message]}"
 MSG="${2:-release}"
 
 ADDON="$REPO_ROOT/esptoolkit_addon"
 CONFIG="$ADDON/config.yaml"
 INIT="$ADDON/app/__init__.py"
 MANIFEST="$REPO_ROOT/custom_components/esptoolkit/manifest.json"
+DOCKERFILE_FULL="$ADDON/docker/Dockerfile"
+DOCKERFILE_FAST="$ADDON/docker/Dockerfile.fast"
 
 DOCKER_HUB="ghcr.io/postsi"
 # Map host arch to add-on image name (config.yaml has image: "ghcr.io/postsi/esptoolkit-addon-{arch}")
@@ -42,35 +52,57 @@ print('Updated', p, 'to version', sys.argv[2])
 " "$MANIFEST" "$VERSION"
 fi
 
-echo "=== Running tests locally (Docker) ==="
-docker build \
-  -f "$ADDON/docker/Dockerfile" \
-  --target test \
-  -t esptoolkit-addon-test \
-  "$ADDON"
-docker run --rm --entrypoint python3 esptoolkit-addon-test -c "
+if [ "$USE_FAST" = true ]; then
+  BASE_TAG=$(grep 'ARG BUILD_BASE_VERSION=' "$DOCKERFILE_FULL" | head -1 | sed 's/.*=//' | tr -d ' ')
+  if ! docker image inspect "esptoolkit-base:${BASE_TAG}" >/dev/null 2>&1; then
+    echo "=== Base image esptoolkit-base:${BASE_TAG} not found. Run: ./scripts/build-base.sh ==="
+    exit 1
+  fi
+  echo "=== Building production image (fast: FROM esptoolkit-base) ==="
+  docker build \
+    -f "$DOCKERFILE_FAST" \
+    --build-arg BUILD_VERSION="$VERSION" \
+    --build-arg BASE_TAG="$BASE_TAG" \
+    -t "${IMAGE_NAME}:${VERSION}" \
+    -t "${IMAGE_NAME}:latest" \
+    "$ADDON"
+  echo "=== Quick smoke test ==="
+  docker run --rm --entrypoint python3 "${IMAGE_NAME}:${VERSION}" -c "
 from app.main import app
 print('version', app.version)
 print('Smoke OK')
 "
-if [ -d "$ADDON/tests" ]; then
-  docker run --rm \
-    --entrypoint python3 \
-    -v "$ADDON/tests:/tests:ro" \
-    -e PYTHONPATH=/app \
-    esptoolkit-addon-test \
-    -m pytest /tests -v --tb=short
 else
-  echo "No tests dir in addon; skipping pytest."
-fi
+  echo "=== Running tests locally (Docker) ==="
+  docker build \
+    -f "$DOCKERFILE_FULL" \
+    --target test \
+    -t esptoolkit-addon-test \
+    "$ADDON"
+  docker run --rm --entrypoint python3 esptoolkit-addon-test -c "
+from app.main import app
+print('version', app.version)
+print('Smoke OK')
+"
+  if [ -d "$ADDON/tests" ]; then
+    docker run --rm \
+      --entrypoint python3 \
+      -v "$ADDON/tests:/tests:ro" \
+      -e PYTHONPATH=/app \
+      esptoolkit-addon-test \
+      -m pytest /tests -v --tb=short
+  else
+    echo "No tests dir in addon; skipping pytest."
+  fi
 
-echo "=== Building production image (same as original: docker build -f addon/docker/Dockerfile addon) ==="
-docker build \
-  -f "$ADDON/docker/Dockerfile" \
-  --build-arg BUILD_VERSION="$VERSION" \
-  -t "${IMAGE_NAME}:${VERSION}" \
-  -t "${IMAGE_NAME}:latest" \
-  "$ADDON"
+  echo "=== Building production image (full: from ESPHome base) ==="
+  docker build \
+    -f "$DOCKERFILE_FULL" \
+    --build-arg BUILD_VERSION="$VERSION" \
+    -t "${IMAGE_NAME}:${VERSION}" \
+    -t "${IMAGE_NAME}:latest" \
+    "$ADDON"
+fi
 
 echo "=== Pushing to ghcr.io ==="
 if [ -n "${GITHUB_TOKEN:-}" ] || [ -f "$REPO_ROOT/.github-token" ]; then

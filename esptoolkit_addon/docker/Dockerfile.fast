@@ -1,0 +1,14 @@
+# Fast add-on build: assumes esptoolkit-base:BASE_TAG exists (build it with scripts/build-base.sh).
+# Builds only app + custom_components on top of the base; use for quick deploys.
+ARG BASE_TAG=2025.04.0
+ARG BUILD_VERSION=dev
+
+FROM esptoolkit-base:${BASE_TAG}
+
+ARG BUILD_VERSION
+LABEL io.hass.version="${BUILD_VERSION}"
+
+WORKDIR /app
+COPY app/ ./app/
+COPY custom_components/ ./custom_components/
+EXPOSE 8098
