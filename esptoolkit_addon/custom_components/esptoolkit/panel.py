@@ -16,8 +16,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PanelCheckView(HomeAssistantView):
-    """Diagnostic: GET /api/esptoolkit/panel-check returns whether Designer panel and web/dist are present."""
-    url = f"/api/{DOMAIN}/panel-check"
+    """Diagnostic: GET /esptoolkit/panel-check returns whether Designer panel and web/dist are present."""
+    url = f"/{PANEL_URL_PATH}/panel-check"
     name = f"{DOMAIN}:panel_check"
     requires_auth = False
 
@@ -54,9 +54,9 @@ def _designer_fallback_html() -> str:
 
 
 class PanelDesignerView(HomeAssistantView):
-    """Serves the raw Designer SPA at /api/esptoolkit/designer (for iframe or direct open)."""
+    """Serves the raw Designer SPA at /esptoolkit/designer (for iframe or direct open)."""
     url = PANEL_DESIGNER_URL
-    name = f"api:{DOMAIN}:designer"
+    name = f"{DOMAIN}:designer"
     requires_auth = False
 
     async def get(self, request):
@@ -132,9 +132,9 @@ def _tabbed_panel_html() -> str:
 
 
 class PanelIndexView(HomeAssistantView):
-    """Serves the tabbed wrapper at /api/esptoolkit/panel (Overview + Designer tab)."""
+    """Serves the tabbed wrapper at /esptoolkit (Overview + Designer tab). Root-level path like working repo."""
     url = PANEL_PAGE_URL
-    name = f"api:{DOMAIN}:panel"
+    name = f"{DOMAIN}:panel"
     requires_auth = False
 
     async def get(self, request):

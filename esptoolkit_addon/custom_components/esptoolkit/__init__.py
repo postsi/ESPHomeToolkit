@@ -117,7 +117,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # Register Designer panel at /api/esptoolkit/panel so the panel appears even when no config entry yet
     from .panel import async_register_designer_panel
     await async_register_designer_panel(hass)
-    _LOGGER.info("ESPToolkit loaded: panel at %s (Designer tab at %s), diagnostic at /api/esptoolkit/panel-check", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
+    _LOGGER.info("ESPToolkit loaded: panel at %s (Designer at %s), diagnostic at %s/panel-check", PANEL_PAGE_URL, PANEL_DESIGNER_URL, PANEL_PAGE_URL)
     return True
 
 
