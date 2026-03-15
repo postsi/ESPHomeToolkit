@@ -109,7 +109,7 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
                         discovery_keys=MappingProxyType({}),
                         unique_id=None,
                     )
-                    hass.config_entries.async_add(entry)
+                    await hass.config_entries.async_add(entry)
                     _LOGGER.info("Created config entry from add-on config file (base_url=%s)", base_url)
 
     # --- Designer services (no config entry needed) ---
