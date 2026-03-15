@@ -10,7 +10,7 @@ from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 
 from .const import DOMAIN, PANEL_TITLE, PANEL_PAGE_URL, PANEL_DESIGNER_URL, PANEL_URL_PATH, STATIC_URL_PATH
-from .api.views import register_api_views
+from .api.views import register_api_views, SchemasView, SchemaDetailView, RecipesView
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -170,8 +170,12 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(PanelIndexView)
         hass.http.register_view(PanelDesignerView)
         hass.http.register_view(PanelCheckView)
+        # Register schemas and recipes API so LVGL widgets and hardware recipes show even without a config entry
+        hass.http.register_view(SchemasView)
+        hass.http.register_view(SchemaDetailView)
+        hass.http.register_view(RecipesView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
-        _LOGGER.warning("ESPToolkit panel routes registered: %s and %s — Designer should load now.", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
+        _LOGGER.warning("ESPToolkit panel routes registered: %s, %s, and API (schemas/recipes).", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,

@@ -5414,9 +5414,8 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(DiagnosticsView)
     hass.http.register_view(SelfCheckView)
 
+    # Schemas and Recipes are registered in panel.async_register_designer_panel so they work without a config entry
     # Schemas / devices
-    hass.http.register_view(SchemasView)
-    hass.http.register_view(SchemaDetailView)
     hass.http.register_view(DevicesView)
     hass.http.register_view(DeviceProjectView)
     hass.http.register_view(CleanupOrphansView)
@@ -5427,8 +5426,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(CardSaveView)
     hass.http.register_view(CardDeleteView)
 
-    # Hardware recipes
-    hass.http.register_view(RecipesView)
+    # Hardware recipes (RecipesView is registered in panel; clone/export/etc need entry)
     hass.http.register_view(RecipeCloneView)
     hass.http.register_view(RecipeExportView)
     hass.http.register_view(RecipeUserUpdateView)
