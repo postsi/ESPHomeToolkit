@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 
-from .const import DOMAIN, PANEL_TITLE, PANEL_URL_PATH, STATIC_URL_PATH
+from .const import DOMAIN, PANEL_TITLE, PANEL_PAGE_URL, PANEL_URL_PATH, STATIC_URL_PATH
 from .api.views import register_api_views
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,9 +42,9 @@ def _unregister_panel(hass: HomeAssistant) -> None:
 
 
 class PanelIndexView(HomeAssistantView):
-    """Serves the SPA entrypoint. requires_auth=False so iframe loads reliably (sidebar is admin-only)."""
-    url = f"/{PANEL_URL_PATH}"
-    name = f"{DOMAIN}:panel"
+    """Serves the SPA entrypoint at /api/esptoolkit/panel (under /api/ for reliable routing)."""
+    url = PANEL_PAGE_URL
+    name = f"api:{DOMAIN}:panel"
     requires_auth = False
 
     async def get(self, request):
@@ -86,7 +86,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         sidebar_title=PANEL_TITLE,
         sidebar_icon="mdi:gesture-tap",
         frontend_url_path=PANEL_URL_PATH,
-        config={"url": f"/{PANEL_URL_PATH}"},
+        config={"url": PANEL_PAGE_URL},
         require_admin=True,
     )
     _LOGGER.debug("Designer panel registered at /%s", PANEL_URL_PATH)

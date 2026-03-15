@@ -21,6 +21,7 @@ from .const import (
     ATTR_YAML,
     CONF_BASE_URL,
     DOMAIN,
+    PANEL_PAGE_URL,
     SERVICE_COMPILE,
     SERVICE_RUN,
     SERVICE_SET_LIGHT_COLOR_TEMP,
@@ -112,10 +113,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         DOMAIN, SERVICE_SET_LIGHT_COLOR_TEMP, async_set_light_color_temp, schema=SET_LIGHT_COLOR_TEMP_SCHEMA
     )
 
-    # Register Designer panel and /esptoolkit route so the panel appears even when no config entry yet
+    # Register Designer panel at /api/esptoolkit/panel so the panel appears even when no config entry yet
     from .panel import async_register_designer_panel
     await async_register_designer_panel(hass)
-
+    _LOGGER.info("ESPToolkit loaded: Designer at %s, diagnostic at /api/esptoolkit/panel-check", PANEL_PAGE_URL)
     return True
 
 
