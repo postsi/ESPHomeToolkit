@@ -38,6 +38,7 @@
   <div class="tabs">
     <button type="button" id="tab-setup" class="tab-btn">Setup</button>
     <button type="button" id="tab-operational" class="tab-btn">Operational</button>
+    <button type="button" id="tab-designer" class="tab-btn">Designer</button>
   </div>
 
   <div id="panel-setup" class="panel">
@@ -79,6 +80,17 @@
       <p>After you have configured the token and (optionally) MCP, click below. The default tab will switch to Operational.</p>
       <button type="button" id="setup-complete-btn" class="primary">I've completed setup</button>
       <span id="setup-complete-msg"></span>
+    </div>
+  </div>
+
+  <div id="panel-designer" class="panel">
+    <div class="card">
+      <h2>ESPToolkit Designer</h2>
+      <p>The Designer runs in Home Assistant (integration panel). If you opened this add-on from HA, it is shown below; otherwise open the <strong>ESPToolkit</strong> panel from the HA sidebar or go to <strong>Settings → Devices &amp; Services → ESPToolkit</strong>.</p>
+      <div id="designer-container" style="margin-top:1rem;">
+        <p id="designer-placeholder">Loading…</p>
+        <iframe id="designer-iframe" style="display:none; width:100%; height:calc(100vh - 280px); min-height:400px; border:1px solid var(--border); border-radius:8px;" title="ESPToolkit Designer"></iframe>
+      </div>
     </div>
   </div>
 
@@ -140,10 +152,37 @@
       } else {
         if (statusPollId) { clearInterval(statusPollId); statusPollId = null; }
       }
+      if (name === 'designer') loadDesignerIframe();
+    }
+
+    function getHaOrigin() {
+      try {
+        if (document.referrer) {
+          const u = new URL(document.referrer);
+          if (u.origin && (u.protocol === 'http:' || u.protocol === 'https:')) return u.origin;
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    function loadDesignerIframe() {
+      const placeholder = document.getElementById('designer-placeholder');
+      const iframe = document.getElementById('designer-iframe');
+      const haOrigin = getHaOrigin();
+      if (haOrigin) {
+        const src = haOrigin + '/api/esptoolkit/designer';
+        if (iframe.src !== src) iframe.src = src;
+        placeholder.style.display = 'none';
+        iframe.style.display = 'block';
+      } else {
+        placeholder.innerHTML = 'Open this add-on from Home Assistant (e.g. <strong>Add-ons → ESPToolkit → Open Web UI</strong>) so the Designer can load below, or open the <strong>ESPToolkit</strong> panel from the HA sidebar.';
+        iframe.style.display = 'none';
+      }
     }
 
     document.getElementById('tab-setup').onclick = () => showTab('setup');
     document.getElementById('tab-operational').onclick = () => showTab('operational');
+    document.getElementById('tab-designer').onclick = () => showTab('designer');
 
     function buildApiBaseUrl() {
       return (window.location.origin || '').replace(/\/$/, '') + (API_BASE || '');
