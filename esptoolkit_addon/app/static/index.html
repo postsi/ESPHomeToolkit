@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESPHome API Add-on</title>
+  <title>ESPToolkit</title>
   <style>
     :root { --bg: #111; --card: #1e1e1e; --text: #e0e0e0; --accent: #03a9f4; --border: #333; }
     * { box-sizing: border-box; }
@@ -34,7 +34,7 @@
   </style>
 </head>
 <body>
-  <h1>ESPHome API Add-on</h1>
+  <h1>ESPToolkit</h1>
   <div class="tabs">
     <button type="button" id="tab-setup" class="tab-btn">Setup</button>
     <button type="button" id="tab-operational" class="tab-btn">Operational</button>
@@ -43,11 +43,11 @@
   <div id="panel-setup" class="panel">
     <div class="card">
       <h2>1. API token</h2>
-      <p>The add-on uses a single API token everywhere (MCP, API, this page). If you have not set one in <strong>Settings → Add-ons → ESPHome API Add-on → Configuration</strong>, the add-on auto-generates one on first start. To change the token, set <strong>api_token</strong> in Configuration and restart the add-on.</p>
+      <p>The add-on uses a single API token everywhere (MCP, API, this page). If you have not set one in <strong>Settings → Add-ons → ESPToolkit → Configuration</strong>, the add-on auto-generates one on first start. To change the token, set <strong>api_token</strong> in Configuration and restart the add-on.</p>
     </div>
     <div class="card">
       <h2>2. MCP (Cursor / VSCode)</h2>
-      <p>Copy the config below into Cursor. <strong>Recommended:</strong> local proxy (same pattern as <a href="https://github.com/Coolver/home-assistant-vibecode-agent" target="_blank" rel="noopener">HA Vibecode Agent</a>) — install once on your dev machine: <code>pip install git+https://github.com/postsi/ESPHomeAPI-Addon.git</code></p>
+      <p>Copy the config below into Cursor. <strong>Recommended:</strong> use the <strong>Direct URL</strong> block so Cursor talks to this add-on over HTTP (no extra install). Ensure the URL is reachable from your machine (same network as Home Assistant). Optional: local stdio proxy — <code>pip install git+https://github.com/postsi/ESPHomeToolkit.git</code> (if you use the stdio config).</p>
       <button type="button" id="load-mcp-config" class="primary mb">Load MCP config</button>
       <button type="button" id="regenerate-token" class="primary mb">Regenerate API token</button>
       <span id="regenerate-msg" class="mb"></span>
@@ -69,7 +69,8 @@
         <pre id="mcp-entry-only"></pre>
         <label>Form values (Name / URL / Headers):</label>
         <pre id="mcp-form-values"></pre>
-        <p><strong>Cursor:</strong> Settings → Tools & MCP → Edit config. Paste one of the full blocks above. Restart Cursor.</p>
+        <p><strong>Cursor:</strong> Settings → Tools & MCP → Edit config. Paste the <strong>Direct URL</strong> full block above (with <code>"type": "streamableHttp"</code>). Restart Cursor fully.</p>
+        <p><strong>If Cursor can't connect:</strong> the URL must be reachable from your computer (same network as HA). If you use Ingress, use the URL shown here; if you use the add-on port, use <code>http://YOUR_HA_HOST:8098/mcp/</code>. Run &quot;Test connection&quot; first — if it fails in the browser, Cursor will fail too.</p>
         <p><strong>If you change the API token</strong> (Configuration or Regenerate), restart the add-on, then refresh this page and update your Cursor mcp.json with the new config.</p>
       </div>
     </div>
@@ -117,8 +118,8 @@
         const c = await fetch(API_BASE + '/api/public/mcp-config', {
           headers: { 'X-Addon-Base': (window.location.origin || '').replace(/\/$/, '') + (document.location.pathname || '').replace(/\/$/, '') }
         }).then(res => res.json());
-        if (c.token_set && c.stdio_config?.mcpServers?.['esphome-api-addon']?.env?.ESPHOME_API_TOKEN)
-          token = c.stdio_config.mcpServers['esphome-api-addon'].env.ESPHOME_API_TOKEN;
+        if (c.token_set && c.stdio_config?.mcpServers?.['esptoolkit']?.env?.ESPHOME_API_TOKEN)
+          token = c.stdio_config.mcpServers['esptoolkit'].env.ESPHOME_API_TOKEN;
       } catch (_) {}
       showTab(defaultTab);
     }
@@ -165,20 +166,20 @@
           noToken.style.display = 'block';
           return;
         }
-        token = d.stdio_config?.mcpServers?.['esphome-api-addon']?.env?.ESPHOME_API_TOKEN || '';
+        token = d.stdio_config?.mcpServers?.['esptoolkit']?.env?.ESPHOME_API_TOKEN || '';
         if (!token) { noToken.style.display = 'block'; return; }
         const stdioFull = JSON.stringify(d.stdio_config, null, 2);
         const directFull = JSON.stringify(d.direct_config, null, 2);
-        const stdioEntry = d.stdio_config.mcpServers['esphome-api-addon'];
-        const directEntry = d.direct_config.mcpServers['esphome-api-addon'];
-        const stdioSnippet = '  "esphome-api-addon": ' + JSON.stringify(stdioEntry, null, 2).split('\n').map((l, i) => (i === 0 ? '' : '  ') + l).join('\n');
-        const directSnippet = '  "esphome-api-addon": ' + JSON.stringify(directEntry, null, 2).split('\n').map((l, i) => (i === 0 ? '' : '  ') + l).join('\n');
+        const stdioEntry = d.stdio_config.mcpServers['esptoolkit'];
+        const directEntry = d.direct_config.mcpServers['esptoolkit'];
+        const stdioSnippet = '  "esptoolkit": ' + JSON.stringify(stdioEntry, null, 2).split('\n').map((l, i) => (i === 0 ? '' : '  ') + l).join('\n');
+        const directSnippet = '  "esptoolkit": ' + JSON.stringify(directEntry, null, 2).split('\n').map((l, i) => (i === 0 ? '' : '  ') + l).join('\n');
         const base = d.base_url || '';
         document.getElementById('mcp-json-stdio').textContent = stdioFull;
         document.getElementById('mcp-entry-stdio').textContent = stdioSnippet;
         document.getElementById('mcp-json').textContent = directFull;
         document.getElementById('mcp-entry-only').textContent = directSnippet;
-        document.getElementById('mcp-form-values').textContent = 'Name: esphome-api-addon\nURL: ' + base + '/mcp/\nHeaders: Authorization = Bearer ' + token;
+        document.getElementById('mcp-form-values').textContent = 'Name: esptoolkit\nURL: ' + base + '/mcp/\nHeaders: Authorization = Bearer ' + token;
         out.style.display = 'block';
       } catch (e) {
         document.getElementById('mcp-no-token').querySelector('p').textContent = 'Error loading config: ' + (e.message || e);

@@ -374,7 +374,7 @@ async def get_mcp_config(request: Request):
         return {"token_set": False, "message": "Set API token in Add-on Configuration and restart the add-on."}
     stdio_config = {
         "mcpServers": {
-            "esphome-api-addon": {
+            "esptoolkit": {
                 "command": "python",
                 "args": ["-m", "mcp_stdio_proxy"],
                 "env": {"ESPHOME_API_URL": base, "ESPHOME_API_TOKEN": token},
@@ -383,7 +383,11 @@ async def get_mcp_config(request: Request):
     }
     direct_config = {
         "mcpServers": {
-            "esphome-api-addon": {"url": f"{base}/mcp/", "headers": {"Authorization": f"Bearer {token}"}},
+            "esptoolkit": {
+                "type": "streamableHttp",
+                "url": f"{base}/mcp/",
+                "headers": {"Authorization": f"Bearer {token}"},
+            }
         }
     }
     return {"token_set": True, "base_url": base, "stdio_config": stdio_config, "direct_config": direct_config}
