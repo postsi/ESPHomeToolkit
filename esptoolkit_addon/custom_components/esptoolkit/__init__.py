@@ -30,6 +30,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+# Log as soon as this module is imported (proves HA found custom_components/esptoolkit)
+_LOGGER.warning("ESPToolkit custom component module imported — integration path is valid")
 
 # File written by the add-on so we can create a config entry without user config flow
 _INTEGRATION_CONFIG_FILE = ".esptoolkit_addon_config.json"
