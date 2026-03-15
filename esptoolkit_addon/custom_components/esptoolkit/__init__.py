@@ -130,11 +130,12 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
     )
 
     # Diagnostic: register ping so we can confirm integration loaded (GET /esptoolkit/ping)
-    from .panel import PingView
+    from .panel import PingView, async_register_designer_panel
     hass.http.register_view(PingView)
 
-    # Panel + Designer routes are registered only in async_setup_entry (like working esphome_touch_designer)
-    _LOGGER.warning("ESPToolkit loaded. Test https://YOUR_HA/esptoolkit/ping — panel at /esptoolkit when config entry exists.")
+    # Register panel and /esptoolkit, /esptoolkit/designer here so they work even before a config entry exists (add-on ingress Designer tab iframes /esptoolkit/designer)
+    await async_register_designer_panel(hass)
+    _LOGGER.warning("ESPToolkit loaded. Panel at /esptoolkit, Designer at /esptoolkit/designer.")
     return True
 
 
