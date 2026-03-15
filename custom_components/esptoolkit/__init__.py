@@ -62,6 +62,15 @@ SET_LIGHT_COLOR_TEMP_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up ESPToolkit. Auto-create or sync config entry from add-on file. Register Designer services."""
+    _LOGGER.warning("ESPToolkit async_setup called (integration is loading)")
+    try:
+        return await _async_setup_impl(hass, config)
+    except Exception:
+        _LOGGER.exception("ESPToolkit async_setup failed")
+        raise
+
+
+async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
     # --- Config entry from add-on file (no config flow) ---
     entries = hass.config_entries.async_entries(DOMAIN)
     config_path = Path(hass.config.config_dir) / _INTEGRATION_CONFIG_FILE
@@ -123,6 +132,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up API services and Designer (storage, panel, API views)."""
+    _LOGGER.warning("ESPToolkit async_setup_entry called (config entry is being set up)")
+    try:
+        return await _async_setup_entry_impl(hass, entry)
+    except Exception:
+        _LOGGER.exception("ESPToolkit async_setup_entry failed")
+        raise
+
+
+async def _async_setup_entry_impl(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     base_url = (entry.data.get(CONF_BASE_URL) or "").strip().rstrip("/")
     token = (entry.data.get(CONF_TOKEN) or "").strip()
     if not base_url or not token:
