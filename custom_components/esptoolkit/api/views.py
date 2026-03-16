@@ -5480,6 +5480,8 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(DeployBuildView)
     hass.http.register_view(DeviceExportPreviewView)
     hass.http.register_view(DeviceExportView)
+    hass.http.register_view(DeviceValidateExportView)
+    hass.http.register_view(DeviceDeployExportView)
 
     # Project backup/restore
     hass.http.register_view(DeviceProjectExportView)
@@ -6156,6 +6158,106 @@ class DeviceExportView(HomeAssistantView):
         new_hash = hashlib.sha256(new_text.encode("utf-8")).hexdigest()
 
         return self.json({"ok": True, "path": str(outp), "mode": mode, "hash": new_hash})
+
+
+def _write_device_yaml_to_esphome(hass: HomeAssistant, device: DeviceProject) -> tuple[Path | None, dict | None]:
+    """Compile device to YAML and write to /config/esphome/<slug>.yaml. Returns (path, None) on success or (None, error_json_response)."""
+    try:
+        yaml_text = compile_to_esphome_yaml(device)
+    except Exception as e:
+        return None, {"ok": False, "error": "compile_failed", "detail": str(e)}
+    BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"
+    END = "# --- END ESPHOME_TOUCH_DESIGNER GENERATED ---"
+    esphome_dir = Path(hass.config.path("esphome"))
+    esphome_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"{device.slug or device.device_id}.yaml"
+    outp = esphome_dir / fname
+    generated_block = f"{BEGIN}\n{yaml_text.rstrip()}\n{END}\n"
+    existing = outp.read_text("utf-8", errors="ignore") if outp.exists() else ""
+    try:
+        new_text, _mode = _export_merge_yaml(existing, generated_block, BEGIN, END)
+    except ValueError as e:
+        return None, {"ok": False, "error": "marker_corrupt", "detail": str(e), "path": str(outp)}
+    outp.write_text(new_text, encoding="utf-8")
+    return outp, None
+
+
+class DeviceValidateExportView(HomeAssistantView):
+    """Write compiled YAML to esphome/ then call add-on config-check (validate) HA service."""
+
+    url = f"/api/{DOMAIN}/devices/{{device_id}}/validate_export"
+    name = f"api:{DOMAIN}:device_validate_export"
+    requires_auth = False
+
+    async def post(self, request, device_id: str):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        device = storage.get_device(device_id)
+        if not device:
+            return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
+        outp, err = _write_device_yaml_to_esphome(hass, device)
+        if err is not None:
+            return self.json(err, status_code=500 if err.get("error") == "compile_failed" else 409)
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            return self.json({"ok": False, "error": "no_addon_connection", "stdout": "", "stderr": "EspToolkit add-on not configured."}, status_code=503)
+        base_url, token = conn
+        fname = outp.name
+        ok, result = await _esphome_addon_request(
+            hass,
+            base_url,
+            "api/config-check",
+            {"config_source": "file", "filename": fname},
+            token=token,
+        )
+        return self.json({
+            "ok": ok,
+            "stdout": result if ok else "",
+            "stderr": "" if ok else result,
+        })
+
+
+class DeviceDeployExportView(HomeAssistantView):
+    """Write compiled YAML to esphome/ then call add-on upload (deploy) HA service."""
+
+    url = f"/api/{DOMAIN}/devices/{{device_id}}/deploy_export"
+    name = f"api:{DOMAIN}:device_deploy_export"
+    requires_auth = False
+
+    async def post(self, request, device_id: str):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        device = storage.get_device(device_id)
+        if not device:
+            return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
+        outp, err = _write_device_yaml_to_esphome(hass, device)
+        if err is not None:
+            return self.json(err, status_code=500 if err.get("error") == "compile_failed" else 409)
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
+        base_url, token = conn
+        fname = outp.name
+        ok, result = await _esphome_addon_request(
+            hass,
+            base_url,
+            "api/upload",
+            {"config_source": "file", "filename": fname},
+            token=token,
+        )
+        if ok:
+            return self.json({"ok": True, "path": str(outp), "result": result})
+        return self.json({"ok": False, "error": "addon_failed", "detail": result, "path": str(outp)}, status_code=502)
 
 
 class EntityCapabilitiesView(HomeAssistantView):

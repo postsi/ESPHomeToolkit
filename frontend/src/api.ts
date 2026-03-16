@@ -241,3 +241,17 @@ export async function deployBuild(device_id: string, entry_id: string) {
   u.searchParams.set("entry_id", entry_id);
   return apiPost(u.toString(), { device_id });
 }
+
+/** Write compiled YAML to esphome/ then run add-on config-check (validate). */
+export async function validateExport(device_id: string, entry_id: string): Promise<{ ok: boolean; stdout?: string; stderr?: string }> {
+  const u = new URL(`${API_BASE}/devices/${encodeURIComponent(device_id)}/validate_export`, window.location.origin);
+  u.searchParams.set("entry_id", entry_id);
+  return apiPost(u.toString(), {});
+}
+
+/** Write compiled YAML to esphome/ then run add-on upload (deploy). */
+export async function deployExport(device_id: string, entry_id: string): Promise<{ ok: boolean; path?: string; result?: string; error?: string; detail?: string }> {
+  const u = new URL(`${API_BASE}/devices/${encodeURIComponent(device_id)}/deploy_export`, window.location.origin);
+  u.searchParams.set("entry_id", entry_id);
+  return apiPost(u.toString(), {});
+}

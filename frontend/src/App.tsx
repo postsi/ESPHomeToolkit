@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import packageJson from "../package.json";
 import Canvas from "./Canvas";
-import {listRecipes, compileYaml, validateYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listCards, getCard, saveCard, deleteCard, previewWidgetYaml} from "./lib/api";
+import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listCards, getCard, saveCard, deleteCard, previewWidgetYaml} from "./lib/api";
 import { collectWidgetIds, updateSectionsWidgetRef } from "./projectSections";
 import { CONTROL_TEMPLATES, type ControlTemplate } from "./controls";
 import { PREBUILT_WIDGETS, type PrebuiltWidget } from "./prebuiltWidgets";
@@ -22,8 +22,10 @@ import { getMatchingActionBindings, INPUT_WIDGET_TYPES, OPTION_SELECT_WIDGET_TYP
 import {
   deleteDevice,
   deploy,
+  deployExport,
   exportDeviceYamlPreview,
   exportDeviceYamlWithExpectedHash,
+  validateExport,
   callService,
   fetchStateBatch,
   getContext,
@@ -2447,7 +2449,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     } finally { setBusy(false); }
   }
 
-  /** Save compiled YAML to /config/esphome/<slug>.yaml. Build/upload via add-on disabled for now. */
+  /** Write compiled YAML to /config/esphome/<slug>.yaml then run add-on upload (deploy). */
   async function deployToConfig() {
     if (!selectedDevice || !entryId || !project) return;
     setBusy(true);
@@ -2460,42 +2462,40 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         }
         setProjectDirty(false);
       }
-      const preview: any = await exportDeviceYamlPreview(selectedDevice, entryId);
-      if (!preview?.ok) {
-        setToast({ type: "error", msg: `Export failed: ${preview?.error ?? "preview failed"}` });
-        return;
+      const res: any = await deployExport(selectedDevice, entryId);
+      if (res?.ok) {
+        setToast({ type: "ok", msg: res.path ? `Deployed: ${res.path}` : "Deployed" });
+      } else {
+        const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
+        setToast({ type: "error", msg });
       }
-      const expected = preview.existing_hash || "";
-      const res: any = await exportDeviceYamlWithExpectedHash(selectedDevice, expected, entryId);
-      if (!res?.ok) {
-        setToast({ type: "error", msg: `Export failed: ${[res?.error, res?.detail].filter(Boolean).join(": ") || "export failed"}` });
-        return;
-      }
-      setToast({ type: "ok", msg: "YAML saved to /config/esphome/" });
     } catch (e: any) {
-      setToast({ type: "error", msg: `Export failed: ${e?.message ?? "unknown error"}` });
+      setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
     } finally {
       setBusy(false);
     }
   }
 
-  /** Validate the exported YAML (same as would be deployed) via add-on or local ESPHome CLI. */
+  /** Write compiled YAML to esphome/ then run add-on config-check (validate). */
   async function validateExportYaml() {
     if (!selectedDevice || !entryId) return;
     setValidateYamlBusy(true);
     setValidateYamlResult(null);
     try {
-      const preview: any = await exportDeviceYamlPreview(selectedDevice, entryId);
-      if (!preview?.ok || !preview?.new_text) {
-        setToast({ type: "error", msg: preview?.error ? `Preview failed: ${preview.error}` : "Could not get export preview." });
-        return;
+      if (project && projectDirty) {
+        const res = await putProject(entryId, selectedDevice, project);
+        if (!res.ok) {
+          setToast({ type: "error", msg: `Save failed: ${res.error}` });
+          return;
+        }
+        setProjectDirty(false);
       }
-      const result = await validateYaml(preview.new_text, entryId);
+      const result = await validateExport(selectedDevice, entryId);
       setValidateYamlResult(result);
       if (result.ok) {
         setToast({ type: "ok", msg: "Config valid" });
       } else {
-        const msg = (result.stderr || result.stdout || result.error || "Validation failed").slice(0, 200);
+        const msg = (result.stderr || result.stdout || "Validation failed").slice(0, 200);
         setToast({ type: "error", msg: `Validation failed: ${msg}` });
       }
     } catch (e: any) {
