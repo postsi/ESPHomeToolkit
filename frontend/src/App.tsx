@@ -51,6 +51,9 @@ import YamlEditor from "./YamlEditor";
 
 type Toast = { type: "ok" | "error"; msg: string };
 
+const INTEGRATION_NOT_CONFIGURED_MSG =
+  "Integration not configured. Set the API token in the ESPToolkit add-on (Settings → Add-ons → ESPToolkit → Configuration), then restart the add-on and Home Assistant.";
+
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(16).slice(2, 10)}`;
 }
@@ -448,15 +451,21 @@ async function refreshAssets() {
     setAssets(items);
     setAssetError(null);
   } catch (e: any) {
-    setAssetError(String(e?.message || e));
+    const msg = String(e?.message || e);
+    setAssetError(msg.includes("404") || msg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : msg);
   }
 }
 
 async function onUploadAssetFile(file: File) {
-  const buf = await file.arrayBuffer();
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-  await uploadAsset(file.name, b64);
-  await refreshAssets();
+  try {
+    const buf = await file.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    await uploadAsset(file.name, b64);
+    await refreshAssets();
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    setAssetError(msg.includes("404") || msg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : msg);
+  }
 }
 
 const [lintOpen, setLintOpen] = useState<boolean>(false);
@@ -536,6 +545,7 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
 
   // v1: Custom cards (card = snapshot of current page)
   const [customCards, setCustomCards] = useState<{ id: string; name: string; description: string; device_types: string[] }[]>([]);
+  const [cardsError, setCardsError] = useState<string | null>(null);
   const [saveCardOpen, setSaveCardOpen] = useState<boolean>(false);
   const [saveCardName, setSaveCardName] = useState<string>("");
   const [saveCardDescription, setSaveCardDescription] = useState<string>("");
@@ -550,8 +560,11 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
     try {
       const cards = await listCards();
       setCustomCards(cards);
-    } catch {
+      setCardsError(null);
+    } catch (e: any) {
       setCustomCards([]);
+      const msg = String(e?.message || e);
+      setCardsError(msg.includes("404") || msg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : msg);
     }
   }
   useEffect(() => {
@@ -566,7 +579,8 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
       const res = await importRecipe(recipeImportYaml, recipeImportLabel || undefined, recipeImportId || undefined);
       setRecipeImportOk(res);
     } catch (e: any) {
-      setRecipeImportErr(String(e?.message || e));
+      const errMsg = String(e?.message || e);
+      setRecipeImportErr(errMsg.includes("404") || errMsg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : errMsg);
     } finally {
       setRecipeImportBusy(false);
     }
@@ -576,6 +590,10 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
 
 
   async function refresh() {
+    if (!entryId) {
+      setDevices([]);
+      return;
+    }
     const res = await listDevices(entryId);
     if (!res.ok) return setToast({ type: "error", msg: res.error });
     setDevices(res.devices);
@@ -593,16 +611,30 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
   useEffect(() => {
     refreshRecipes();
     (async () => {
-      const ctx = await getContext();
+      let ctx = await getContext();
       if (!ctx.ok) return setToast({ type: "error", msg: ctx.error });
-      setEntryId(ctx.entry_id);
+      let eid = ctx.entry_id ?? "";
+      if (!eid) {
+        await new Promise((r) => setTimeout(r, 2000));
+        ctx = await getContext();
+        if (ctx.ok) eid = ctx.entry_id ?? "";
+        if (!eid) {
+          await new Promise((r) => setTimeout(r, 3000));
+          ctx = await getContext();
+          if (ctx.ok) eid = ctx.entry_id ?? "";
+        }
+      }
+      setEntryId(eid);
 
       const si = await listWidgetSchemas();
       if (si.ok) setSchemaIndex(si.schemas);
 
-      // refresh after entryId set
-      const res = await listDevices(ctx.entry_id);
-      if (res.ok) setDevices(res.devices);
+      if (eid) {
+        const res = await listDevices(eid);
+        if (res.ok) setDevices(res.devices);
+      } else {
+        setDevices([]);
+      }
     })();
   }, []);
 
@@ -1337,6 +1369,10 @@ if (baseId.startsWith("glance_card")) {
 
   async function saveEditedDevice() {
     if (!selectedDevice || !newDeviceName.trim()) return;
+    if (!entryId) {
+      setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+      return;
+    }
     setBusy(true);
     try {
       const res = await upsertDevice(entryId, {
@@ -1363,6 +1399,10 @@ if (baseId.startsWith("glance_card")) {
 
   async function createNewDeviceFromWizard() {
     if (!newDeviceWizardRecipe || !newDeviceWizardId.trim()) return;
+    if (!entryId) {
+      setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+      return;
+    }
     const did = newDeviceWizardId.trim();
     setBusy(true);
     try {
@@ -1427,6 +1467,10 @@ if (baseId.startsWith("glance_card")) {
   }
 
   async function removeDevice(id: string) {
+    if (!entryId) {
+      setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+      return;
+    }
     setBusy(true);
     try {
       const res = await deleteDevice(entryId, id);
@@ -1438,6 +1482,10 @@ if (baseId.startsWith("glance_card")) {
   }
 
   async function copyDevice(sourceId: string, newName: string, newSlug: string) {
+    if (!entryId) {
+      setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+      return;
+    }
     setBusy(true);
     try {
       const projRes = await getProject(entryId, sourceId);
@@ -1461,6 +1509,10 @@ if (baseId.startsWith("glance_card")) {
   }
 
   async function loadDevice(id: string) {
+    if (!entryId) {
+      setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+      return;
+    }
     setBusy(true);
     try {
       const res = await getProject(entryId, id);
@@ -2460,6 +2512,9 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         <div>
           <h1>ESPHome Touch Designer</h1>
           <div className="muted">v{packageJson.version}</div>
+          {!entryId && (
+            <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>If you just started Home Assistant, wait a few seconds and refresh the page.</div>
+          )}
         </div>
         <div className="pill"><span className="muted">entry_id</span><code>{entryId || "…"}</code></div>
       </header>
@@ -3083,7 +3138,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                                 await refreshRecipes();
                                 setToast({ type: 'ok', msg: `Cloned: ${r.id}` });
                               } catch (e: any) {
-                                setRecipeMgrErr(String(e?.message || e));
+                                const errMsg = String(e?.message || e);
+                                setRecipeMgrErr(errMsg.includes("404") || errMsg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : errMsg);
                               } finally {
                                 setRecipeMgrBusy(false);
                               }
@@ -3104,7 +3160,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                                     await refreshRecipes();
                                     setToast({ type: "ok", msg: `Updated label: ${r.id}` });
                                   } catch (e: any) {
-                                    setRecipeMgrErr(String(e?.message || e));
+                                    const errMsg = String(e?.message || e);
+                                    setRecipeMgrErr(errMsg.includes("404") || errMsg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : errMsg);
                                   } finally {
                                     setRecipeMgrBusy(false);
                                   }
@@ -3123,7 +3180,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                                     await refreshRecipes();
                                     setToast({ type: "ok", msg: `Deleted recipe: ${r.id}` });
                                   } catch (e: any) {
-                                    setRecipeMgrErr(String(e?.message || e));
+                                    const errMsg = String(e?.message || e);
+                                    setRecipeMgrErr(errMsg.includes("404") || errMsg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : errMsg);
                                   } finally {
                                     setRecipeMgrBusy(false);
                                   }
@@ -3384,6 +3442,10 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         busy={busy}
         onOpen={(id) => { loadDevice(id); setManageDevicesOpen(false); }}
         onRename={async (id, payload) => {
+          if (!entryId) {
+            setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
+            return;
+          }
           const dev = devices.find((d) => d.device_id === id);
           const res = await upsertDevice(entryId, { device_id: id, name: payload.name, slug: payload.slug, hardware_recipe_id: dev?.hardware_recipe_id ?? null });
           if (!res.ok) return setToast({ type: "error", msg: res.error });
@@ -3443,7 +3505,12 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               Required for Home Assistant API. Visible for debugging. Saves with device; paste into ESPHome secrets or ensure it matches configuration.yaml.
             </div>
-            {!entryId && <div className="muted" style={{ marginTop: 6 }}>Integration not ready.</div>}
+            {!entryId && (
+              <div className="muted" style={{ marginTop: 6 }}>
+                Integration not ready.
+                <div style={{ marginTop: 4, fontSize: 11 }}>If you just started Home Assistant, wait a few seconds and refresh the page.</div>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
               <button className="ghost" onClick={() => setEditDeviceModalOpen(false)}>Cancel</button>
               <button disabled={busy || !newDeviceName.trim()} onClick={saveEditedDevice}>Save</button>
@@ -3994,6 +4061,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               <>
                 <div className="sectionTitle" title="Card = reusable UI snippet (e.g. thermostat, fan) you can drop on the canvas.">Card Library</div>
                 <div className="muted" style={{ fontSize: 10, marginBottom: 8 }}>Cards = reusable UI snippets. Drop onto the canvas.</div>
+                {cardsError && <div className="error" style={{ marginBottom: 8 }}>{cardsError}</div>}
                 <div className="palette">
                   {[...(CONTROL_TEMPLATES || []), ...(pluginControls || [])].filter((t: any) => t && String((t as any).title ?? "").startsWith("Card Library • ") && !String((t as any).title ?? "").startsWith("Card Library disabled • ")).map((t: any) => (
                     <div
@@ -4460,7 +4528,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       )}
                     </div>
                     {selectedSchema ? (
-                      <Inspector widget={selectedWidget} schema={selectedSchema} onChange={updateField} assets={assets} />
+                      <Inspector widget={selectedWidget} schema={selectedSchema} onChange={updateField} assets={assets} assetError={assetError} />
                     ) : (
                       <div className="muted">No schema for this widget type.</div>
                     )}
@@ -5566,8 +5634,8 @@ function MultiSelectProperties(props: {
 // ESPHome LVGL built-in fonts (Montserrat). User can pick these without uploading assets.
 const BUILTIN_LVGL_FONTS = ["montserrat_8","montserrat_10","montserrat_12","montserrat_14","montserrat_16","montserrat_18","montserrat_20","montserrat_22","montserrat_24","montserrat_26","montserrat_28","montserrat_30","montserrat_32","montserrat_34","montserrat_36","montserrat_38","montserrat_40","montserrat_42","montserrat_44","montserrat_46","montserrat_48"];
 
-function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (section: any, key: string, value: any) => void; assets: {name:string; size:number}[] }) {
-  const { widget, schema, onChange, assets } = props;
+function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (section: any, key: string, value: any) => void; assets: {name:string; size:number}[]; assetError?: string | null }) {
+  const { widget, schema, onChange, assets, assetError } = props;
   const fontFiles = (assets || []).map(a=>a.name).filter(n=>/\.(ttf|otf)$/i.test(n));
   const fontSizes = [10,12,14,16,18,20,24,28,32,36,40];
 
@@ -5904,6 +5972,7 @@ function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (sectio
 
   return (
     <div>
+      {assetError && <div className="error" style={{ marginBottom: 8 }}>{assetError}</div>}
       <div className="muted" style={{ marginBottom: 8 }}><strong>{schema.title}</strong> <span className="muted">({schema.type})</span></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
         <input

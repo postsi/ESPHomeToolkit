@@ -1981,7 +1981,10 @@ def _active_entry_id(hass: HomeAssistant) -> str | None:
 
 
 def _get_storage(hass: HomeAssistant, entry_id: str):
-    return hass.data[DOMAIN][entry_id]["storage"]
+    """Return storage for entry_id, or None if entry not loaded (e.g. stale or not yet set up)."""
+    if not entry_id or entry_id not in hass.data.get(DOMAIN, {}):
+        return None
+    return hass.data[DOMAIN][entry_id].get("storage")
 
 
 def _get_addon_connection(hass: HomeAssistant, entry_id: str | None = None) -> tuple[str, str] | None:
@@ -4044,9 +4047,8 @@ class ContextView(HomeAssistantView):
 
     async def get(self, request):
         hass: HomeAssistant = request.app["hass"]
-        entry_id = _active_entry_id(hass)
-        if not entry_id:
-            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        entry_id = _active_entry_id(hass) or ""
+        # Return 200 with entry_id (or "") so frontend still loads schemas/recipes; device list and create need a real entry
         return self.json({"ok": True, "entry_id": entry_id})
 
 
@@ -4073,7 +4075,8 @@ class DiagnosticsView(HomeAssistantView):
         device_count = 0
         if entry_id:
             storage = _get_storage(hass, entry_id)
-            device_count = len(storage.state.devices)
+            if storage is not None:
+                device_count = len(storage.state.devices)
         return self.json({
             "ok": True,
             "version": _integration_version(),
@@ -4294,6 +4297,8 @@ class DevicesView(HomeAssistantView):
         if not entry_id:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         return self.json({
             "ok": True,
             "devices": [
@@ -4316,6 +4321,8 @@ class DevicesView(HomeAssistantView):
 
         body = await request.json()
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
 
         existing = storage.get_device(body["device_id"])
         api_key = body.get("api_key")
@@ -4366,6 +4373,8 @@ class DevicesView(HomeAssistantView):
         if not device_id:
             return self.json({"ok": False, "error": "missing_device_id"}, status_code=400)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         ok = storage.delete_device(device_id)
         if ok:
             await storage.async_save()
@@ -4383,6 +4392,8 @@ class DeviceProjectView(HomeAssistantView):
         if not entry_id:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -4415,6 +4426,8 @@ class DeviceProjectView(HomeAssistantView):
         if not entry_id:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -5068,7 +5081,8 @@ class SectionsDefaultsView(HomeAssistantView):
             entry_id = request.query.get("entry_id") or body.get("entry_id") or _active_entry_id(hass)
             if entry_id:
                 storage = _get_storage(hass, entry_id)
-                device = storage.get_device(device_id)
+                if storage is not None:
+                    device = storage.get_device(device_id)
         recipe_id = (body.get("recipe_id") or "").strip() or (project.get("device") or {}).get("hardware_recipe_id") or (project.get("hardware") or {}).get("recipe_id") or ""
         if not recipe_id:
             recipe_id = "sunton_2432s028r_320x240"
@@ -5156,6 +5170,8 @@ class CompileView(HomeAssistantView):
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
 
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -5312,6 +5328,8 @@ class DeployView(HomeAssistantView):
         device_id = body["device_id"]
 
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -5371,6 +5389,8 @@ class DeployBuildView(HomeAssistantView):
             return self.json({"ok": False, "error": "missing_device_id"}, status_code=400)
 
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({
@@ -5409,14 +5429,13 @@ class DeployBuildView(HomeAssistantView):
 
 def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Register all HTTP API views for the integration."""
-    hass.http.register_view(ContextView)
+    # ContextView is registered in panel so /api/context is always available
     hass.http.register_view(HealthView)
     hass.http.register_view(DiagnosticsView)
     hass.http.register_view(SelfCheckView)
 
-    # Schemas and Recipes are registered in panel.async_register_designer_panel so they work without a config entry
+    # ContextView and DevicesView are registered in panel so routes exist; they return no_active_entry when no config entry
     # Schemas / devices
-    hass.http.register_view(DevicesView)
     hass.http.register_view(DeviceProjectView)
     hass.http.register_view(CleanupOrphansView)
 
@@ -5909,6 +5928,8 @@ class DeviceProjectExportView(HomeAssistantView):
         if not entry_id:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -5937,6 +5958,8 @@ class DeviceProjectImportView(HomeAssistantView):
         if not entry_id:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -6016,6 +6039,8 @@ class DeviceExportPreviewView(HomeAssistantView):
             return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
 
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
@@ -6075,6 +6100,8 @@ class DeviceExportView(HomeAssistantView):
             return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
 
         storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
