@@ -931,6 +931,7 @@ const stageRef = useRef<any>(null);
                     return Math.max(8, Math.min(24, Math.round(baseFontSize * scaleFactor)));
                   })();
             const labelColor = toFillColor(s.label_text_color ?? p.label_text_color ?? s.text_color, "#e5e7eb");
+            const tickColor = toFillColor(s.tick_color ?? p.tick_color ?? s.label_text_color ?? p.label_text_color ?? s.text_color, "#e5e7eb");
             const minInt = Math.ceil(min);
             const maxInt = Math.floor(max);
             const tickInterval = Math.max(1, Number(s.tick_interval ?? p.tick_interval ?? 1));
@@ -956,7 +957,7 @@ const stageRef = useRef<any>(null);
                       x={cx}
                       y={cy}
                       points={[(outerR - tickLen) * c, (outerR - tickLen) * s_, (outerR + tickLen) * c, (outerR + tickLen) * s_]}
-                      stroke={labelColor}
+                      stroke={tickColor}
                       strokeWidth={1}
                       listening={false}
                     />

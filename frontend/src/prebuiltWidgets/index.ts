@@ -530,6 +530,7 @@ interval:
           style: {
             bg_color: bgTrack,
             radius: 4,
+            tick_color: textNormal,
             label_text_color: textNormal,
             label_text_font: "",
             label_font_size: 0,
@@ -564,6 +565,39 @@ interval:
           { widget_id: btnId, event: "on_click", yaml_override: "then:\n  - lvgl.page.previous:" },
         ],
       };
+    },
+  },
+  {
+    id: "prebuilt_screen_saver",
+    title: "Screen saver",
+    description: "Blanks display after idle time; touch wakes. Set timeout in inspector (seconds).",
+    build: ({ x, y }) => {
+      const rootId = uid("screensaver");
+      const defaultTimeout = 60;
+      const raw = [
+        {
+          id: rootId,
+          type: "container",
+          x: 0,
+          y: 0,
+          w: 140,
+          h: 28,
+          props: { timeout_seconds: defaultTimeout },
+          style: { bg_color: bgDark, radius: 6 },
+        },
+        {
+          id: uid("screensaver_lbl"),
+          type: "label",
+          parent_id: rootId,
+          x: pad,
+          y: 4,
+          w: 120,
+          h: 20,
+          props: { text: `Screen saver (${defaultTimeout}s)` },
+          style: { text_color: textMuted, text_font: "montserrat_14" },
+        },
+      ];
+      return { widgets: wrapInGroup(x, y, raw) };
     },
   },
   {

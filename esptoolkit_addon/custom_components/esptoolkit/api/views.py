@@ -156,6 +156,95 @@ def _collect_widget_ids_from_project(project: dict) -> set[str]:
     return ids
 
 
+def _iter_all_widgets(project: dict):
+    """Yield every widget dict from project.pages[].widgets (flat and nested)."""
+    pages = project.get("pages") or []
+    if not isinstance(pages, list):
+        return
+
+    def visit(widgets: list):
+        for w in widgets or []:
+            if isinstance(w, dict):
+                yield w
+                yield from visit(w.get("widgets") or [])
+
+    for p in pages:
+        if isinstance(p, dict):
+            yield from visit(p.get("widgets") or [])
+
+
+def _get_screensaver_config(project: dict) -> tuple[bool, int]:
+    """If project has a screen saver widget (id starts with 'screensaver_'), return (True, timeout_seconds). Else (False, 60)."""
+    for w in _iter_all_widgets(project):
+        wid = str(w.get("id") or "").strip()
+        if wid.startswith("screensaver_"):
+            props = w.get("props") or {}
+            if isinstance(props, dict):
+                timeout = props.get("timeout_seconds")
+                if timeout is not None:
+                    try:
+                        return (True, max(5, min(86400, int(timeout))))
+                    except (TypeError, ValueError):
+                        pass
+            return (True, 60)
+    return (False, 60)
+
+
+def _compile_screensaver_globals() -> str:
+    """YAML body for screen saver global (last activity time)."""
+    return (
+        "  - id: etd_screensaver_last_activity\n"
+        "    type: uint32_t\n"
+        "    restore_value: no\n"
+        "    initial_value: '0'\n"
+    )
+
+
+def _compile_screensaver_interval(timeout_seconds: int) -> str:
+    """YAML body for screen saver interval: every 1s, turn off backlight if idle > timeout."""
+    timeout_ms = timeout_seconds * 1000
+    return (
+        "  - interval: 1s\n"
+        "    then:\n"
+        "      - lambda: |-\n"
+        "          if (id(etd_screensaver_last_activity) == 0) {\n"
+        "            id(etd_screensaver_last_activity) = millis();\n"
+        "          } else if ((millis() - id(etd_screensaver_last_activity)) >= " + str(timeout_ms) + ") {\n"
+        "            id(display_backlight).turn_off();\n"
+        "          }\n"
+    )
+
+
+def _inject_screensaver_on_touch_into_body(touchscreen_body: str, backlight_id: str = "display_backlight") -> str:
+    """Inject on_touch into the first touchscreen entry so touch wakes display. Returns modified body."""
+    if not touchscreen_body or not touchscreen_body.strip():
+        return touchscreen_body
+    lines = touchscreen_body.splitlines()
+    # List format: "  - id: ...\n    platform: ..." vs single-object: "  platform: ...\n  id: ..."
+    on_touch_lines = [
+        "  on_touch:",
+        "    then:",
+        "    - lambda: 'id(etd_screensaver_last_activity) = millis();'",
+        "    - light.turn_on:",
+        "        id: " + backlight_id,
+    ]
+    if lines[0].strip().startswith("- ") or (len(lines[0]) >= 4 and lines[0][:4] == "  - "):
+        # List format: inject into first entry (before next "  - " or end)
+        first_entry_end = len(lines)
+        for i in range(1, len(lines)):
+            ln = lines[i]
+            if len(ln) >= 4 and ln[:4] == "  - " and not ln.startswith("    "):
+                first_entry_end = i
+                break
+        indent = "    "
+        on_touch_block = [indent + "on_touch:", indent + "  then:", indent + "  - lambda: 'id(etd_screensaver_last_activity) = millis();'", indent + "  - light.turn_on:", indent + "      id: " + backlight_id]
+        new_lines = lines[:first_entry_end] + on_touch_block + lines[first_entry_end:]
+    else:
+        # Single-object format: append on_touch at top level (2-space indent)
+        new_lines = lines + on_touch_lines
+    return "\n".join(new_lines)
+
+
 def _widget_refs_in_block(block: str) -> list[str]:
     """Return list of widget ids referenced in a section block (e.g. '  - platform: lvgl\\n    widget: x')."""
     return _WIDGET_REF_RE.findall(block)
@@ -1336,6 +1425,22 @@ def _build_compiler_sections(project: dict, device: object | None = None) -> dic
                 else:
                     out["interval"] = interval_body
 
+    # Screen saver: globals + interval when screen saver widget is present
+    has_screensaver, screensaver_timeout = _get_screensaver_config(project)
+    if has_screensaver:
+        ss_globals = _compile_screensaver_globals()
+        if ss_globals.strip():
+            if "globals" in out:
+                out["globals"] = out["globals"].rstrip() + "\n\n" + ss_globals.rstrip()
+            else:
+                out["globals"] = ss_globals.rstrip()
+        ss_interval = _compile_screensaver_interval(screensaver_timeout)
+        if ss_interval.strip():
+            if "interval" in out:
+                out["interval"] = out["interval"].rstrip() + "\n\n" + ss_interval.rstrip()
+            else:
+                out["interval"] = ss_interval.rstrip()
+
     # LVGL (full body: config + pages); keep leading indent (rstrip only).
     pages_yaml = _compile_lvgl_pages_schema_driven(
         project, cpicker_defaults=cpicker_defaults, wpicker_defaults=wpicker_defaults
@@ -1760,6 +1865,9 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
             continue
         block = pieces[key]
         content = _section_body_from_value(block, key)
+        # Screen saver: inject on_touch into first touchscreen entry so touch wakes display
+        if key == "touchscreen" and content and _get_screensaver_config(project)[0]:
+            content = _inject_screensaver_on_touch_into_body(content, "display_backlight")
         # Minimal stub recipe uses id stub_display; lvgl body has no displays key, so prepend for "esphome config" to pass
         if key == "lvgl" and content and display_id == "stub_display" and "  displays:" not in content:
             content = "  displays:\n  - " + display_id + "\n" + content
@@ -2475,7 +2583,7 @@ def _emit_widget_from_schema(
             if k in ("align_to_id", "align_to_align", "align_to_x", "align_to_y", "width_override", "height_override"):
                 continue  # align_to -> block below; width/height_override -> used in geometry
             # Designer-only keys for arc/arc_labeled: never emit (ESPHome arc has no such options).
-            if section == "style" and root_key == "arc" and k in ("label_text_color", "label_text_font", "label_font_size", "tick_interval", "label_interval"):
+            if section == "style" and root_key == "arc" and k in ("tick_color", "label_text_color", "label_text_font", "label_font_size", "tick_interval", "label_interval"):
                 continue
             # Only emit props/style keys that are in the esphome mapping (designer-only keys are omitted).
             if section in ("props", "style") and k not in mapping:
@@ -3752,12 +3860,11 @@ def _compile_lvgl_pages_schema_driven(
                 if isinstance(label_color, str):
                     label_color = _hex_color_for_yaml(label_color) or 0xFFFFFF
                 label_color = int(label_color) & 0xFFFFFF
+                tick_color = style.get("tick_color") or style.get("label_text_color") or style.get("text_color") or 0xFFFFFF
+                if isinstance(tick_color, str):
+                    tick_color = _hex_color_for_yaml(tick_color) or 0xFFFFFF
+                tick_color = int(tick_color) & 0xFFFFFF
                 label_font = (style.get("label_text_font") or "").strip() or None
-                # Arc at (0,0) inside container
-                w_arc = dict(w)
-                w_arc["x"] = 0
-                w_arc["y"] = 0
-                raw_arc = _emit_widget_from_schema(w_arc, schema, ab_list, parent_w, parent_h, option_maps)
                 cx = w_val / 2.0
                 cy = h_val / 2.0
                 r = min(w_val, h_val) / 2.0
@@ -3768,18 +3875,48 @@ def _compile_lvgl_pages_schema_driven(
                 max_int = int(math.floor(max_val))
                 tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
                 label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
+                label_font_size = max(8, min(24, int(style.get("label_font_size") or 0) or 14))
+                # Compute label positions and bounding box so container can be expanded to avoid clipping
+                label_boxes = []
+                for i, value in enumerate(label_values):
+                    angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
+                    angle_rad = math.radians(angle_deg)
+                    lx = cx + label_r * math.cos(angle_rad)
+                    ly = cy + label_r * math.sin(angle_rad)
+                    text = str(value)
+                    box = max(20, int(len(text) * label_font_size * 0.6) + 6)
+                    half = box / 2
+                    lx_int = int(round(lx - half))
+                    ly_int = int(round(ly - label_font_size / 2))
+                    label_boxes.append((lx_int, ly_int, box, label_font_size + 2))
+                pad = 4
+                min_x = 0
+                max_x = w_val
+                min_y = 0
+                max_y = h_val
+                for (lx_int, ly_int, box, lh) in label_boxes:
+                    min_x = min(min_x, lx_int)
+                    max_x = max(max_x, lx_int + box)
+                    min_y = min(min_y, ly_int)
+                    max_y = max(max_y, ly_int + lh)
+                container_w = max(w_val, max_x - min_x + 2 * pad)
+                container_h = max(h_val, max_y - min_y + 2 * pad)
+                ox = pad - min_x
+                oy = pad - min_y
+                w_arc = dict(w)
+                w_arc["x"] = int(round(ox))
+                w_arc["y"] = int(round(oy))
+                raw_arc = _emit_widget_from_schema(w_arc, schema, ab_list, parent_w, parent_h, option_maps)
                 ci = indent + "    "
                 ce = indent + "      "
-                cb = indent + "        "
-                # Arc body must be indented more than "- arc:" so YAML sees one key per widget
                 cb_arc = indent + "          "
                 out_parts = [
                     f"{indent}- container:\n",
                     f"{ci}id: {wid}_ct\n",
                     f"{ci}x: {x_val}\n",
                     f"{ci}y: {y_val}\n",
-                    f"{ci}width: {w_val}\n",
-                    f"{ci}height: {h_val}\n",
+                    f"{ci}width: {container_w}\n",
+                    f"{ci}height: {container_h}\n",
                     f"{ci}widgets:\n",
                 ]
                 for ln in raw_arc.splitlines(True):
@@ -3800,33 +3937,25 @@ def _compile_lvgl_pages_schema_driven(
                     line_id = f"{wid}_tick_{i}"
                     out_parts.append(f"{ce}- line:\n")
                     out_parts.append(f"{cb_arc}id: {line_id}\n")
-                    out_parts.append(f"{cb_arc}x: 0\n")
-                    out_parts.append(f"{cb_arc}y: 0\n")
+                    out_parts.append(f"{cb_arc}x: {int(round(ox))}\n")
+                    out_parts.append(f"{cb_arc}y: {int(round(oy))}\n")
                     out_parts.append(f"{cb_arc}width: {w_val}\n")
                     out_parts.append(f"{cb_arc}height: {h_val}\n")
                     out_parts.append(f"{cb_arc}points:\n")
                     out_parts.append(f"{cb_arc}  - {pts[0]}\n")
                     out_parts.append(f"{cb_arc}  - {pts[1]}\n")
                     out_parts.append(f"{cb_arc}line_width: 1\n")
-                    out_parts.append(f"{cb_arc}line_color: 0x{label_color:06X}\n")
-                label_font_size = max(8, min(24, int(style.get("label_font_size") or 0) or 14))
+                    out_parts.append(f"{cb_arc}line_color: 0x{tick_color:06X}\n")
                 for i, value in enumerate(label_values):
-                    angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
-                    angle_rad = math.radians(angle_deg)
-                    lx = cx + label_r * math.cos(angle_rad)
-                    ly = cy + label_r * math.sin(angle_rad)
+                    lx_int, ly_int, box, lh = label_boxes[i]
                     text = str(value)
-                    box = max(20, int(len(text) * label_font_size * 0.6) + 6)
-                    half = box / 2
-                    lx_int = int(round(lx - half))
-                    ly_int = int(round(ly - label_font_size / 2))
                     lbl_id = f"{wid}_lbl_{value}"
                     out_parts.append(f"{ce}- label:\n")
                     out_parts.append(f"{cb_arc}id: {lbl_id}\n")
-                    out_parts.append(f"{cb_arc}x: {lx_int}\n")
-                    out_parts.append(f"{cb_arc}y: {ly_int}\n")
+                    out_parts.append(f"{cb_arc}x: {int(round(ox)) + lx_int}\n")
+                    out_parts.append(f"{cb_arc}y: {int(round(oy)) + ly_int}\n")
                     out_parts.append(f"{cb_arc}width: {box}\n")
-                    out_parts.append(f"{cb_arc}height: {label_font_size + 2}\n")
+                    out_parts.append(f"{cb_arc}height: {lh}\n")
                     out_parts.append(f"{cb_arc}text: {json.dumps(text)}\n")
                     out_parts.append(f"{cb_arc}text_color: 0x{label_color:06X}\n")
                     if label_font:

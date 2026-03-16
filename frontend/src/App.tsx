@@ -4151,7 +4151,15 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                         const p2 = clone(project);
                         const pg = p2.pages?.[safePageIndex];
                         if (!pg?.widgets) return;
-                        const built = pw.build({ x: 80, y: 80 });
+                        const NAV_BAR_W = 200;
+                        const NAV_BAR_H = 44;
+                        const placeX = pw.id === "prebuilt_nav_bar"
+                          ? (screenSize.width - NAV_BAR_W) / 2
+                          : 80;
+                        const placeY = pw.id === "prebuilt_nav_bar"
+                          ? screenSize.height - NAV_BAR_H
+                          : 80;
+                        const built = pw.build({ x: placeX, y: placeY });
                         const widgets = built.widgets || [];
                         for (const w of widgets) pg.widgets.push(w);
                         const rootId = widgets[0]?.id ?? null;
@@ -4332,7 +4340,15 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       const pw = PREBUILT_WIDGETS.find((p) => p.id === prebuiltId);
                       console.log('[ETD onDropCreate] Prebuilt:', prebuiltId, 'found:', !!pw);
                       if (pw && pg) {
-                        const built = pw.build({ x, y });
+                        const NAV_BAR_W = 200;
+                        const NAV_BAR_H = 44;
+                        const placeX = prebuiltId === "prebuilt_nav_bar"
+                          ? (screenSize.width - NAV_BAR_W) / 2
+                          : x;
+                        const placeY = prebuiltId === "prebuilt_nav_bar"
+                          ? screenSize.height - NAV_BAR_H
+                          : y;
+                        const built = pw.build({ x: placeX, y: placeY });
                         const widgets = built.widgets || [];
                         console.log('[ETD onDropCreate] Built widgets:', widgets.length, widgets.map((w: any) => ({ id: w.id, type: w.type, parent_id: w.parent_id })));
                         for (const w of widgets) pg.widgets.push(w);
