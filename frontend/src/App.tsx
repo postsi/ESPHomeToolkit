@@ -2472,7 +2472,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     } catch (e: any) {
       setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
     } finally {
-      setBusy(false);
+      setBusy(false); // re-enable Deploy / Deploy to Host when request completes (add-on exits with --no-logs)
     }
   }
 
@@ -2501,7 +2501,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     } catch (e: any) {
       setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
     } finally {
-      setBusy(false);
+      setBusy(false); // re-enable buttons when request completes
     }
   }
 

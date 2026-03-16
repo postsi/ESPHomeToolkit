@@ -39,6 +39,9 @@ class JobRunner:
         argv = ["esphome", command, config_path]
         if device and str(device).strip():
             argv.extend(["--device", str(device).strip()])
+        # run = validate + compile + upload; --no-logs so we exit after upload instead of staying connected
+        if command == "run":
+            argv.append("--no-logs")
         proc = await asyncio.create_subprocess_exec(
             *argv,
             stdout=asyncio.subprocess.PIPE,
