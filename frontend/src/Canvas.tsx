@@ -921,10 +921,15 @@ const stageRef = useRef<any>(null);
             const tickLen = Math.max(2, Math.min(6, Math.min(w.w, w.h) / 40));
             const labelFontSizeProp = Number(s.label_font_size ?? 0);
             const labelFontId = s.label_text_font ?? p.label_text_font ?? s.text_font ?? p.text_font;
-            const baseFontSize = labelFontSizeProp > 0 ? labelFontSizeProp : (fontSizeFromFontId(labelFontId) ?? 12);
-            const scaleRef = 100;
-            const scaleFactor = Math.min(w.w, w.h) / scaleRef;
-            const labelFontSize = Math.max(8, Math.min(24, Math.round(baseFontSize * scaleFactor)));
+            const labelFontSize =
+              labelFontSizeProp > 0
+                ? Math.max(8, Math.min(48, labelFontSizeProp))
+                : (() => {
+                    const baseFontSize = fontSizeFromFontId(labelFontId) ?? 12;
+                    const scaleRef = 100;
+                    const scaleFactor = Math.min(w.w, w.h) / scaleRef;
+                    return Math.max(8, Math.min(24, Math.round(baseFontSize * scaleFactor)));
+                  })();
             const labelColor = toFillColor(s.label_text_color ?? p.label_text_color ?? s.text_color, "#e5e7eb");
             const minInt = Math.ceil(min);
             const maxInt = Math.floor(max);

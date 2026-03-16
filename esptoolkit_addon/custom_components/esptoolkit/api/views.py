@@ -3771,6 +3771,8 @@ def _compile_lvgl_pages_schema_driven(
                 ci = indent + "    "
                 ce = indent + "      "
                 cb = indent + "        "
+                # Arc body must be indented more than "- arc:" so YAML sees one key per widget
+                cb_arc = indent + "          "
                 out_parts = [
                     f"{indent}- container:\n",
                     f"{ci}id: {wid}_ct\n",
@@ -3782,7 +3784,7 @@ def _compile_lvgl_pages_schema_driven(
                 ]
                 for ln in raw_arc.splitlines(True):
                     if ln.startswith("            "):
-                        out_parts.append(cb + ln[12:])
+                        out_parts.append(cb_arc + ln[12:])
                     elif ln.startswith("        "):
                         out_parts.append(ce + ln[8:])
                 for i, value in enumerate(tick_values):
