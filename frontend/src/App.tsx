@@ -25,6 +25,7 @@ import {
   deployExport,
   exportDeviceYamlPreview,
   exportDeviceYamlWithExpectedHash,
+  getVersion,
   validateExport,
   callService,
   fetchStateBatch,
@@ -293,6 +294,7 @@ function useHistory<T>(initial: T) {
 
 export default function App() {
   const [entryId, setEntryId] = useState<string>("");
+  const [versionInfo, setVersionInfo] = useState<{ integration: string; addon: string | null } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
@@ -639,6 +641,16 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!entryId) {
+      setVersionInfo(null);
+      return;
+    }
+    getVersion(entryId)
+      .then(setVersionInfo)
+      .catch(() => setVersionInfo(null));
+  }, [entryId]);
 
   const selectedDeviceObj = useMemo(() => devices.find((d) => d.device_id === selectedDevice) || null, [devices, selectedDevice]);
   const selectedRecipeId = selectedDeviceObj?.hardware_recipe_id || null;
@@ -2540,7 +2552,10 @@ function nudgeSelected(dx: number, dy: number, step: number) {
       <header className="header">
         <div>
           <h1>EspToolkit Designer</h1>
-          <div className="muted">v{packageJson.version}</div>
+          <div className="muted">
+            Designer v{versionInfo?.integration || packageJson.version}
+            {versionInfo?.addon != null && versionInfo.addon !== "" ? ` · Add-on v${versionInfo.addon}` : ""}
+          </div>
           {!entryId && (
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>If you just started Home Assistant, wait a few seconds and refresh the page.</div>
           )}

@@ -4071,6 +4071,41 @@ class HealthView(HomeAssistantView):
         return self.json({"ok": True, "version": _integration_version()})
 
 
+class VersionView(HomeAssistantView):
+    """Return integration and add-on versions for the Designer UI (e.g. 'Designer 1.0.24 | Add-on 1.0.24')."""
+
+    url = f"/api/{DOMAIN}/version"
+    name = f"api:{DOMAIN}:version"
+    requires_auth = False
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        addon_version = None
+        conn = _get_addon_connection(hass, entry_id) if entry_id else None
+        if conn:
+            base_url, token = conn
+            import aiohttp
+            url = base_url.rstrip("/") + "/api/version"
+            headers = {}
+            if token and token.strip():
+                headers["Authorization"] = f"Bearer {token.strip()}"
+            try:
+                timeout = aiohttp.ClientTimeout(total=10)
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers, timeout=timeout) as resp:
+                        if resp.status == 200:
+                            data = await resp.json() if "application/json" in (resp.content_type or "") else None
+                            if isinstance(data, dict) and "api_addon" in data:
+                                addon_version = str(data["api_addon"]).strip() or None
+            except Exception:
+                pass
+        return self.json({
+            "integration": _integration_version(),
+            "addon": addon_version,
+        })
+
+
 
 class DiagnosticsView(HomeAssistantView):
     """Lightweight diagnostics for troubleshooting (used by Lane A hardening)."""
@@ -5447,6 +5482,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Register all HTTP API views for the integration."""
     # ContextView is registered in panel so /api/context is always available
     hass.http.register_view(HealthView)
+    hass.http.register_view(VersionView)
     hass.http.register_view(DiagnosticsView)
     hass.http.register_view(SelfCheckView)
 
@@ -6063,7 +6099,8 @@ class DeviceExportPreviewView(HomeAssistantView):
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
 
-        yaml_text = compile_to_esphome_yaml(device)
+        recipe_text = _get_recipe_text_for_device(hass, device)
+        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
 
         BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"
         END = "# --- END ESPHOME_TOUCH_DESIGNER GENERATED ---"
@@ -6131,7 +6168,8 @@ class DeviceExportView(HomeAssistantView):
             body = None
         expected_hash = body.get("expected_hash") if isinstance(body, dict) else None
 
-        yaml_text = compile_to_esphome_yaml(device)
+        recipe_text = _get_recipe_text_for_device(hass, device)
+        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
 
         BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"
         END = "# --- END ESPHOME_TOUCH_DESIGNER GENERATED ---"
@@ -6161,9 +6199,11 @@ class DeviceExportView(HomeAssistantView):
 
 
 def _write_device_yaml_to_esphome(hass: HomeAssistant, device: DeviceProject) -> tuple[Path | None, dict | None]:
-    """Compile device to YAML and write to /config/esphome/<slug>.yaml. Returns (path, None) on success or (None, error_json_response)."""
+    """Compile device to YAML and write to /config/esphome/<slug>.yaml. Returns (path, None) on success or (None, error_json_response).
+    Uses same recipe source (builtin or user) as Compile/Deploy so LVGL and all sections are included."""
+    recipe_text = _get_recipe_text_for_device(hass, device)
     try:
-        yaml_text = compile_to_esphome_yaml(device)
+        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
     except Exception as e:
         return None, {"ok": False, "error": "compile_failed", "detail": str(e)}
     BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"

@@ -256,3 +256,15 @@ export async function deployExport(device_id: string, entry_id: string, device?:
   const body = device && device.trim() ? { device: device.trim() } : {};
   return apiPost(u.toString(), body);
 }
+
+/** Integration and add-on versions for the Designer UI. */
+export async function getVersion(entry_id?: string): Promise<{ integration: string; addon: string | null }> {
+  const u = new URL(`${API_BASE}/version`, window.location.origin);
+  if (entry_id) u.searchParams.set("entry_id", entry_id);
+  const res = await fetch(u.toString(), { credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  return {
+    integration: (data as any)?.integration ?? "",
+    addon: (data as any)?.addon ?? null,
+  };
+}
