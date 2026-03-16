@@ -135,8 +135,56 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
 
     # Register panel and /esptoolkit, /esptoolkit/designer here so they work even before a config entry exists (add-on ingress Designer tab iframes /esptoolkit/designer)
     await async_register_designer_panel(hass)
+
+    # When context is requested with no active entry, try to create/reload from add-on file (fixes add-on-starts-after-HA race)
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["_ensure_config_entry_from_file"] = _ensure_config_entry_from_addon_file
+
     _LOGGER.warning("ESPToolkit loaded. Panel at /esptoolkit, Designer at /esptoolkit/designer.")
     return True
+
+
+async def _ensure_config_entry_from_addon_file(hass: HomeAssistant) -> str | None:
+    """If there is no active config entry, try to create or reload from add-on config file (e.g. add-on started after HA).
+    Returns entry_id if we now have an active entry, else None."""
+    from .api.views import _active_entry_id
+
+    if _active_entry_id(hass):
+        return _active_entry_id(hass)
+    config_path = Path(hass.config.config_dir) / _INTEGRATION_CONFIG_FILE
+    if not config_path.is_file():
+        return None
+    try:
+        data = json.loads(await hass.async_add_executor_job(config_path.read_text))
+    except Exception as e:
+        _LOGGER.debug("Could not read add-on config file %s: %s", config_path, e)
+        return None
+    base_url = (data.get("base_url") or "").strip().rstrip("/")
+    token = (data.get("token") or "").strip()
+    if not base_url or not token:
+        return None
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if entries:
+        entry = entries[0]
+        _LOGGER.info("Reloading config entry from add-on file (entry was not set up)")
+        await hass.config_entries.async_reload(entry.entry_id)
+        return entry.entry_id
+    entry = ConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="ESPToolkit",
+        data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
+        source="import",
+        options=None,
+        subentries_data=None,
+        discovery_keys=MappingProxyType({}),
+        unique_id=None,
+    )
+    await hass.config_entries.async_add(entry)
+    _LOGGER.info("Created config entry from add-on file when opening Designer (base_url=%s)", base_url)
+    await _async_setup_entry_impl(hass, entry)
+    return entry.entry_id
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

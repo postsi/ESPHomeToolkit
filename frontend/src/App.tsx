@@ -52,7 +52,7 @@ import YamlEditor from "./YamlEditor";
 type Toast = { type: "ok" | "error"; msg: string };
 
 const INTEGRATION_NOT_CONFIGURED_MSG =
-  "Integration not configured. Set the API token in the ESPToolkit add-on (Settings → Add-ons → ESPToolkit → Configuration), then restart the add-on and Home Assistant.";
+  "Designer isn't connected yet. If you've set the API token in the ESPToolkit add-on (Settings → Add-ons → ESPToolkit → Configuration), restart the add-on and Home Assistant, then refresh this page.";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(16).slice(2, 10)}`;

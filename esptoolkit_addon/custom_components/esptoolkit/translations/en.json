@@ -1,0 +1,14 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESPToolkit"
+      }
+    },
+    "abort": {
+      "configure_via_addon": "Configure the ESPToolkit add-on (Settings → Add-ons → ESPToolkit → Configuration): set the API token and ensure the add-on is running. The integration will be set up automatically.",
+      "invalid_config": "Invalid configuration (base_url and token required).",
+      "already_configured": "Integration is already configured."
+    }
+  }
+}

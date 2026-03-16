@@ -4048,8 +4048,14 @@ class ContextView(HomeAssistantView):
     async def get(self, request):
         hass: HomeAssistant = request.app["hass"]
         entry_id = _active_entry_id(hass) or ""
-        # Return 200 with entry_id (or "") so frontend still loads schemas/recipes; device list and create need a real entry
-        return self.json({"ok": True, "entry_id": entry_id})
+        if not entry_id:
+            ensure = (hass.data.get(DOMAIN) or {}).get("_ensure_config_entry_from_file")
+            if callable(ensure):
+                try:
+                    entry_id = await ensure(hass) or ""
+                except Exception:
+                    entry_id = ""
+        return self.json({"ok": True, "entry_id": entry_id or ""})
 
 
 class HealthView(HomeAssistantView):
@@ -4248,12 +4254,17 @@ def _safe_merge_markers(existing_text: str, generated_block: str) -> str:
         after = "\n" + after
     return before + generated_block + after
 
+def _read_json_path(path):  # Used in executor to avoid blocking the event loop
+    return json.loads(path.read_text("utf-8"))
+
+
 class SchemasView(HomeAssistantView):
     url = f"/api/{DOMAIN}/schemas/widgets"
     name = f"api:{DOMAIN}:schemas_widgets"
     requires_auth = False  # Panel iframe: Safari may not send cookies; panel access is gated by sidebar
 
     async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
         schemas_path = _schemas_dir()
         items = []
         for p in sorted(schemas_path.glob("*.json")):
@@ -4261,7 +4272,7 @@ class SchemasView(HomeAssistantView):
             if wtype not in PALETTE_WIDGET_TYPES:
                 continue
             try:
-                data = json.loads(p.read_text("utf-8"))
+                data = await hass.async_add_executor_job(_read_json_path, p)
                 items.append({
                     "type": data.get("type", wtype),
                     "title": data.get("title", wtype),
@@ -4278,10 +4289,11 @@ class SchemaDetailView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, widget_type: str):
+        hass: HomeAssistant = request.app["hass"]
         schemas_path = _schemas_dir() / f"{widget_type}.json"
         if not schemas_path.exists():
             return self.json({"ok": False, "error": "schema_not_found"}, status_code=404)
-        data = json.loads(schemas_path.read_text("utf-8"))
+        data = await hass.async_add_executor_job(_read_json_path, schemas_path)
         data = _merge_common_extras(data, widget_type)
         return self.json({"ok": True, "schema": data})
 
