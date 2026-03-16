@@ -4055,7 +4055,11 @@ class ContextView(HomeAssistantView):
                     entry_id = await ensure(hass) or ""
                 except Exception:
                     entry_id = ""
-        return self.json({"ok": True, "entry_id": entry_id or ""})
+        addon_base_url = ""
+        conn = _get_addon_connection(hass, entry_id or None)
+        if conn:
+            addon_base_url = conn[0]
+        return self.json({"ok": True, "entry_id": entry_id or "", "addon_base_url": addon_base_url})
 
 
 class HealthView(HomeAssistantView):
@@ -5261,7 +5265,7 @@ class ValidateYamlView(HomeAssistantView):
         entry_id = request.query.get("entry_id") or _active_entry_id(hass)
         conn = _get_addon_connection(hass, entry_id)
         if not conn:
-            return self.json({"ok": False, "error": "no_addon_connection", "stdout": "", "stderr": "ESPToolkit add-on not configured."}, status_code=503)
+            return self.json({"ok": False, "error": "no_addon_connection", "stdout": "", "stderr": "EspToolkit add-on not configured."}, status_code=503)
         base_url, token = conn
         ok, result = await _esphome_addon_request(
             hass,
@@ -5413,7 +5417,7 @@ class DeployBuildView(HomeAssistantView):
 
         conn = _get_addon_connection(hass, entry_id)
         if not conn:
-            return self.json({"ok": False, "error": "no_addon_connection", "detail": "ESPToolkit add-on not configured."}, status_code=503)
+            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
         base_url, token = conn
 
         recipe_text = _get_recipe_text_for_device(hass, device)

@@ -25,7 +25,7 @@ class PingView(HomeAssistantView):
         return web.json_response({
             "ok": True,
             "integration": DOMAIN,
-            "message": "ESPToolkit integration is loaded. If /esptoolkit still 404s, ensure config entry exists (add-on writes .esptoolkit_addon_config.json) and restart HA.",
+            "message": "EspToolkit integration is loaded. If /esptoolkit still 404s, ensure config entry exists (add-on writes .esptoolkit_addon_config.json) and restart HA.",
         })
 
 
@@ -86,8 +86,15 @@ class PanelDesignerView(HomeAssistantView):
         )
 
 
-def _tabbed_panel_html() -> str:
-    """HTML for the tabbed panel (Overview + Designer as tabs)."""
+def _tabbed_panel_html(addon_base_url: str = "") -> str:
+    """HTML for the tabbed panel: Designer (default), ESPHome Output, Setup. No header."""
+    addon_operational_url = (addon_base_url.rstrip("/") + "/?tab=operational") if addon_base_url else ""
+    addon_setup_url = (addon_base_url.rstrip("/") + "/?tab=setup") if addon_base_url else ""
+    # When no add-on URL, show placeholder instead of empty iframe
+    operational_iframe_style = "" if addon_operational_url else "display:none;"
+    operational_ph_style = "display:block;" if not addon_operational_url else "display:none;"
+    setup_iframe_style = "" if addon_setup_url else "display:none;"
+    setup_ph_style = "display:block;" if not addon_setup_url else "display:none;"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,59 +108,68 @@ def _tabbed_panel_html() -> str:
     .tabs button {{ padding: 12px 20px; background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; border-bottom: 3px solid transparent; }}
     .tabs button:hover {{ background: rgba(255,255,255,0.05); }}
     .tabs button.active {{ border-bottom-color: var(--ha-primary-color, #03a9f4); }}
-    .panels {{ padding: 16px; }}
-    .panel {{ display: none; height: calc(100vh - 120px); }}
+    .panels {{ padding: 0; height: calc(100vh - 56px); }}
+    .panel {{ display: none; height: 100%; }}
     .panel.active {{ display: block; }}
     .panel.iframe-panel iframe {{ width: 100%; height: 100%; border: none; }}
-    .overview {{ max-width: 600px; }}
-    .overview a {{ color: var(--ha-primary-color); }}
+    .panel-placeholder {{ padding: 16px; color: var(--ha-secondary-text-color, #888); }}
   </style>
 </head>
 <body>
   <div class="tabs">
-    <button type="button" class="tab active" data-tab="overview">Overview</button>
-    <button type="button" class="tab" data-tab="designer">Designer</button>
+    <button type="button" class="tab active" data-tab="designer">Designer</button>
+    <button type="button" class="tab" data-tab="esphome-output">ESPHome Output</button>
+    <button type="button" class="tab" data-tab="setup">Setup</button>
   </div>
   <div class="panels">
-    <div id="overview" class="panel active">
-      <div class="overview">
-        <h2>{PANEL_TITLE}</h2>
-        <p>Use the <strong>Designer</strong> tab to build and manage ESPHome LVGL dashboards.</p>
-        <p>Open the Designer in this panel or in a new window:</p>
-        <ul>
-          <li><a href="{PANEL_DESIGNER_URL}" target="_blank">Open Designer in new window</a></li>
-        </ul>
-      </div>
+    <div id="designer" class="panel iframe-panel active">
+      <iframe src="{PANEL_DESIGNER_URL}" title="Designer"></iframe>
     </div>
-    <div id="designer" class="panel iframe-panel">
-      <iframe src="{PANEL_DESIGNER_URL}" title="ESPToolkit Designer"></iframe>
+    <div id="esphome-output" class="panel iframe-panel">
+      <iframe src="{addon_operational_url}" title="ESPHome Output" style="{operational_iframe_style}"></iframe>
+      <div class="panel-placeholder" style="{operational_ph_style}">Configure the add-on (Setup tab) and ensure it is running to use ESPHome Output.</div>
+    </div>
+    <div id="setup" class="panel iframe-panel">
+      <iframe src="{addon_setup_url}" title="Setup EspToolkit" style="{setup_iframe_style}"></iframe>
+      <div class="panel-placeholder" style="{setup_ph_style}">Set the API token in Settings → Add-ons → EspToolkit → Configuration and restart the add-on to load Setup.</div>
     </div>
   </div>
   <script>
-    document.querySelectorAll('.tab').forEach(function(btn) {{
-      btn.addEventListener('click', function() {{
-        var tab = this.getAttribute('data-tab');
-        document.querySelectorAll('.tab').forEach(function(b) {{ b.classList.remove('active'); }});
-        document.querySelectorAll('.panel').forEach(function(p) {{ p.classList.remove('active'); }});
-        this.classList.add('active');
-        var el = document.getElementById(tab);
-        if (el) el.classList.add('active');
+    (function() {{
+      var tabs = document.querySelectorAll('.tab');
+      var panels = document.querySelectorAll('.panel');
+      tabs.forEach(function(btn) {{
+        btn.addEventListener('click', function() {{
+          var tab = this.getAttribute('data-tab');
+          tabs.forEach(function(b) {{ b.classList.remove('active'); }});
+          panels.forEach(function(p) {{ p.classList.remove('active'); }});
+          this.classList.add('active');
+          var el = document.getElementById(tab);
+          if (el) el.classList.add('active');
+        }});
       }});
-    }});
+    }})();
   </script>
 </body>
 </html>"""
 
 
 class PanelIndexView(HomeAssistantView):
-    """Serves the tabbed wrapper at /esptoolkit (Overview + Designer tab). Root-level path like working repo."""
+    """Serves the tabbed wrapper at /esptoolkit (Designer, ESPHome Output, Setup)."""
     url = PANEL_PAGE_URL
     name = f"{DOMAIN}:panel"
     requires_auth = False
 
     async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        addon_base_url = ""
+        from .api.views import _active_entry_id, _get_addon_connection
+        eid = _active_entry_id(hass)
+        conn = _get_addon_connection(hass, eid)
+        if conn:
+            addon_base_url = conn[0]
         return web.Response(
-            text=_tabbed_panel_html(),
+            text=_tabbed_panel_html(addon_base_url),
             content_type="text/html",
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
@@ -178,7 +194,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(RecipesView)
         hass.http.register_view(DevicesView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
-        _LOGGER.warning("ESPToolkit panel routes registered: %s, %s, and API (schemas/recipes).", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
+        _LOGGER.warning("EspToolkit panel routes registered: %s, %s, and API (schemas/recipes).", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,

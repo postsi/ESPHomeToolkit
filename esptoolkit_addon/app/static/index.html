@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESPToolkit</title>
+  <title>EspToolkit</title>
   <style>
     :root { --bg: #111; --card: #1e1e1e; --text: #e0e0e0; --accent: #03a9f4; --border: #333; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 1rem; }
     h1 { font-size: 1.25rem; margin: 0 0 1rem 0; }
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .tabs { display: none; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
     .tabs button { background: none; border: none; color: var(--text); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; }
     .tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }
     .tabs button:hover { color: var(--accent); }
@@ -34,17 +34,12 @@
   </style>
 </head>
 <body>
-  <h1>ESPToolkit</h1>
-  <div class="tabs">
-    <button type="button" id="tab-setup" class="tab-btn">Setup</button>
-    <button type="button" id="tab-operational" class="tab-btn">Operational</button>
-    <button type="button" id="tab-designer" class="tab-btn">Designer</button>
-  </div>
+  <h1>EspToolkit</h1>
 
   <div id="panel-setup" class="panel">
     <div class="card">
       <h2>1. API token</h2>
-      <p>The add-on uses a single API token everywhere (MCP, API, this page). If you have not set one in <strong>Settings → Add-ons → ESPToolkit → Configuration</strong>, the add-on auto-generates one on first start. To change the token, set <strong>api_token</strong> in Configuration and restart the add-on.</p>
+      <p>The add-on uses a single API token everywhere (MCP, API, this page). If you have not set one in <strong>Settings → Add-ons → EspToolkit → Configuration</strong>, the add-on auto-generates one on first start. To change the token, set <strong>api_token</strong> in Configuration and restart the add-on.</p>
     </div>
     <div class="card">
       <h2>2. MCP (Cursor / VSCode)</h2>
@@ -77,20 +72,9 @@
     </div>
     <div class="card">
       <h2>3. Mark setup complete</h2>
-      <p>After you have configured the token and (optionally) MCP, click below. The default tab will switch to Operational.</p>
+      <p>After you have configured the token and (optionally) MCP, click below. Then open the EspToolkit panel in the sidebar for Designer and ESPHome Output.</p>
       <button type="button" id="setup-complete-btn" class="primary">I've completed setup</button>
       <span id="setup-complete-msg"></span>
-    </div>
-  </div>
-
-  <div id="panel-designer" class="panel">
-    <div class="card">
-      <h2>ESPToolkit Designer</h2>
-      <p>The Designer runs in Home Assistant (integration panel). If you opened this add-on from HA, it is shown below; otherwise open the <strong>ESPToolkit</strong> panel from the HA sidebar or go to <strong>Settings → Devices &amp; Services → ESPToolkit</strong>.</p>
-      <div id="designer-container" style="margin-top:1rem;">
-        <p id="designer-placeholder">Loading…</p>
-        <iframe id="designer-iframe" style="display:none; width:100%; height:calc(100vh - 280px); min-height:400px; border:1px solid var(--border); border-radius:8px;" title="ESPToolkit Designer"></iframe>
-      </div>
     </div>
   </div>
 
@@ -120,12 +104,23 @@
       return res.json();
     }
 
-    async function loadDefaultTab() {
+    function getTabFromUrl() {
       try {
-        const r = await fetch(API_BASE + '/api/setup-complete');
-        const d = await r.json();
-        defaultTab = d.setup_complete ? 'operational' : 'setup';
+        const params = new URLSearchParams(window.location.search || '');
+        const t = (params.get('tab') || '').toLowerCase();
+        if (t === 'operational' || t === 'esphome-output') return 'operational';
+        if (t === 'setup') return 'setup';
       } catch (_) {}
+      return null;
+    }
+
+    async function loadDefaultTab() {
+      const urlTab = getTabFromUrl();
+      if (urlTab) {
+        defaultTab = urlTab;
+      } else {
+        defaultTab = 'setup';
+      }
       try {
         const c = await fetch(API_BASE + '/api/public/mcp-config', {
           headers: { 'X-Addon-Base': (window.location.origin || '').replace(/\/$/, '') + (document.location.pathname || '').replace(/\/$/, '') }
@@ -139,11 +134,8 @@
     let statusPollId = null;
     function showTab(name) {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       const panel = document.getElementById('panel-' + name);
-      const btn = document.getElementById('tab-' + name);
       if (panel) panel.classList.add('active');
-      if (btn) btn.classList.add('active');
       if (name === 'operational') {
         refreshStatus(true);
         connectLogWs();
@@ -152,37 +144,7 @@
       } else {
         if (statusPollId) { clearInterval(statusPollId); statusPollId = null; }
       }
-      if (name === 'designer') loadDesignerIframe();
     }
-
-    function getHaOrigin() {
-      try {
-        if (document.referrer) {
-          const u = new URL(document.referrer);
-          if (u.origin && (u.protocol === 'http:' || u.protocol === 'https:')) return u.origin;
-        }
-      } catch (_) {}
-      return null;
-    }
-
-    function loadDesignerIframe() {
-      const placeholder = document.getElementById('designer-placeholder');
-      const iframe = document.getElementById('designer-iframe');
-      const haOrigin = getHaOrigin();
-      if (haOrigin) {
-        const src = haOrigin + '/esptoolkit/designer';
-        if (iframe.src !== src) iframe.src = src;
-        placeholder.style.display = 'none';
-        iframe.style.display = 'block';
-      } else {
-        placeholder.innerHTML = 'Open this add-on from Home Assistant (e.g. <strong>Add-ons → ESPToolkit → Open Web UI</strong>) so the Designer can load below, or open the <strong>ESPToolkit</strong> panel from the HA sidebar.';
-        iframe.style.display = 'none';
-      }
-    }
-
-    document.getElementById('tab-setup').onclick = () => showTab('setup');
-    document.getElementById('tab-operational').onclick = () => showTab('operational');
-    document.getElementById('tab-designer').onclick = () => showTab('designer');
 
     function buildApiBaseUrl() {
       return (window.location.origin || '').replace(/\/$/, '') + (API_BASE || '');
@@ -271,9 +233,7 @@
       if (!token) { alert('Click "Load MCP config" first so the add-on can authenticate the request.'); return; }
       try {
         await apiFetch('/api/setup-complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ setup_complete: true }) });
-        document.getElementById('setup-complete-msg').textContent = ' Done. Default tab is now Operational.';
-        defaultTab = 'operational';
-        showTab('operational');
+        document.getElementById('setup-complete-msg').textContent = ' Done. Open the EspToolkit panel in the sidebar for Designer and ESPHome Output.';
       } catch (e) {
         document.getElementById('setup-complete-msg').textContent = ' Error: ' + e.message;
       }
@@ -316,7 +276,6 @@
       logWs.onclose = () => { logWs = null; setTimeout(connectLogWs, 5000); };
     }
 
-    document.getElementById('tab-operational').addEventListener('click', () => { refreshStatus(); connectLogWs(); });
     loadDefaultTab();
   </script>
 </body>

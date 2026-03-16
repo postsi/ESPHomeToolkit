@@ -52,7 +52,7 @@ import YamlEditor from "./YamlEditor";
 type Toast = { type: "ok" | "error"; msg: string };
 
 const INTEGRATION_NOT_CONFIGURED_MSG =
-  "Designer isn't connected yet. If you've set the API token in the ESPToolkit add-on (Settings → Add-ons → ESPToolkit → Configuration), restart the add-on and Home Assistant, then refresh this page.";
+  "Designer isn't connected yet. If you've set the API token in the EspToolkit add-on (Settings → Add-ons → EspToolkit → Configuration), restart the add-on and Home Assistant, then refresh this page.";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(16).slice(2, 10)}`;
@@ -2510,7 +2510,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     <div className="app">
       <header className="header">
         <div>
-          <h1>ESPHome Touch Designer</h1>
+          <h1>EspToolkit Designer</h1>
           <div className="muted">v{packageJson.version}</div>
           {!entryId && (
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>If you just started Home Assistant, wait a few seconds and refresh the page.</div>
@@ -3776,7 +3776,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               <button className="ghost" onClick={() => setAboutOpen(false)}>Close</button>
             </div>
             <div style={{ padding: 16 }}>
-              <p style={{ marginBottom: 12 }}><strong>ESPHome Touch Designer</strong> — A Lovelace-style UI designer for ESP32 LVGL touch screens. Compiles designs into ESPHome YAML and deploys through Home Assistant.</p>
+              <p style={{ marginBottom: 12 }}><strong>EspToolkit Designer</strong> — A Lovelace-style UI designer for ESP32 LVGL touch screens. Compiles designs into ESPHome YAML and deploys through Home Assistant.</p>
               <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>YAML editing in this app uses CodeMirror 6.</p>
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12 }}>
                 <div style={{ fontSize: 12, marginBottom: 8 }}><strong>CodeMirror 6</strong></div>

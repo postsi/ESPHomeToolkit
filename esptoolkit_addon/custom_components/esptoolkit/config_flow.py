@@ -1,4 +1,4 @@
-"""Config flow for ESPToolkit. Configuration is created by the add-on (import), not via UI."""
+"""Config flow for EspToolkit. Configuration is created by the add-on (import), not via UI."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from .const import CONF_BASE_URL, CONF_TOKEN, DOMAIN
 
 
 class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for ESPToolkit. No user step; config comes from add-on file."""
+    """Handle a config flow for EspToolkit. No user step; config comes from add-on file."""
 
     VERSION = 1
 
@@ -26,6 +26,6 @@ class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
         return self.async_create_entry(
-            title="ESPToolkit",
+            title="EspToolkit",
             data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
         )

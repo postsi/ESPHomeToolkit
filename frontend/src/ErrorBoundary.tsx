@@ -31,7 +31,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
     return (
       <div style={{ fontFamily: "system-ui", padding: 16 }}>
-        <h2 style={{ marginTop: 0 }}>ESPHome Touch Designer crashed</h2>
+        <h2 style={{ marginTop: 0 }}>EspToolkit Designer crashed</h2>
         <p>The UI hit an unexpected error. You can usually reload the page to continue.</p>
         <button
           onClick={() => window.location.reload()}

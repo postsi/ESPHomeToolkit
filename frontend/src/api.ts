@@ -72,7 +72,7 @@ function url(path: string, entryId?: string) {
   return u.toString();
 }
 
-export async function getContext(): Promise<ApiOk<{ entry_id: string }> | ApiErr> {
+export async function getContext(): Promise<ApiOk<{ entry_id: string; addon_base_url?: string }> | ApiErr> {
   const res = await fetch(url("context"), { credentials: "include" });
   return res.json();
 }

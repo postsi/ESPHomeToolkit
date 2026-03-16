@@ -1,4 +1,4 @@
-"""ESPToolkit integration: API services (add-on) + Designer panel and storage."""
+"""EspToolkit integration: API services (add-on) + Designer panel and storage."""
 from __future__ import annotations
 
 import json
@@ -32,7 +32,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 # Log as soon as this module is imported (proves HA found custom_components/esptoolkit)
-_LOGGER.warning("ESPToolkit custom component module imported — integration path is valid")
+_LOGGER.warning("EspToolkit custom component module imported — integration path is valid")
 
 # File written by the add-on so we can create a config entry without user config flow
 _INTEGRATION_CONFIG_FILE = ".esptoolkit_addon_config.json"
@@ -64,12 +64,12 @@ SET_LIGHT_COLOR_TEMP_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up ESPToolkit. Auto-create or sync config entry from add-on file. Register Designer services."""
-    _LOGGER.warning("ESPToolkit async_setup called (integration is loading)")
+    """Set up EspToolkit. Auto-create or sync config entry from add-on file. Register Designer services."""
+    _LOGGER.warning("EspToolkit async_setup called (integration is loading)")
     try:
         return await _async_setup_impl(hass, config)
     except Exception:
-        _LOGGER.exception("ESPToolkit async_setup failed")
+        _LOGGER.exception("EspToolkit async_setup failed")
         raise
 
 
@@ -101,7 +101,7 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
                         version=1,
                         minor_version=1,
                         domain=DOMAIN,
-                        title="ESPToolkit",
+                        title="EspToolkit",
                         data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
                         source="import",
                         options=None,
@@ -140,7 +140,7 @@ async def _async_setup_impl(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["_ensure_config_entry_from_file"] = _ensure_config_entry_from_addon_file
 
-    _LOGGER.warning("ESPToolkit loaded. Panel at /esptoolkit, Designer at /esptoolkit/designer.")
+    _LOGGER.warning("EspToolkit loaded. Panel at /esptoolkit, Designer at /esptoolkit/designer.")
     return True
 
 
@@ -173,7 +173,7 @@ async def _ensure_config_entry_from_addon_file(hass: HomeAssistant) -> str | Non
         version=1,
         minor_version=1,
         domain=DOMAIN,
-        title="ESPToolkit",
+        title="EspToolkit",
         data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
         source="import",
         options=None,
@@ -189,11 +189,11 @@ async def _ensure_config_entry_from_addon_file(hass: HomeAssistant) -> str | Non
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up API services and Designer (storage, panel, API views)."""
-    _LOGGER.warning("ESPToolkit async_setup_entry called (config entry is being set up)")
+    _LOGGER.warning("EspToolkit async_setup_entry called (config entry is being set up)")
     try:
         return await _async_setup_entry_impl(hass, entry)
     except Exception:
-        _LOGGER.exception("ESPToolkit async_setup_entry failed")
+        _LOGGER.exception("EspToolkit async_setup_entry failed")
         raise
 
 
@@ -292,7 +292,7 @@ async def _async_setup_entry_impl(hass: HomeAssistant, entry: ConfigEntry) -> bo
     hass.data[DOMAIN]["active_entry_id"] = entry.entry_id
 
     await async_register_panel(hass, entry)
-    _LOGGER.info("ESPToolkit services and Designer registered (base_url=%s)", base_url)
+    _LOGGER.info("EspToolkit services and Designer registered (base_url=%s)", base_url)
     return True
 
 

@@ -1,4 +1,4 @@
-"""Constants for ESPToolkit integration (API services + Designer)."""
+"""Constants for EspToolkit integration (API services + Designer)."""
 
 DOMAIN = "esptoolkit"
 PLATFORMS: list[str] = []
@@ -31,7 +31,7 @@ STORAGE_VERSION = 1
 PANEL_URL_PATH = "esptoolkit"  # sidebar panel id (frontend_url_path)
 PANEL_PAGE_URL = f"/{PANEL_URL_PATH}"  # Tabbed wrapper (Overview + Designer tab)
 PANEL_DESIGNER_URL = f"/{PANEL_URL_PATH}/designer"  # Raw Designer SPA (iframe or direct)
-PANEL_TITLE = "ESPToolkit"
+PANEL_TITLE = "EspToolkit"
 
 # Static assets under /api/esptoolkit/static (API path is fine for static)
 STATIC_URL_PATH = f"/api/{DOMAIN}/static"
