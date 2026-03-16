@@ -2449,7 +2449,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     } finally { setBusy(false); }
   }
 
-  /** Write compiled YAML to /config/esphome/<slug>.yaml then run add-on upload (deploy). */
+  /** Write compiled YAML to /config/esphome/<slug>.yaml then run add-on run (deploy). */
   async function deployToConfig() {
     if (!selectedDevice || !entryId || !project) return;
     setBusy(true);
@@ -2465,6 +2465,35 @@ function nudgeSelected(dx: number, dy: number, step: number) {
       const res: any = await deployExport(selectedDevice, entryId);
       if (res?.ok) {
         setToast({ type: "ok", msg: res.path ? `Deployed: ${res.path}` : "Deployed" });
+      } else {
+        const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
+        setToast({ type: "error", msg });
+      }
+    } catch (e: any) {
+      setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Deploy to a specific host: prompt for hostname then run add-on run with --device. */
+  async function deployToHost() {
+    if (!selectedDevice || !entryId || !project) return;
+    const host = window.prompt("Deploy to host (hostname or IP):", "");
+    if (host == null || !host.trim()) return;
+    setBusy(true);
+    try {
+      if (projectDirty) {
+        const res = await putProject(entryId, selectedDevice, project);
+        if (!res.ok) {
+          setToast({ type: "error", msg: `Save failed: ${res.error}` });
+          return;
+        }
+        setProjectDirty(false);
+      }
+      const res: any = await deployExport(selectedDevice, entryId, host.trim());
+      if (res?.ok) {
+        setToast({ type: "ok", msg: res.path ? `Deployed to ${host.trim()}: ${res.path}` : `Deployed to ${host.trim()}` });
       } else {
         const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
         setToast({ type: "error", msg });
@@ -4018,7 +4047,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         {/* Group: Device & deploy */}
         <button className={projectDirty ? "primary" : "secondary"} disabled={busy || !selectedDevice || !project} onClick={saveProject} title="Save project to server (Ctrl+S)">{projectDirty ? "Save (unsaved)" : "Save"}</button>
         <button className="secondary" disabled={validateYamlBusy || !selectedDevice || !project} onClick={validateExportYaml} title="Validate exported YAML (add-on or local ESPHome CLI)">{validateYamlBusy ? "Validating…" : "Validate YAML"}</button>
-        <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={deployToConfig} title="Save compiled YAML to /config/esphome/">Deploy</button>
+        <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={deployToConfig} title="Save compiled YAML to /config/esphome/ then run add-on (validate + compile + upload)">Deploy</button>
+        <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={deployToHost} title="Deploy to a specific host (hostname or IP)">Deploy to Host</button>
         <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={() => setFullYamlOpen(true)} title="View full compiled ESPHome YAML">Full YAML</button>
         <button className="secondary" disabled={!project || !project.pages?.[safePageIndex]?.widgets?.length} onClick={() => { setSaveCardOpen(true); setSaveCardErr(""); setSaveCardName(""); setSaveCardDescription(""); setSaveCardDeviceType("climate"); }} title="Save current page as a reusable card (reusable UI snippet you can drop on other projects)">Save as card</button>
         <span className="muted" style={{ marginRight: 4 }}>|</span>

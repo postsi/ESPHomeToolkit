@@ -6223,7 +6223,7 @@ class DeviceValidateExportView(HomeAssistantView):
 
 
 class DeviceDeployExportView(HomeAssistantView):
-    """Write compiled YAML to esphome/ then call add-on upload (deploy) HA service."""
+    """Write compiled YAML to esphome/ then call add-on run (validate + compile + upload)."""
 
     url = f"/api/{DOMAIN}/devices/{{device_id}}/deploy_export"
     name = f"api:{DOMAIN}:device_deploy_export"
@@ -6248,11 +6248,20 @@ class DeviceDeployExportView(HomeAssistantView):
             return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
         base_url, token = conn
         fname = outp.name
+        payload = {"config_source": "file", "filename": fname}
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        device_override = (body or {}).get("device")
+        if isinstance(device_override, str) and device_override.strip():
+            payload["device"] = device_override.strip()
+        # Use run (validate + compile + upload); upload alone expects existing firmware.bin
         ok, result = await _esphome_addon_request(
             hass,
             base_url,
-            "api/upload",
-            {"config_source": "file", "filename": fname},
+            "api/run",
+            payload,
             token=token,
         )
         if ok:

@@ -90,6 +90,7 @@ class ConfigRequest(BaseModel):
     config_source: str = Field(..., description="'file' or 'yaml'")
     filename: str | None = Field(None, description="Filename under /config/esphome (e.g. device.yaml)")
     yaml: str | None = Field(None, description="Raw YAML config when config_source is 'yaml'")
+    device: str | None = Field(None, description="Override target host (hostname or IP) for run/upload; passed as --device")
 
 
 def _require_auth():
@@ -191,13 +192,14 @@ async def config_check(body: ConfigRequest):
 
 @api.post("/run")
 async def run_config(body: ConfigRequest):
-    """Run (validate + compile + upload)."""
-    log.info("Run request: config_source=%s filename=%s", body.config_source, body.filename)
+    """Run (validate + compile + upload). Optional device = hostname/IP for --device."""
+    log.info("Run request: config_source=%s filename=%s device=%r", body.config_source, body.filename, body.device)
     result = await runner.run(
         "run",
         body.config_source,
         filename=body.filename,
         yaml_content=body.yaml,
+        device=body.device and body.device.strip() or None,
     )
     if not result["success"]:
         raise HTTPException(
@@ -214,13 +216,14 @@ async def run_config(body: ConfigRequest):
 
 @api.post("/upload")
 async def upload_config(body: ConfigRequest):
-    """Upload firmware (compile if needed then upload)."""
-    log.info("Upload request: config_source=%s filename=%s", body.config_source, body.filename)
+    """Upload firmware (compile if needed then upload). Optional device = hostname/IP for --device."""
+    log.info("Upload request: config_source=%s filename=%s device=%r", body.config_source, body.filename, body.device)
     result = await runner.run(
         "upload",
         body.config_source,
         filename=body.filename,
         yaml_content=body.yaml,
+        device=body.device and body.device.strip() or None,
     )
     if not result["success"]:
         raise HTTPException(

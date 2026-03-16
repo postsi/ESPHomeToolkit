@@ -249,9 +249,10 @@ export async function validateExport(device_id: string, entry_id: string): Promi
   return apiPost(u.toString(), {});
 }
 
-/** Write compiled YAML to esphome/ then run add-on upload (deploy). */
-export async function deployExport(device_id: string, entry_id: string): Promise<{ ok: boolean; path?: string; result?: string; error?: string; detail?: string }> {
+/** Write compiled YAML to esphome/ then run add-on run (deploy). Optional device = hostname/IP for --device. */
+export async function deployExport(device_id: string, entry_id: string, device?: string): Promise<{ ok: boolean; path?: string; result?: string; error?: string; detail?: string }> {
   const u = new URL(`${API_BASE}/devices/${encodeURIComponent(device_id)}/deploy_export`, window.location.origin);
   u.searchParams.set("entry_id", entry_id);
-  return apiPost(u.toString(), {});
+  const body = device && device.trim() ? { device: device.trim() } : {};
+  return apiPost(u.toString(), body);
 }

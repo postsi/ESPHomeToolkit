@@ -28,27 +28,29 @@ class JobRunner:
         self,
         command: str,
         config_path: str,
+        device: Optional[str] = None,
         on_stdout: Optional[Callable[[str], None]] = None,
         on_stderr: Optional[Callable[[str], None]] = None,
     ) -> tuple[int, str, str]:
-        """Run esphome CLI; return (returncode, stdout, stderr)."""
+        """Run esphome CLI; return (returncode, stdout, stderr). device = optional hostname/IP for --device."""
         env = os.environ.copy()
         # Run from config dir so relative paths in YAML work
         cwd = str(Path(config_path).parent)
+        argv = ["esphome", command, config_path]
+        if device and str(device).strip():
+            argv.extend(["--device", str(device).strip()])
         proc = await asyncio.create_subprocess_exec(
-            "esphome",
-            command,
-            config_path,
+            *argv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env=env,
         )
         self._current_process = proc
-        self._current_command = f"esphome {command} {config_path}"
+        self._current_command = " ".join(argv)
         self._current_config_path = config_path
         self._started_at = asyncio.get_running_loop().time()
-        log.info("Job started: esphome %s %s", command, config_path)
+        log.info("Job started: %s", self._current_command)
         out_buf: list[str] = []
         err_buf: list[str] = []
 
@@ -72,7 +74,7 @@ class JobRunner:
         )
         await proc.wait()
         code = proc.returncode or 0
-        log.info("Job finished: esphome %s %s -> exit_code=%d", command, config_path, code)
+        log.info("Job finished: %s -> exit_code=%d", self._current_command, code)
         self._current_process = None
         self._current_command = None
         self._current_config_path = None
@@ -119,9 +121,10 @@ class JobRunner:
         config_source: str,
         filename: Optional[str] = None,
         yaml_content: Optional[str] = None,
+        device: Optional[str] = None,
     ) -> dict:
-        """Run an esphome command. Returns dict with success, stdout, stderr, exit_code, error."""
-        log.info("run entry: command=%s config_source=%s filename=%r", command, config_source, filename)
+        """Run an esphome command. Returns dict with success, stdout, stderr, exit_code, error. device = optional hostname/IP for --device."""
+        log.info("run entry: command=%s config_source=%s filename=%r device=%r", command, config_source, filename, device)
         async with self._lock:
             pass  # wait for lock
         try:
@@ -141,7 +144,7 @@ class JobRunner:
                     "exit_code": -1,
                 }
             try:
-                code, stdout, stderr = await self._run_esphome(command, str(path))
+                code, stdout, stderr = await self._run_esphome(command, str(path), device=device)
                 success = code == 0
                 err_msg = None if success else (stderr.strip() or stdout.strip() or f"Exit code {code}")
                 if success:
