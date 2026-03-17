@@ -52,8 +52,8 @@ Run from repo root.
 
 ### 3. Update the addon in Home Assistant
 
-- Using the **Home Assistant MCP server** (e.g. user-HAGrimwood), call:
-  - **`ha_update_addon`** with `slug`: `esptoolkit_addon` (or the slug from `ha_list_installed_addons` if different).
+- **Refresh the add-on store** so the Supervisor sees the new version: call the **esptoolkit addon MCP** (user-esptoolkit) tool **`supervisor_store_reload`** (no arguments). The addon calls the Supervisor API so new versions appear. If your addon version does not expose this tool yet, refresh manually: **Settings → Add-ons → Add-on store** → ⋮ → **Reload** (or reload the addon repository).
+- Using the **Home Assistant MCP server** (e.g. user-HAGrimwood), call **`ha_update_addon`** with `slug`: the EspToolkit slug from `ha_list_installed_addons` (e.g. `e7ee47f4_esptoolkit_addon`, not just `esptoolkit_addon`).
 - This pulls the new image and updates the addon. Wait for the call to complete (may take 1–2 minutes).
 
 ### 4. Wait for addon to be running (optional but recommended)

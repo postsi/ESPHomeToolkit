@@ -116,6 +116,29 @@ async def esphome_update() -> str:
 
 
 @mcp.tool()
+async def supervisor_store_reload() -> str:
+    """Reload the Home Assistant add-on store so new addon versions appear (e.g. after pushing a new image).
+    Calls Supervisor API POST /store/reload. Requires addon to run under Supervisor with SUPERVISOR_TOKEN.
+    Returns success message or error."""
+    import os
+    import httpx
+    token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
+    if not token:
+        return "Error: SUPERVISOR_TOKEN not set (addon not running under Supervisor)"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(
+                "http://supervisor/store/reload",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if r.status_code == 200:
+            return "OK: add-on store reloaded"
+        return f"Error: Supervisor returned {r.status_code}: {r.text[:500]}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def local_http(method: str, path: str, body: str | None = None) -> str:
     """Execute an HTTP request to the local Home Assistant instance (or other allowlisted base).
     Only reachable via MCP; not exposed as REST. By default uses Supervisor proxy (http://supervisor/core) with SUPERVISOR_TOKEN.
