@@ -85,10 +85,22 @@ Run from repo root.
 |------|--------|
 | 1 | Clear `YAML_PATCHES`, run validate test; fix bugs / add patches until test passes. |
 | 2 | Bump version (script does it), run **fast** deploy: `./scripts/deploy-local.sh --fast <version> "message"` (not full deploy). |
-| 3 | MCP: `ha_update_addon` (slug `esptoolkit_addon`). |
+| 3 | MCP: `supervisor_store_reload` (esptoolkit), then `ha_update_addon` (slug from `ha_list_installed_addons`). |
 | 4 | Wait 30–60 s; optionally `ha_restart_addon`. |
 | 5 | MCP: `ha_restart` (restart HA); wait 60–90 s. |
 | 6 | Re-run validate test (patches still cleared). |
+
+---
+
+## Verify deployed code (optional)
+
+You can confirm what code is actually running on the HA server using the **Home Assistant MCP** (e.g. user-HAGrimwood):
+
+- **`ha_list_files`** with path `custom_components/esptoolkit` — list integration files on the server.
+- **`ha_read_file`** with path `custom_components/esptoolkit/manifest.json` — check the **version** (e.g. `1.0.48`).
+- **`ha_read_file`** with path `custom_components/esptoolkit/api/views.py` — inspect the compiler (e.g. search for `buffer_size` quoting or `emit_container_only`). Large files may be truncated; use list + read of a specific section if needed.
+
+If the version or code doesn’t match the deploy, the addon may not have copied the integration yet, or HA may need an integration reload / restart.
 
 ---
 
@@ -97,3 +109,4 @@ Run from repo root.
 - **No clean-environment:** This cycle does not run the clean-environment script; it assumes the integration is already installed and the addon is already in place. For a clean install test, run the steps in `scripts/clean_environment_for_deploy.md` before step 1 (or use the standard "local deploy" flow which cleans first).
 - **Version:** The deploy script bumps version in `config.yaml`, `app/__init__.py`, and `manifest.json`; step 2 uses that same version for the git commit message.
 - **Slug:** If `ha_update_addon` fails, list addons with `ha_list_installed_addons` and use the slug that corresponds to the ESPToolkit addon (often `esptoolkit_addon` or a prefixed form).
+- **Store refresh 403:** The addon uses **hassio_role: manager** so it can call Supervisor `POST /store/reload` (`supervisor_store_reload`). With **hassio_role: default**, that call returns 403.

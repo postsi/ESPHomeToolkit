@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration#add-on-config
 name: EspToolkit
-version: "1.0.48"
+version: "1.0.49"
 slug: esptoolkit_addon
 description: Runs ESPHome and exposes compile/upload/validate via REST API and MCP. Installs the EspToolkit integration (Designer + API services) into Home Assistant.
 url: "https://github.com/postsi/ESPHomeToolkit"
@@ -32,8 +32,9 @@ ingress_port: 8098
 startup: application
 boot: auto
 host_network: false
+# hassio_role: manager required for supervisor_store_reload (POST /store/reload); default role only allows /info
 hassio_api: true
-hassio_role: default
+hassio_role: manager
 homeassistant_api: true
 auth_api: false
 full_access: false
