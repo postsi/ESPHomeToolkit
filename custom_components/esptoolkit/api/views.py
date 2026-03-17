@@ -39,13 +39,20 @@ except ImportError:
 
 
 def _integration_version() -> str:
-    """Best-effort integration version (from manifest.json)."""
+    """Best-effort integration version (from manifest.json). Cached at import to avoid blocking the event loop."""
+    return _integration_version_cached
+
+
+def _load_integration_version() -> str:
     try:
         manifest_path = Path(__file__).resolve().parent.parent / "manifest.json"
         data = json.loads(manifest_path.read_text("utf-8"))
         return str(data.get("version") or "0.0.0")
     except Exception:
         return "0.0.0"
+
+
+_integration_version_cached = _load_integration_version()
 
 
 def list_builtin_recipes() -> list[dict]:
@@ -1924,6 +1931,29 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
     out = "".join(out_parts).rstrip() + "\n"
     out = out.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
     return out
+
+
+def _sync_compile_device_yaml(
+    hass: HomeAssistant,
+    device: DeviceProject,
+    project_override: dict | None = None,
+    recipe_override: str | None = None,
+) -> tuple[str, list]:
+    """Sync helper: load recipe and compile device YAML. Run in executor to avoid blocking the event loop.
+    Returns (yaml_text, warnings)."""
+    recipe_text = _get_recipe_text_for_device(hass, device)
+    if project_override is not None or recipe_override is not None:
+        import copy
+        device = copy.deepcopy(device)
+        if project_override is not None:
+            device.project = project_override
+        if recipe_override is not None:
+            device.hardware_recipe_id = recipe_override
+        recipe_text = _get_recipe_text_for_device(hass, device)
+    yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
+    yaml_text = yaml_text.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
+    warnings = _compile_warnings(device.project or {})
+    return yaml_text, warnings
 
 
 def compile_to_esphome_yaml(device: DeviceProject, recipe_text: str | None = None) -> str:
@@ -4330,7 +4360,7 @@ class SelfCheckView(HomeAssistantView):
         except Exception as e:
             results.append({"name":"recipes_list", "ok": False, "error": str(e)})
 
-        # 2) Compile determinism on representative mini-projects
+        # 2) Compile determinism on representative mini-projects (run in executor to avoid blocking I/O)
         samples = [
             {
                 "name": "sample_basic_label",
@@ -4371,25 +4401,31 @@ class SelfCheckView(HomeAssistantView):
             },
         ]
 
-        for s in samples:
-            try:
-                dev = DeviceProject(
-                    device_id=f"selfcheck_{s['name']}",
-                    slug=f"selfcheck_{s['name']}",
-                    name=f"SelfCheck {s['name']}",
-                    hardware_recipe_id=(s["project"].get("hardware") or {}).get("recipe_id"),
-                    device_settings={},
-                    project=s["project"],
-                )
-                y1 = compile_to_esphome_yaml(dev)
-                y2 = compile_to_esphome_yaml(dev)
-                results.append({
-                    "name": f"compile_determinism:{s['name']}",
-                    "ok": y1 == y2 and bool(y1.strip()),
-                    "detail": {"len": len(y1), "identical": y1 == y2},
-                })
-            except Exception as e:
-                results.append({"name": f"compile_determinism:{s['name']}", "ok": False, "error": str(e)})
+        def _selfcheck_compile_determinism(samples_list: list) -> list:
+            out = []
+            for s in samples_list:
+                try:
+                    dev = DeviceProject(
+                        device_id=f"selfcheck_{s['name']}",
+                        slug=f"selfcheck_{s['name']}",
+                        name=f"SelfCheck {s['name']}",
+                        hardware_recipe_id=(s["project"].get("hardware") or {}).get("recipe_id"),
+                        device_settings={},
+                        project=s["project"],
+                    )
+                    y1 = compile_to_esphome_yaml(dev)
+                    y2 = compile_to_esphome_yaml(dev)
+                    out.append({
+                        "name": f"compile_determinism:{s['name']}",
+                        "ok": y1 == y2 and bool(y1.strip()),
+                        "detail": {"len": len(y1), "identical": y1 == y2},
+                    })
+                except Exception as e:
+                    out.append({"name": f"compile_determinism:{s['name']}", "ok": False, "error": str(e)})
+            return out
+
+        compile_results = await hass.async_add_executor_job(_selfcheck_compile_determinism, samples)
+        results.extend(compile_results)
 
         # 3) Safe merge marker invariant checks (pure string-level; does not touch disk)
         try:
@@ -5585,41 +5621,11 @@ class CompileView(HomeAssistantView):
             if isinstance(body.get("hardware_recipe_id"), str) and body.get("hardware_recipe_id").strip():
                 recipe_override = body.get("hardware_recipe_id").strip()
 
-        # Load recipe from same source as UI (builtin or user via _find_recipe_path_by_id)
-        project = device.project or {}
-        recipe_id = (
-            (project.get("hardware") or {}).get("recipe_id")
-            or device.hardware_recipe_id
-            or "sunton_2432s028r_320x240"
+        mode = "preview" if (project_override is not None or recipe_override is not None) else "stored"
+        yaml_text, warnings = await hass.async_add_executor_job(
+            _sync_compile_device_yaml, hass, device, project_override, recipe_override
         )
-        recipe_path = _find_recipe_path_by_id(hass, recipe_id) or (RECIPES_BUILTIN_DIR / f"{recipe_id}.yaml")
-        recipe_text = recipe_path.read_text("utf-8") if recipe_path.exists() else ""
-
-        if project_override is not None or recipe_override is not None:
-            original_project = device.project
-            original_recipe = device.hardware_recipe_id
-            try:
-                if project_override is not None:
-                    device.project = project_override
-                if recipe_override is not None:
-                    device.hardware_recipe_id = recipe_override
-                # Re-resolve recipe_id and recipe_text when override is present
-                proj = device.project or {}
-                rid = (proj.get("hardware") or {}).get("recipe_id") or device.hardware_recipe_id or recipe_id
-                rpath = _find_recipe_path_by_id(hass, rid) or (RECIPES_BUILTIN_DIR / f"{rid}.yaml")
-                rtext = rpath.read_text("utf-8") if rpath.exists() else ""
-                yaml_text = compile_to_esphome_yaml(device, recipe_text=rtext)
-            finally:
-                device.project = original_project
-                device.hardware_recipe_id = original_recipe
-            yaml_text = yaml_text.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
-            warnings = _compile_warnings(device.project or {})
-            return self.json({"ok": True, "yaml": yaml_text, "warnings": warnings, "mode": "preview"})
-
-        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
-        yaml_text = yaml_text.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
-        warnings = _compile_warnings(device.project or {})
-        return self.json({"ok": True, "yaml": yaml_text, "warnings": warnings, "mode": "stored"})
+        return self.json({"ok": True, "yaml": yaml_text, "warnings": warnings, "mode": mode})
 
 
 class ValidateYamlView(HomeAssistantView):
@@ -6443,8 +6449,9 @@ class DeviceExportPreviewView(HomeAssistantView):
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
 
-        recipe_text = _get_recipe_text_for_device(hass, device)
-        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
+        yaml_text, _ = await hass.async_add_executor_job(
+            _sync_compile_device_yaml, hass, device, None, None
+        )
 
         BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"
         END = "# --- END ESPHOME_TOUCH_DESIGNER GENERATED ---"
@@ -6455,7 +6462,11 @@ class DeviceExportPreviewView(HomeAssistantView):
         outp = esphome_dir / fname
 
         generated_block = f"{BEGIN}\n{yaml_text.rstrip()}\n{END}\n"
-        existing = outp.read_text("utf-8", errors="ignore") if outp.exists() else ""
+
+        def _read_existing(p: Path) -> str:
+            return p.read_text("utf-8", errors="ignore") if p.exists() else ""
+
+        existing = await hass.async_add_executor_job(_read_existing, outp)
 
         try:
             new_text, mode = _export_merge_yaml(existing, generated_block, BEGIN, END)
@@ -6512,8 +6523,9 @@ class DeviceExportView(HomeAssistantView):
             body = None
         expected_hash = body.get("expected_hash") if isinstance(body, dict) else None
 
-        recipe_text = _get_recipe_text_for_device(hass, device)
-        yaml_text = compile_to_esphome_yaml(device, recipe_text=recipe_text)
+        yaml_text, _ = await hass.async_add_executor_job(
+            _sync_compile_device_yaml, hass, device, None, None
+        )
 
         BEGIN = "# --- BEGIN ESPHOME_TOUCH_DESIGNER GENERATED ---"
         END = "# --- END ESPHOME_TOUCH_DESIGNER GENERATED ---"
@@ -6524,7 +6536,11 @@ class DeviceExportView(HomeAssistantView):
         outp = esphome_dir / fname
 
         generated_block = f"{BEGIN}\n{yaml_text.rstrip()}\n{END}\n"
-        existing = outp.read_text("utf-8", errors="ignore") if outp.exists() else ""
+
+        def _read_existing(p: Path) -> str:
+            return p.read_text("utf-8", errors="ignore") if p.exists() else ""
+
+        existing = await hass.async_add_executor_job(_read_existing, outp)
 
         import hashlib
         existing_hash = hashlib.sha256(existing.encode("utf-8")).hexdigest()
@@ -6536,7 +6552,7 @@ class DeviceExportView(HomeAssistantView):
         except ValueError as e:
             return self.json({"ok": False, "error": "marker_corrupt", "detail": str(e), "path": str(outp)}, status_code=409)
 
-        outp.write_text(new_text, encoding="utf-8")
+        await hass.async_add_executor_job(outp.write_text, new_text, "utf-8")
         new_hash = hashlib.sha256(new_text.encode("utf-8")).hexdigest()
 
         return self.json({"ok": True, "path": str(outp), "mode": mode, "hash": new_hash})
@@ -6584,7 +6600,7 @@ class DeviceValidateExportView(HomeAssistantView):
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
-        outp, err = _write_device_yaml_to_esphome(hass, device)
+        outp, err = await hass.async_add_executor_job(_write_device_yaml_to_esphome, hass, device)
         if err is not None:
             return self.json(err, status_code=500 if err.get("error") == "compile_failed" else 409)
         conn = _get_addon_connection(hass, entry_id)
@@ -6624,7 +6640,7 @@ class DeviceDeployExportView(HomeAssistantView):
         device = storage.get_device(device_id)
         if not device:
             return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
-        outp, err = _write_device_yaml_to_esphome(hass, device)
+        outp, err = await hass.async_add_executor_job(_write_device_yaml_to_esphome, hass, device)
         if err is not None:
             return self.json(err, status_code=500 if err.get("error") == "compile_failed" else 409)
         conn = _get_addon_connection(hass, entry_id)

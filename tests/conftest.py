@@ -7,26 +7,141 @@ import os
 import json
 import pytest
 import httpx
+import socket
+from urllib.parse import urlparse, urlunparse
+
+# -----------------------------------------------------------------------------
+# Cursor MCP config discovery (optional)
+# -----------------------------------------------------------------------------
+
+def _load_cursor_mcp_esptoolkit() -> tuple[str | None, str | None]:
+    """Best-effort: read ~/.cursor/mcp.json and return (addon_base_url, addon_token)."""
+    path = os.path.expanduser("~/.cursor/mcp.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None, None
+
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    if not isinstance(servers, dict):
+        return None, None
+
+    s = servers.get("esptoolkit")
+    if not isinstance(s, dict):
+        return None, None
+
+    url = (s.get("url") or "").strip()
+    headers = s.get("headers") or {}
+    auth = (headers.get("Authorization") or headers.get("authorization") or "").strip() if isinstance(headers, dict) else ""
+
+    if not url or not auth:
+        return None, None
+
+    # Cursor stores the full MCP endpoint, typically .../mcp/
+    u = url.rstrip("/")
+    if u.endswith("/mcp"):
+        addon_base = u[: -len("/mcp")]
+    else:
+        addon_base = u
+
+    token = auth
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return addon_base, token
 
 # -----------------------------------------------------------------------------
 # MCP client: call addon's MCP server (tools/call) and return tool result text
 # -----------------------------------------------------------------------------
 
-def _mcp_tools_call(base_url: str, token: str, tool_name: str, arguments: dict) -> str:
-    """Send MCP tools/call to addon, return the tool result as string."""
-    url = base_url.rstrip("/") + "/mcp/"
+_MCP_SESSION_CACHE: dict[tuple[str, str], str] = {}
+
+def _prefer_ipv4(url: str) -> str:
+    """If hostname resolves to IPv4, rewrite URL to use the first IPv4 address.
+    Avoids environments where IPv6 is preferred but the service only listens on IPv4."""
+    try:
+        u = urlparse(url)
+        host = u.hostname
+        if not host:
+            return url
+        # Already an IP literal?
+        try:
+            socket.inet_pton(socket.AF_INET, host)
+            return url
+        except Exception:
+            pass
+        infos = socket.getaddrinfo(host, u.port or (443 if u.scheme == "https" else 80), family=socket.AF_INET)
+        if not infos:
+            return url
+        ip = infos[0][4][0]
+        netloc = ip
+        if u.port:
+            netloc = f"{ip}:{u.port}"
+        return urlunparse((u.scheme, netloc, u.path, u.params, u.query, u.fragment))
+    except Exception:
+        return url
+
+
+def _mcp_initialize(base_url: str, token: str) -> str:
+    """Initialize MCP session and return mcp-session-id."""
+    url = _prefer_ipv4(base_url.rstrip("/") + "/mcp/")
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+        # Client declares supported protocol version (FastMCP uses this header for streamable HTTP sessions)
+        "mcp-protocol-version": "2025-03-26",
     }
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "esptoolkit-pytest", "version": "0.1"},
+        },
+    }
+    with httpx.Client(timeout=30.0) as client:
+        r = client.post(url, headers=headers, json=body)
+        r.raise_for_status()
+        sid = r.headers.get("mcp-session-id") or r.headers.get("Mcp-Session-Id")
+        if not sid:
+            # Some servers include it lowercased; httpx normalizes, but keep fallback
+            sid = r.headers.get("mcp-session-id".lower())
+        if not sid:
+            # Even if server doesn't provide a session id, allow stateless mode
+            return ""
+        return sid
+
+
+def _mcp_tools_call(base_url: str, token: str, tool_name: str, arguments: dict) -> str:
+    """Send MCP tools/call to addon, return the tool result as string."""
+    url = _prefer_ipv4(base_url.rstrip("/") + "/mcp/")
+    cache_key = (url, token)
+    sid = _MCP_SESSION_CACHE.get(cache_key)
+    if sid is None:
+        sid = _mcp_initialize(base_url, token)
+        _MCP_SESSION_CACHE[cache_key] = sid
+    # Tool-specific timeouts: compile/run/upload/update can legitimately take longer.
+    timeout_s = 30.0
+    if tool_name.startswith(("esphome_compile", "esphome_run", "esphome_upload", "esphome_update", "esphome_config_check")):
+        timeout_s = 300.0
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "mcp-protocol-version": "2025-03-26",
+    }
+    if sid:
+        headers["mcp-session-id"] = sid
     body = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
         "params": {"name": tool_name, "arguments": arguments},
     }
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=timeout_s) as client:
         r = client.post(url, headers=headers, json=body)
         r.raise_for_status()
         data = r.json()
@@ -135,17 +250,23 @@ def _addon_call(base_url: str, token: str, tool_name: str, **kwargs) -> str:
 @pytest.fixture(scope="session")
 def addon_url():
     u = os.environ.get("ESPTOOLKIT_ADDON_URL", "").strip()
-    if not u:
-        pytest.skip("ESPTOOLKIT_ADDON_URL not set")
-    return u
+    if u:
+        return u
+    auto_url, _ = _load_cursor_mcp_esptoolkit()
+    if auto_url:
+        return auto_url
+    pytest.skip("ESPTOOLKIT_ADDON_URL not set and ~/.cursor/mcp.json missing esptoolkit url")
 
 
 @pytest.fixture(scope="session")
 def addon_token():
     t = os.environ.get("ESPTOOLKIT_ADDON_TOKEN", "").strip()
-    if not t:
-        pytest.skip("ESPTOOLKIT_ADDON_TOKEN not set")
-    return t
+    if t:
+        return t
+    _, auto_token = _load_cursor_mcp_esptoolkit()
+    if auto_token:
+        return auto_token
+    pytest.skip("ESPTOOLKIT_ADDON_TOKEN not set and ~/.cursor/mcp.json missing esptoolkit token")
 
 
 @pytest.fixture(scope="session")
