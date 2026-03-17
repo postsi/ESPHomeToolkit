@@ -89,8 +89,18 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
             "body": None,
         }
 
-    # Use first allowed base (primary HA).
     base_prefix = bases[0]
+    # When using supervisor proxy, token is required (SUPERVISOR_TOKEN); Core API rejects unauthenticated requests.
+    if base_prefix == "http://supervisor/core" and not token:
+        return {
+            "success": False,
+            "error": "SUPERVISOR_TOKEN not set; add-on may not be running under Home Assistant Supervisor, or set ha_base_url and ha_token in add-on options",
+            "status_code": None,
+            "headers": {},
+            "body": None,
+        }
+
+    # Use first allowed base (primary HA).
     # path may include query string, e.g. /api/states?filter=...
     url = base_prefix + ("/" + path.lstrip("/") if path != "/" else "/")
     if not any(url.startswith(p + "/") or url == (p + "/") for p in bases):
@@ -117,19 +127,19 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
                 headers=headers or None,
             )
     except httpx.TimeoutException as e:
-        log.warning("local_http timeout: %s %s", method, path)
+        log.warning("local_http timeout: %s %s -> %s", method, path, url)
         return {
             "success": False,
-            "error": f"request timeout: {e}",
+            "error": f"request timeout to {url}: {e}",
             "status_code": None,
             "headers": {},
             "body": None,
         }
     except Exception as e:
-        log.exception("local_http request failed: %s %s", method, path)
+        log.exception("local_http request failed: %s %s -> %s", method, path, url)
         return {
             "success": False,
-            "error": str(e),
+            "error": f"proxy to {url} failed: {str(e)}",
             "status_code": None,
             "headers": {},
             "body": None,

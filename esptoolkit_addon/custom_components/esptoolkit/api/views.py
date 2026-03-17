@@ -5267,19 +5267,19 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             try:
                 async for msg in ws:
                     if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
-                    break
-                if msg.type == web.WSMsgType.TEXT and msg.data:
-                    try:
-                        data = json.loads(msg.data)
-                        if isinstance(data, dict) and "log_level" in data:
-                            level_name = data.get("log_level")
-                            new_level = _resolve_native_log_level(level_name)
-                            if unsub_logs is not None:
-                                unsub_logs()
-                            unsub_logs = client.subscribe_logs(on_log, log_level=new_level)
-                            current_level = new_level
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                        break
+                    if msg.type == web.WSMsgType.TEXT and msg.data:
+                        try:
+                            data = json.loads(msg.data)
+                            if isinstance(data, dict) and "log_level" in data:
+                                level_name = data.get("log_level")
+                                new_level = _resolve_native_log_level(level_name)
+                                if unsub_logs is not None:
+                                    unsub_logs()
+                                unsub_logs = client.subscribe_logs(on_log, log_level=new_level)
+                                current_level = new_level
+                        except (json.JSONDecodeError, TypeError):
+                            pass
             finally:
                 pump_task.cancel()
                 try:
