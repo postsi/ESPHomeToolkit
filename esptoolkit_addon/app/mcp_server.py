@@ -134,7 +134,9 @@ async def local_http(method: str, path: str, body: str | None = None) -> str:
     if headers:
         lines.append("Headers: " + ", ".join(f"{k}: {v}" for k, v in list(headers.items())[:10]))
     if resp_body is not None:
-        lines.append("Body: " + (resp_body if len(resp_body) <= 8000 else resp_body[:8000] + "\n... (truncated)"))
+        # Allow large bodies (e.g. GET project ~tens of KB) so MCP clients get valid JSON
+        _max_body = 512_000
+        lines.append("Body: " + (resp_body if len(resp_body) <= _max_body else resp_body[:_max_body] + "\n... (truncated)"))
     return "\n".join(lines)
 
 
