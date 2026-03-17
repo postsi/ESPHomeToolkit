@@ -27,25 +27,24 @@ def _normalize_prefix(url: str) -> str:
 
 def _get_allowed_bases_and_token() -> tuple[list[str], str]:
     opts = load_options()
-    # Tight default: use Supervisor proxy to talk to HA Core.
-    # This avoids storing a separate HA long-lived token in add-on options.
     supervisor_token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
     supervisor_base = "http://supervisor/core"
+    # Direct Core container (same Docker network as addon). Bypasses Supervisor proxy so PUT/POST/DELETE work.
+    direct_core_base = "http://homeassistant:8123"
 
-    # Optional override for advanced setups (e.g. remote HA core, custom proxy).
     override_base = (opts.get("ha_base_url") or "").strip()
     override_token = (opts.get("ha_token") or "").strip()
 
-    # When running under Supervisor, prefer supervisor proxy. Treat localhost/127.0.0.1 as "not set"
-    # so we don't use them from inside the container (they wouldn't reach HA).
+    # When running under Supervisor, prefer direct Core so mutating methods (PUT/POST/DELETE) work.
+    # Supervisor proxy often returns 405 for non-GET to some paths; direct Core accepts all methods.
     if supervisor_token and override_base in ("", "http://localhost:8123", "http://127.0.0.1:8123"):
-        base = supervisor_base
+        base = direct_core_base
     else:
         base = override_base or supervisor_base
     token = override_token or supervisor_token
 
     bases: list[str] = []
-    for b in (base, supervisor_base):
+    for b in (base, direct_core_base, supervisor_base):
         n = _normalize_prefix(b)
         if n and n not in bases:
             bases.append(n)
@@ -95,8 +94,8 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
         }
 
     base_prefix = bases[0]
-    # When using supervisor proxy, token is required (SUPERVISOR_TOKEN); Core API rejects unauthenticated requests.
-    if base_prefix == "http://supervisor/core" and not token:
+    # Token required for Supervisor proxy and for direct Core (SUPERVISOR_TOKEN or ha_token).
+    if not token:
         return {
             "success": False,
             "error": "SUPERVISOR_TOKEN not set; add-on may not be running under Home Assistant Supervisor, or set ha_base_url and ha_token in add-on options",
