@@ -2518,6 +2518,13 @@ def _emit_widget_from_schema(
     wtype = widget.get("type") or schema.get("type")
     esphome = schema.get("esphome", {})
     root_key = esphome.get("root_key") or wtype  # e.g. "label", "button"
+    # ESPHome animimg requires non-empty src; when missing/empty emit a container instead.
+    emit_container_only = False
+    if root_key == "animimg":
+        src = (widget.get("props") or {}).get("src")
+        if not src or (isinstance(src, list) and len(src) == 0):
+            root_key = "container"
+            emit_container_only = True
 
     # Widget list item: "- type:" then properties indented 2 more (YAML: value of single key for ESPHome)
     body_indent = "            "  # 12 spaces: value under "- container:" so parser sees one key per list item
@@ -2572,6 +2579,9 @@ def _emit_widget_from_schema(
         else:
             out.append(f"{body_indent}{yaml_key}: {int(val)}\n")
 
+    if emit_container_only:
+        return "\n".join(out)
+
     action_by_event = {}
     if action_bindings_for_widget:
         for ab in action_bindings_for_widget:
@@ -2624,10 +2634,8 @@ def _emit_widget_from_schema(
         mapping = (esphome.get(section) or {})
         fields = schema.get(section) or {}
         values = dict(widget.get(section) or {})
-        # ESPHome animimg requires src (list of image ids) and duration; emit defaults when missing.
+        # ESPHome animimg requires duration when src is present; default when missing.
         if section == "props" and root_key == "animimg":
-            if not values.get("src") and "src" not in values:
-                values["src"] = []
             if not values.get("duration") and "duration" not in values:
                 values["duration"] = "1000ms"
         # For events: prefer action_binding for this widget (yaml_override or generated from call).

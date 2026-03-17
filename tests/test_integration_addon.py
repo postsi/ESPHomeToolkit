@@ -188,26 +188,23 @@ def _patch_animimg_required_src_duration(yaml_text: str) -> str:
 
 
 def _patch_lvgl_buffer_size(yaml_text: str) -> str:
-    """Fix or remove buffer_size: quote value or drop line (compiler fix not yet deployed)."""
-    # Try quoting first; if line still causes issues, remove it (use ESPHome default)
+    """Quote buffer_size value when it contains % (compiler fix not yet deployed)."""
     def _repl(m):
         val = m.group(2).rstrip()
         if "%" in val and not (val.startswith('"') and val.endswith('"')):
             return f'{m.group(1)} "{val}"\n'
         return m.group(0)
-    yaml_text = re.sub(r"^(\s*buffer_size:)\s*(.*)$", _repl, yaml_text, flags=re.MULTILINE)
-    # If ESPHome still rejects buffer_size, remove the line entirely
-    yaml_text = re.sub(r"^\s*buffer_size:\s*.*\n?", "", yaml_text, flags=re.MULTILINE)
-    return yaml_text
+    return re.sub(r"^(\s*buffer_size:)\s*(.*)$", _repl, yaml_text, flags=re.MULTILINE)
 
 
 # List of (description, patch_func). Apply in order before validate. Remove all after deploy.
+# After deploy: empty list so test validates raw compiler output. Add patches again when iterating on bugs without redeploy.
 YAML_PATCHES = [
     ("drop malformed geometry lines (compiler fix not yet deployed)", _patch_drop_malformed_geometry_lines),
     ("Python bools -> lowercase (compiler fix not yet deployed)", _patch_python_bools_in_yaml),
     ("remove lvgl disp_bg_color (compiler fix not yet deployed)", _patch_remove_lvgl_disp_bg_color),
-    ("fix/remove lvgl buffer_size (compiler fix not yet deployed)", _patch_lvgl_buffer_size),
-    ("animimg required src/duration (compiler fix not yet deployed)", _patch_animimg_required_src_duration),
+    ("fix lvgl buffer_size quoting (compiler fix not yet deployed)", _patch_lvgl_buffer_size),
+    ("animimg required src/duration -> container when empty (compiler fix not yet deployed)", _patch_animimg_required_src_duration),
 ]
 
 
