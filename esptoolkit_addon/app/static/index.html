@@ -258,6 +258,7 @@
       }).catch(() => {});
     }
 
+    const ESPHOME_OUTPUT_CLEAR = '[ESPHOME_OUTPUT_CLEAR]';
     let logWs = null;
     function connectLogWs() {
       if (!token) return;
@@ -265,13 +266,20 @@
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const base = location.host;
       logWs = new WebSocket(proto + '//' + base + API_BASE + '/api/logs/ws?token=' + encodeURIComponent(token));
+      logWs.onopen = () => {
+        const box = document.getElementById('log-box');
+        if (box) box.textContent = '';
+      };
       logWs.onmessage = (ev) => {
         const box = document.getElementById('log-box');
-        if (box) {
-          const line = (typeof ev.data === 'string' ? ev.data : String(ev.data)).replace(/\r?\n$/, '');
-          box.appendChild(document.createTextNode(line + '\n'));
-          box.scrollTop = box.scrollHeight;
+        if (!box) return;
+        const line = (typeof ev.data === 'string' ? ev.data : String(ev.data)).replace(/\r?\n$/, '');
+        if (line === ESPHOME_OUTPUT_CLEAR) {
+          box.textContent = '';
+          return;
         }
+        box.appendChild(document.createTextNode(line + '\n'));
+        box.scrollTop = box.scrollHeight;
       };
       logWs.onclose = () => { logWs = null; setTimeout(connectLogWs, 5000); };
     }

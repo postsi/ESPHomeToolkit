@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 
 from app.job_runner import runner
 from app.config import get_esphome_config_dir, load_options
+from app.local_http import execute_local_http
 from app import __version__ as addon_version
 
 
@@ -112,6 +113,29 @@ async def esphome_update() -> str:
     if r.returncode != 0:
         return f"Update failed (exit {r.returncode}):\n{r.stderr or r.stdout}"
     return r.stdout or "ESPHome updated."
+
+
+@mcp.tool()
+async def local_http(method: str, path: str, body: str | None = None) -> str:
+    """Execute an HTTP request to the local Home Assistant instance (or other allowlisted base).
+    Only reachable via MCP; not exposed as REST. By default uses Supervisor proxy (http://supervisor/core) with SUPERVISOR_TOKEN.
+    Optional override via ha_base_url and ha_token in add-on options.
+    method: GET, POST, PUT, PATCH, or DELETE.
+    path: path and optional query, e.g. /api/states or /api/config/config_entries/entry.
+    body: optional request body (e.g. JSON string) for POST/PUT/PATCH.
+    Returns response status, headers, and body as text."""
+    result = await execute_local_http(method=method, path=path, body=body)
+    if not result.get("success"):
+        return f"Error: {result.get('error', 'unknown')}"
+    status = result.get("status_code")
+    headers = result.get("headers") or {}
+    resp_body = result.get("body")
+    lines = [f"Status: {status}"]
+    if headers:
+        lines.append("Headers: " + ", ".join(f"{k}: {v}" for k, v in list(headers.items())[:10]))
+    if resp_body is not None:
+        lines.append("Body: " + (resp_body if len(resp_body) <= 8000 else resp_body[:8000] + "\n... (truncated)"))
+    return "\n".join(lines)
 
 
 def get_mcp_app():

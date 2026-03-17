@@ -13,6 +13,9 @@ log = logging.getLogger("esphome_api.job_runner")
 # Max lines to keep in memory for status/logs API
 LOG_TAIL_LINES = 2000
 
+# Sentinel sent to log subscribers when a new job starts so clients (e.g. ESPHome Output) clear the view
+ESPHOME_OUTPUT_CLEAR = "[ESPHOME_OUTPUT_CLEAR]"
+
 
 class JobRunner:
     def __init__(self) -> None:
@@ -54,6 +57,7 @@ class JobRunner:
         self._current_config_path = config_path
         self._started_at = asyncio.get_running_loop().time()
         log.info("Job started: %s", self._current_command)
+        await self._broadcast_log(ESPHOME_OUTPUT_CLEAR)
         out_buf: list[str] = []
         err_buf: list[str] = []
 

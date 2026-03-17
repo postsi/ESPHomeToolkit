@@ -87,14 +87,13 @@ class PanelDesignerView(HomeAssistantView):
 
 
 class PanelDeviceLogView(HomeAssistantView):
-    """Simple log viewer that streams logs via integration websocket proxy."""
+    """Device log viewer: connect to device via ESPHome Native API; clear on connect; log level settable."""
 
     url = f"/{PANEL_URL_PATH}/device-log"
     name = f"{DOMAIN}:device_log"
     requires_auth = False
 
     async def get(self, request):
-        # Minimal HTML/JS so we can add the tab without rebuilding the Designer SPA.
         return web.Response(
             text=f"""<!DOCTYPE html>
 <html lang="en">
@@ -111,22 +110,33 @@ class PanelDeviceLogView(HomeAssistantView):
     button.secondary {{ background: transparent; border: 1px solid var(--ha-border-color, #333); color: inherit; }}
     button:disabled {{ opacity: 0.6; cursor: not-allowed; }}
     .muted {{ color: var(--ha-secondary-text-color, #9aa0a6); font-size: 13px; }}
-    pre {{ margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--ha-border-color, #333); border-radius: 10px; height: calc(100vh - 130px); overflow: auto; white-space: pre-wrap; word-break: break-word; }}
-    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }}
+    pre {{ margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--ha-border-color, #333); border-radius: 10px; height: calc(100vh - 150px); overflow: auto; white-space: pre-wrap; word-break: break-word; }}
+    code {{ font-family: ui-monospace, monospace; }}
   </style>
 </head>
 <body>
   <div class="row">
     <strong>Device Log</strong>
-    <span class="muted">Stream logs from <code>esphome logs</code> via the add-on.</span>
+    <span class="muted">Stream device runtime logs via ESPHome Native API. Host = device name (<code>.local</code>).</span>
   </div>
   <div class="row" style="margin-top: 10px">
     <label class="muted">Device</label>
     <select id="deviceSelect" style="min-width: 220px"></select>
-    <label class="muted">Host/IP (optional)</label>
-    <input id="hostInput" placeholder="e.g. 192.168.1.50" style="min-width: 220px" />
-    <button id="startBtn">Start</button>
-    <button id="stopBtn" class="secondary">Stop</button>
+    <label class="muted">Host override (optional)</label>
+    <input id="hostInput" placeholder="e.g. 192.168.1.50" style="min-width: 180px" />
+    <label class="muted">Log level</label>
+    <select id="logLevelSelect" style="min-width: 140px">
+      <option value="VERY_VERBOSE">Very verbose</option>
+      <option value="VERBOSE">Verbose</option>
+      <option value="DEBUG">Debug</option>
+      <option value="CONFIG">Config</option>
+      <option value="INFO" selected>Info</option>
+      <option value="WARN">Warn</option>
+      <option value="ERROR">Error</option>
+      <option value="NONE">None</option>
+    </select>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
     <button id="clearBtn" class="secondary">Clear</button>
   </div>
   <div id="status" class="muted" style="margin-top: 8px"></div>
@@ -138,8 +148,9 @@ class PanelDeviceLogView(HomeAssistantView):
       var logBox = document.getElementById('logBox');
       var deviceSelect = document.getElementById('deviceSelect');
       var hostInput = document.getElementById('hostInput');
-      var startBtn = document.getElementById('startBtn');
-      var stopBtn = document.getElementById('stopBtn');
+      var logLevelSelect = document.getElementById('logLevelSelect');
+      var connectBtn = document.getElementById('connectBtn');
+      var disconnectBtn = document.getElementById('disconnectBtn');
       var clearBtn = document.getElementById('clearBtn');
 
       function setStatus(s) {{ statusEl.textContent = s || ''; }}
@@ -148,35 +159,78 @@ class PanelDeviceLogView(HomeAssistantView):
         logBox.textContent += String(line) + "\\n";
         logBox.scrollTop = logBox.scrollHeight;
       }}
+      function clearLog() {{ logBox.textContent = ''; }}
 
       async function getContext() {{
-        const res = await fetch('/api/{DOMAIN}/context', {{ credentials: 'include' }});
+        var res = await fetch('/api/{DOMAIN}/context', {{ credentials: 'include' }});
         return res.json();
       }}
       async function loadDevices(entryId) {{
-        const res = await fetch('/api/{DOMAIN}/devices?entry_id=' + encodeURIComponent(entryId), {{ credentials: 'include' }});
+        var res = await fetch('/api/{DOMAIN}/devices?entry_id=' + encodeURIComponent(entryId), {{ credentials: 'include' }});
         return res.json();
       }}
 
       var entryId = '';
       var ws = null;
 
-      function connectWs() {{
-        try {{ if (ws) ws.close(); }} catch (e) {{}}
+      function buildWsUrl() {{
         var proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
-        ws = new WebSocket(proto + '//' + location.host + '/api/{DOMAIN}/device_logs/ws?entry_id=' + encodeURIComponent(entryId));
-        ws.onopen = function() {{ setStatus('Connected.'); }};
+        var deviceId = deviceSelect.value || '';
+        var url = proto + '//' + location.host + '/api/{DOMAIN}/device_native_logs/ws?entry_id=' + encodeURIComponent(entryId) + '&device_id=' + encodeURIComponent(deviceId);
+        var host = (hostInput.value || '').trim();
+        if (host) url += '&host=' + encodeURIComponent(host);
+        return url;
+      }}
+
+      function connect() {{
+        var deviceId = deviceSelect.value || '';
+        if (!deviceId) {{ setStatus('Pick a device first.'); return; }}
+        clearLog();
+        setStatus('Connecting…');
+        try {{ if (ws) ws.close(); }} catch (e) {{}}
+        ws = new WebSocket(buildWsUrl());
+        ws.onopen = function() {{ setStatus('Connecting to device…'); }};
         ws.onmessage = function(ev) {{
-          // keepalive is empty string
-          if (ev.data !== '') appendLine(ev.data);
+          var data = ev.data;
+          if (data === '[connected]') {{
+            setStatus('Connected.');
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            deviceSelect.disabled = true;
+            return;
+          }}
+          if (data && data.indexOf('error:') === 0) {{
+            setStatus(data);
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            deviceSelect.disabled = false;
+            return;
+          }}
+          if (data !== '') appendLine(data);
         }};
-        ws.onclose = function() {{ setStatus('Disconnected.'); }};
+        ws.onclose = function() {{
+          setStatus('Disconnected.');
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          deviceSelect.disabled = false;
+          ws = null;
+        }};
         ws.onerror = function() {{ setStatus('WebSocket error.'); }};
       }}
 
+      function disconnect() {{
+        if (ws) {{ ws.close(); ws = null; }}
+      }}
+
+      function sendLogLevel() {{
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        var level = logLevelSelect.value || 'INFO';
+        ws.send(JSON.stringify({{ log_level: level }}));
+      }}
+
       async function init() {{
-        setStatus('Loading context…');
-        const ctx = await getContext();
+        setStatus('Loading…');
+        var ctx = await getContext();
         if (!ctx || !ctx.ok) {{
           setStatus('Not connected: ' + (ctx && ctx.error ? ctx.error : 'unknown'));
           return;
@@ -186,8 +240,8 @@ class PanelDeviceLogView(HomeAssistantView):
           setStatus('No active config entry. Configure the add-on first.');
           return;
         }}
-        const d = await loadDevices(entryId);
-        const list = (d && d.ok && d.devices) ? d.devices : [];
+        var d = await loadDevices(entryId);
+        var list = (d && d.ok && d.devices) ? d.devices : [];
         deviceSelect.innerHTML = '';
         if (!list.length) {{
           var opt = document.createElement('option');
@@ -202,53 +256,13 @@ class PanelDeviceLogView(HomeAssistantView):
             deviceSelect.appendChild(opt);
           }});
         }}
-        connectWs();
-        setStatus('Ready.');
+        setStatus('Select a device and click Connect.');
       }}
 
-      startBtn.addEventListener('click', async function() {{
-        const deviceId = deviceSelect.value || '';
-        if (!deviceId) {{ setStatus('Pick a device first.'); return; }}
-        setStatus('Starting logs…');
-        try {{
-          const res = await fetch('/api/{DOMAIN}/device_logs/start?entry_id=' + encodeURIComponent(entryId), {{
-            method: 'POST',
-            headers: {{ 'Content-Type': 'application/json' }},
-            credentials: 'include',
-            body: JSON.stringify({{ device_id: deviceId, device: (hostInput.value || '').trim() || null }}),
-          }});
-          const data = await res.json().catch(function() {{ return {{}}; }});
-          if (!res.ok || !data || data.ok !== true) {{
-            setStatus('Start failed: ' + (data && (data.detail || data.error) ? (data.detail || data.error) : ('HTTP ' + res.status)));
-            return;
-          }}
-          setStatus('Logs started.');
-        }} catch (e) {{
-          setStatus('Start failed: ' + (e && e.message ? e.message : String(e)));
-        }}
-      }});
-
-      stopBtn.addEventListener('click', async function() {{
-        setStatus('Stopping…');
-        try {{
-          const res = await fetch('/api/{DOMAIN}/device_logs/stop?entry_id=' + encodeURIComponent(entryId), {{
-            method: 'POST',
-            headers: {{ 'Content-Type': 'application/json' }},
-            credentials: 'include',
-            body: JSON.stringify({{}}),
-          }});
-          const data = await res.json().catch(function() {{ return {{}}; }});
-          if (!res.ok || !data || data.ok !== true) {{
-            setStatus('Stop failed: ' + (data && (data.detail || data.error) ? (data.detail || data.error) : ('HTTP ' + res.status)));
-            return;
-          }}
-          setStatus('Stopped.');
-        }} catch (e) {{
-          setStatus('Stop failed: ' + (e && e.message ? e.message : String(e)));
-        }}
-      }});
-
-      clearBtn.addEventListener('click', function() {{ logBox.textContent = ''; }});
+      connectBtn.addEventListener('click', connect);
+      disconnectBtn.addEventListener('click', disconnect);
+      clearBtn.addEventListener('click', clearLog);
+      logLevelSelect.addEventListener('change', sendLogLevel);
 
       init();
     }})();

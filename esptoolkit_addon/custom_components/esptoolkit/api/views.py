@@ -5160,152 +5160,158 @@ class StateWebSocketView(HomeAssistantView):
         return ws
 
 
-class DeviceLogsProxyWebSocketView(HomeAssistantView):
-    """WebSocket proxy to the add-on's /api/logs/ws without exposing the token to the browser."""
+def _resolve_native_log_level(name: str):
+    import aioesphomeapi as api
 
-    url = f"/api/{DOMAIN}/device_logs/ws"
-    name = f"api:{DOMAIN}:device_logs_ws"
+    key = (name or "").strip().upper().replace("-", "_")
+    if key in ("NONE", "NONE_"):
+        return api.LogLevel.LOG_LEVEL_NONE
+    if key == "ERROR":
+        return api.LogLevel.LOG_LEVEL_ERROR
+    if key == "WARN":
+        return api.LogLevel.LOG_LEVEL_WARN
+    if key == "INFO":
+        return api.LogLevel.LOG_LEVEL_INFO
+    if key == "CONFIG":
+        return api.LogLevel.LOG_LEVEL_CONFIG
+    if key == "DEBUG":
+        return api.LogLevel.LOG_LEVEL_DEBUG
+    if key == "VERBOSE":
+        return api.LogLevel.LOG_LEVEL_VERBOSE
+    if key == "VERY_VERBOSE":
+        return api.LogLevel.LOG_LEVEL_VERY_VERBOSE
+    return api.LogLevel.LOG_LEVEL_VERY_VERBOSE
+
+
+class DeviceNativeLogsWebSocketView(HomeAssistantView):
+    """WebSocket: connect to device via ESPHome Native API and stream logs. Clear on connect; log level settable."""
+
+    url = f"/api/{DOMAIN}/device_native_logs/ws"
+    name = f"api:{DOMAIN}:device_native_logs_ws"
     requires_auth = False
 
     async def get(self, request):
-        import aiohttp
+        import aioesphomeapi as api
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
         hass: HomeAssistant = request.app["hass"]
         entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        device_id = (request.query.get("device_id") or "").strip()
+        host_override = (request.query.get("host") or "").strip() or None
+
         if not entry_id:
-            await ws.send_str("no_active_entry")
+            await ws.send_str("error: no_active_entry")
+            await ws.close()
+            return ws
+        if not device_id:
+            await ws.send_str("error: missing_device_id")
             await ws.close()
             return ws
 
-        conn = _get_addon_connection(hass, entry_id)
-        if not conn:
-            await ws.send_str("no_addon_connection")
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            await ws.send_str("error: no_active_entry")
             await ws.close()
             return ws
-        base_url, token = conn
+        device = storage.get_device(device_id)
+        if not device:
+            await ws.send_str("error: device_not_found")
+            await ws.close()
+            return ws
 
-        addon_ws_url = base_url.rstrip("/") + "/api/logs/ws?token=" + token
+        host = host_override or f"{device.slug}.local"
+        port = 6053
+        api_key = (device.api_key or "").strip()
+        if not api_key:
+            await ws.send_str("error: device has no api_key")
+            await ws.close()
+            return ws
 
-        session = aiohttp.ClientSession()
+        client = api.APIClient(host, port, noise_psk=api_key)
+        unsub_logs = None
+        current_level = api.LogLevel.LOG_LEVEL_VERY_VERBOSE
+        log_queue = asyncio.Queue(maxsize=500)
+
+        def on_log(response):
+            try:
+                msg = getattr(response, "message", None) or str(response)
+                if msg:
+                    log_queue.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
+            except Exception:
+                pass
+
+        async def pump_logs():
+            while True:
+                try:
+                    line = await asyncio.wait_for(log_queue.get(), timeout=30.0)
+                    await ws.send_str(line)
+                except asyncio.TimeoutError:
+                    try:
+                        await ws.send_str("")
+                    except Exception:
+                        break
+                except Exception:
+                    break
+
+        pump_task = None
         try:
-            async with session.ws_connect(addon_ws_url, heartbeat=30) as addon_ws:
-                async def pump_addon_to_client():
-                    async for msg in addon_ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            try:
-                                await ws.send_str(msg.data)
-                            except Exception:
-                                break
-                        elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
-                            break
+            await client.connect(login=True)
+            await ws.send_str("[connected]")
+            unsub_logs = client.subscribe_logs(on_log, log_level=current_level)
 
-                async def pump_client_to_addon():
-                    # Client doesn't need to send anything; keep reading so close propagates promptly.
-                    async for msg in ws:
-                        if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
-                            break
-
-                await asyncio.gather(pump_addon_to_client(), pump_client_to_addon())
+            pump_task = asyncio.create_task(pump_logs())
+            try:
+                async for msg in ws:
+                if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
+                    break
+                if msg.type == web.WSMsgType.TEXT and msg.data:
+                    try:
+                        data = json.loads(msg.data)
+                        if isinstance(data, dict) and "log_level" in data:
+                            level_name = data.get("log_level")
+                            new_level = _resolve_native_log_level(level_name)
+                            if unsub_logs is not None:
+                                unsub_logs()
+                            unsub_logs = client.subscribe_logs(on_log, log_level=new_level)
+                            current_level = new_level
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            finally:
+                pump_task.cancel()
+                try:
+                    await pump_task
+                except asyncio.CancelledError:
+                    pass
         except Exception as e:
             try:
-                await ws.send_str(f"proxy_error: {str(e)[:200]}")
+                await ws.send_str(f"error: {str(e)[:300]}")
             except Exception:
                 pass
         finally:
-            await session.close()
+            if pump_task is not None:
+                pump_task.cancel()
+                try:
+                    await pump_task
+                except asyncio.CancelledError:
+                    pass
+            if unsub_logs is not None:
+                try:
+                    unsub_logs()
+                except Exception:
+                    pass
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
             try:
                 await ws.close()
             except Exception:
                 pass
         return ws
-
-
-class DeviceLogsStartView(HomeAssistantView):
-    """Start an ESPHome `logs` job in the add-on using compiled YAML."""
-
-    url = f"/api/{DOMAIN}/device_logs/start"
-    name = f"api:{DOMAIN}:device_logs_start"
-    requires_auth = False
-
-    async def post(self, request):
-        hass: HomeAssistant = request.app["hass"]
-        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
-        if not entry_id:
-            return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
-
-        body = None
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        if not isinstance(body, dict):
-            return self.json({"ok": False, "error": "invalid_json"}, status_code=400)
-
-        device_id = str(body.get("device_id") or "").strip()
-        device_override = body.get("device")
-        device_override = str(device_override).strip() if device_override else None
-        if not device_id:
-            return self.json({"ok": False, "error": "missing_device_id"}, status_code=400)
-
-        storage = _get_storage(hass, entry_id)
-        if storage is None:
-            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
-        device = storage.get_device(device_id)
-        if not device:
-            return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
-
-        conn = _get_addon_connection(hass, entry_id)
-        if not conn:
-            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
-        base_url, token = conn
-
-        recipe_text = _get_recipe_text_for_device(hass, device)
-        try:
-            yaml_content = compile_to_esphome_yaml(device, recipe_text=recipe_text)
-        except Exception as e:
-            return self.json({"ok": False, "error": "compile_failed", "detail": str(e)}, status_code=500)
-
-        ok, result = await _esphome_addon_request(
-            hass,
-            base_url,
-            "api/logs-device",
-            {"config_source": "yaml", "yaml": yaml_content, "device": device_override},
-            token=token,
-        )
-        if ok:
-            return self.json({"ok": True, "result": result})
-        return self.json({"ok": False, "error": "addon_failed", "detail": result}, status_code=502)
-
-
-class DeviceLogsStopView(HomeAssistantView):
-    """Stop the current add-on job (logs)."""
-
-    url = f"/api/{DOMAIN}/device_logs/stop"
-    name = f"api:{DOMAIN}:device_logs_stop"
-    requires_auth = False
-
-    async def post(self, request):
-        hass: HomeAssistant = request.app["hass"]
-        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
-        if not entry_id:
-            return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
-        conn = _get_addon_connection(hass, entry_id)
-        if not conn:
-            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
-        base_url, token = conn
-        ok, result = await _esphome_addon_request(
-            hass,
-            base_url,
-            "api/stop",
-            {},
-            token=token,
-        )
-        if ok:
-            return self.json({"ok": True, "result": result})
-        return self.json({"ok": False, "error": "addon_failed", "detail": result}, status_code=502)
 
 
 class PreviewWidgetYamlView(HomeAssistantView):
@@ -5847,9 +5853,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(StateBatchView)
     hass.http.register_view(CallServiceView)
     hass.http.register_view(StateWebSocketView)
-    hass.http.register_view(DeviceLogsProxyWebSocketView)
-    hass.http.register_view(DeviceLogsStartView)
-    hass.http.register_view(DeviceLogsStopView)
+    hass.http.register_view(DeviceNativeLogsWebSocketView)
     hass.http.register_view(EntityCapabilitiesView)
 
     # Plugins
