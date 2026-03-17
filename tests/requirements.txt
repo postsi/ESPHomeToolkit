@@ -1,0 +1,3 @@
+# Test suite: run against HA + addon (MCP local_http).
+pytest>=7.0.0
+httpx>=0.27.0

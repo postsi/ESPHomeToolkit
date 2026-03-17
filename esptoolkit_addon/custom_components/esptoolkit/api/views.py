@@ -2088,6 +2088,7 @@ def _rewrite_widget_font_references(project: dict, font_id_map: dict[str, str]) 
     return p
 
 from aiohttp import web
+import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.http import HomeAssistantView
@@ -5193,6 +5194,8 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
     async def get(self, request):
         import aioesphomeapi as api
 
+        log = logging.getLogger(__name__ + ".device_logs")
+
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
@@ -5229,6 +5232,15 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             await ws.close()
             return ws
 
+        log.debug(
+            "DeviceNativeLogsWebSocketView: connecting to host=%s port=%s device_id=%s slug=%s api_key_len=%d",
+            host,
+            port,
+            device.device_id,
+            device.slug,
+            len(api_key),
+        )
+
         client = api.APIClient(host, port, noise_psk=api_key)
         unsub_logs = None
         current_level = api.LogLevel.LOG_LEVEL_VERY_VERBOSE
@@ -5259,7 +5271,9 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
 
         pump_task = None
         try:
+            log.debug("DeviceNativeLogsWebSocketView: calling client.connect(login=True)")
             await client.connect(login=True)
+            log.debug("DeviceNativeLogsWebSocketView: connect OK, subscribing to logs")
             await ws.send_str("[connected]")
             unsub_logs = client.subscribe_logs(on_log, log_level=current_level)
 
