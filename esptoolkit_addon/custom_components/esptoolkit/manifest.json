@@ -4,7 +4,7 @@
   "documentation": "https://github.com/postsi/ESPHomeToolkit",
   "issue_tracker": "https://github.com/postsi/ESPHomeToolkit/issues",
   "configuration_url": "/esptoolkit",
-  "version": "1.0.38",
+  "version": "1.0.39",
   "after_dependencies": [
     "http",
     "frontend"

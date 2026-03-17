@@ -5298,17 +5298,15 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             zc = None
 
         try:
-            # Prefer keyword args (noise_psk, zeroconf_instance) for newer aioesphomeapi
-            try:
-                client = api.APIClient(
-                    host,
-                    port,
-                    noise_psk=api_key,
-                    zeroconf_instance=zc,
-                )
-            except TypeError:
-                # HA-bundled aioesphomeapi often accepts only 3 positional (address, port, key)
-                client = api.APIClient(host, port, api_key)
+            # Match Home Assistant esphome __init__.py: 3 positionals (host, port, password)
+            # then noise_psk and zeroconf_instance as keywords. password=None when using encryption.
+            client = api.APIClient(
+                host,
+                port,
+                None,  # password (legacy); we use noise_psk for encryption
+                noise_psk=api_key,
+                zeroconf_instance=zc,
+            )
         except Exception as init_err:
             log.exception(
                 "DeviceNativeLogsWebSocketView: APIClient init failed: %s",
