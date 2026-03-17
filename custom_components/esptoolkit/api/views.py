@@ -230,7 +230,7 @@ def _compile_screensaver_interval(timeout_seconds: int, backlight_id: str = "dis
         "          const uint32_t idle_ms = millis() - id(etd_screensaver_last_activity);\n"
         "          if (!id(etd_screensaver_dimmed) && idle_ms >= timeout_ms) {\n"
         f"            ESP_LOGI(\"screensaver\", \"blanking backlight (idle=%ums)\", (unsigned)idle_ms);\n"
-        f"            id({safe_bid}).turn_off();\n"
+        f"            id({safe_bid}).turn_off().perform();\n"
         "            id(etd_screensaver_dimmed) = true;\n"
         "          }\n"
     )
