@@ -199,11 +199,7 @@ def _patch_lvgl_buffer_size(yaml_text: str) -> str:
 
 # List of (description, patch_func). Apply in order before validate. Remove all after deploy.
 # After deploy: empty list so test validates raw compiler output. Add patches again when iterating on bugs without redeploy.
-YAML_PATCHES = [
-    ("Python bools -> lowercase (compiler fix not yet deployed)", _patch_python_bools_in_yaml),
-    ("fix lvgl buffer_size quoting (compiler fix not yet deployed)", _patch_lvgl_buffer_size),
-    ("widgets missing required opts -> container (image/animimg/buttonmatrix/etc, compiler fix not yet deployed)", _patch_animimg_required_src_duration),
-]
+YAML_PATCHES: list[tuple[str, object]] = []
 
 
 def test_addon_config_check_minimal_yaml(addon_url, addon_token):

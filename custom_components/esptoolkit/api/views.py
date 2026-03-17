@@ -1824,6 +1824,26 @@ def _build_section_engine_pieces(
     return pieces, user_edited
 
 
+def _sanitize_esphome_yaml_lvgl(yaml_text: str) -> str:
+    """Final pass: ensure LVGL-related YAML is valid for ESPHome (works even if older code path produced it).
+    - Quote buffer_size values that contain % (e.g. 100% -> \"100%\").
+    - Normalize Python-style booleans to lowercase (True/False -> true/false) so ESPHome accepts them.
+    """
+    if not yaml_text or not yaml_text.strip():
+        return yaml_text
+    # buffer_size: 100% or buffer_size: 25% -> quoted when unquoted
+    def _quote_buffer(m):
+        val = m.group(2).rstrip()
+        if "%" in val and not (val.startswith('"') and val.endswith('"')):
+            return f"{m.group(1)} \"{val}\"\n"
+        return m.group(0)
+    yaml_text = re.sub(r"^(\s*buffer_size:)\s*(.*)$", _quote_buffer, yaml_text, flags=re.MULTILINE)
+    # Python bools -> YAML lowercase (ESPHome rejects True/False)
+    yaml_text = re.sub(r":\s*False\b", ": false", yaml_text)
+    yaml_text = re.sub(r":\s*True\b", ": true", yaml_text)
+    return yaml_text
+
+
 def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: str) -> str:
     """Compiler: Design v2 when project.esphome_yaml is set (stored YAML + compiler lvgl/list merge).
     Legacy: recipe + compiler + project.sections."""
@@ -1930,6 +1950,7 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
         out_parts.append(f"{key}:\n{content.rstrip()}\n\n")
     out = "".join(out_parts).rstrip() + "\n"
     out = out.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
+    out = _sanitize_esphome_yaml_lvgl(out)
     return out
 
 
@@ -2044,6 +2065,7 @@ def compile_to_esphome_yaml(device: DeviceProject, recipe_text: str | None = Non
     if assets_yaml.strip():
         out += assets_yaml.rstrip() + "\n"
     out = out.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
+    out = _sanitize_esphome_yaml_lvgl(out)
     return out
 
 
