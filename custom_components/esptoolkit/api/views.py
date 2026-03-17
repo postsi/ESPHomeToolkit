@@ -4698,6 +4698,10 @@ class DeviceProjectView(HomeAssistantView):
         await storage.async_save()
         return self.json({"ok": True, "removed_orphans": [{"section": s, "widget_id": w} for s, w in removed]})
 
+    async def post(self, request, device_id: str):
+        """Same as put: save project. Allows addons calling via Supervisor proxy (which may only allow GET/POST)."""
+        return await self.put(request, device_id)
+
 
 class CleanupOrphansView(HomeAssistantView):
     """POST with { project } returns project with orphaned widget refs removed from sections (for preview without saving)."""
@@ -5277,7 +5281,17 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             len(api_key),
         )
 
-        client = api.APIClient(host, port, noise_psk=api_key)
+        try:
+            # aioesphomeapi's APIClient expects encryption key as 3rd positional (noise_psk)
+            client = api.APIClient(host, port, api_key)
+        except Exception as init_err:
+            log.exception(
+                "DeviceNativeLogsWebSocketView: APIClient init failed: %s",
+                init_err,
+            )
+            await ws.send_str(f"error: APIClient init: {init_err!s}"[:300])
+            await ws.close()
+            return ws
         unsub_logs = None
         current_level = api.LogLevel.LOG_LEVEL_VERY_VERBOSE
         log_queue = asyncio.Queue(maxsize=500)
