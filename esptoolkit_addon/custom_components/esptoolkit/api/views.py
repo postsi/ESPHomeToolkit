@@ -5287,10 +5287,19 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
                 except asyncio.CancelledError:
                     pass
         except Exception as e:
+            err_msg = str(e)[:300]
             try:
-                await ws.send_str(f"error: {str(e)[:300]}")
+                await ws.send_str(f"error: {err_msg}")
+                await asyncio.sleep(0.2)
             except Exception:
                 pass
+            try:
+                await ws.close(code=1011, message=err_msg.encode("utf-8")[:123])
+            except Exception:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
         finally:
             if pump_task is not None:
                 pump_task.cancel()
@@ -5308,7 +5317,7 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             except Exception:
                 pass
             try:
-                await ws.close()
+                await ws.close(code=1000)
             except Exception:
                 pass
         return ws

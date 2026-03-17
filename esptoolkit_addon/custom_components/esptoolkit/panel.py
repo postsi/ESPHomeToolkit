@@ -172,6 +172,7 @@ class PanelDeviceLogView(HomeAssistantView):
 
       var entryId = '';
       var ws = null;
+      var lastErrorFromMessage = null;
 
       function buildWsUrl() {{
         var proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
@@ -185,6 +186,7 @@ class PanelDeviceLogView(HomeAssistantView):
       function connect() {{
         var deviceId = deviceSelect.value || '';
         if (!deviceId) {{ setStatus('Pick a device first.'); return; }}
+        lastErrorFromMessage = null;
         clearLog();
         setStatus('Connecting…');
         try {{ if (ws) ws.close(); }} catch (e) {{}}
@@ -193,6 +195,7 @@ class PanelDeviceLogView(HomeAssistantView):
         ws.onmessage = function(ev) {{
           var data = ev.data;
           if (data === '[connected]') {{
+            lastErrorFromMessage = null;
             setStatus('Connected.');
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
@@ -200,6 +203,7 @@ class PanelDeviceLogView(HomeAssistantView):
             return;
           }}
           if (data && data.indexOf('error:') === 0) {{
+            lastErrorFromMessage = data;
             setStatus(data);
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
@@ -208,14 +212,27 @@ class PanelDeviceLogView(HomeAssistantView):
           }}
           if (data !== '') appendLine(data);
         }};
-        ws.onclose = function() {{
-          setStatus('Disconnected.');
+        ws.onclose = function(ev) {{
+          var reason = (ev.reason && ev.reason.trim()) ? ev.reason.trim() : '';
+          var code = ev.code || 0;
+          if (lastErrorFromMessage) {{
+            setStatus(lastErrorFromMessage);
+          }} else if (reason) {{
+            setStatus('Disconnected: ' + reason);
+          }} else if (code && code !== 1000) {{
+            setStatus('Disconnected: connection failed (code ' + code + '). Device unreachable or wrong API key?');
+          }} else {{
+            setStatus('Disconnected.');
+          }}
+          lastErrorFromMessage = null;
           connectBtn.disabled = false;
           disconnectBtn.disabled = true;
           deviceSelect.disabled = false;
           ws = null;
         }};
-        ws.onerror = function() {{ setStatus('WebSocket error.'); }};
+        ws.onerror = function() {{
+          if (!lastErrorFromMessage) setStatus('WebSocket error. Check device is on and API key is correct.');
+        }};
       }}
 
       function disconnect() {{

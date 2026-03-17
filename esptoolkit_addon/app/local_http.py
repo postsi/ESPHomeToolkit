@@ -36,7 +36,12 @@ def _get_allowed_bases_and_token() -> tuple[list[str], str]:
     override_base = (opts.get("ha_base_url") or "").strip()
     override_token = (opts.get("ha_token") or "").strip()
 
-    base = override_base or supervisor_base
+    # When running under Supervisor, prefer supervisor proxy. Treat localhost/127.0.0.1 as "not set"
+    # so we don't use them from inside the container (they wouldn't reach HA).
+    if supervisor_token and override_base in ("", "http://localhost:8123", "http://127.0.0.1:8123"):
+        base = supervisor_base
+    else:
+        base = override_base or supervisor_base
     token = override_token or supervisor_token
 
     bases: list[str] = []

@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration#add-on-config
 name: EspToolkit
-version: "1.0.32"
+version: "1.0.33"
 slug: esptoolkit_addon
 description: Runs ESPHome and exposes compile/upload/validate via REST API and MCP. Installs the EspToolkit integration (Designer + API services) into Home Assistant.
 url: "https://github.com/postsi/ESPHomeToolkit"
@@ -20,7 +20,7 @@ map:
 options:
   api_token: ""
   port: 8098
-  ha_base_url: "http://localhost:8123"
+  ha_base_url: ""
   ha_token: ""
 schema:
   api_token: str
