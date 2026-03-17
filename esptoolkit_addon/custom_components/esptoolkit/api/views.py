@@ -5318,14 +5318,28 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
         unsub_logs = None
         current_level = api.LogLevel.LOG_LEVEL_VERY_VERBOSE
         log_queue = asyncio.Queue(maxsize=500)
+        parse_log_message = getattr(api, "parse_log_message", None)
 
         def on_log(response):
             try:
-                msg = getattr(response, "message", None) or str(response)
-                if msg:
-                    log_queue.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
+                raw = getattr(response, "message", None)
+                if raw is None:
+                    return
+                text = raw.decode("utf-8", "backslashreplace") if isinstance(raw, bytes) else str(raw)
+                if not text:
+                    return
+                if parse_log_message:
+                    for line in parse_log_message(text, "", strip_ansi_escapes=True):
+                        if line:
+                            try:
+                                log_queue.put_nowait(line)
+                            except asyncio.QueueFull:
+                                pass
+                else:
+                    try:
+                        log_queue.put_nowait(text.strip())
+                    except asyncio.QueueFull:
+                        pass
             except Exception:
                 pass
 
