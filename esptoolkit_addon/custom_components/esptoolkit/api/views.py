@@ -5298,13 +5298,17 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             zc = None
 
         try:
-            # noise_psk enables encryption (required by device); zeroconf_instance uses HA's shared Zeroconf
-            client = api.APIClient(
-                host,
-                port,
-                noise_psk=api_key,
-                zeroconf_instance=zc,
-            )
+            # Prefer keyword args (noise_psk, zeroconf_instance) for newer aioesphomeapi
+            try:
+                client = api.APIClient(
+                    host,
+                    port,
+                    noise_psk=api_key,
+                    zeroconf_instance=zc,
+                )
+            except TypeError:
+                # HA-bundled aioesphomeapi often accepts only 3 positional (address, port, key)
+                client = api.APIClient(host, port, api_key)
         except Exception as init_err:
             log.exception(
                 "DeviceNativeLogsWebSocketView: APIClient init failed: %s",
