@@ -2519,10 +2519,16 @@ def _emit_widget_from_schema(
     esphome = schema.get("esphome", {})
     root_key = esphome.get("root_key") or wtype  # e.g. "label", "button"
     # ESPHome animimg requires non-empty src; when missing/empty emit a container instead.
+    # ESPHome buttonmatrix requires rows; when missing/empty emit a container instead.
     emit_container_only = False
     if root_key == "animimg":
         src = (widget.get("props") or {}).get("src")
         if not src or (isinstance(src, list) and len(src) == 0):
+            root_key = "container"
+            emit_container_only = True
+    elif root_key == "buttonmatrix":
+        rows = (widget.get("props") or {}).get("rows")
+        if not rows or (isinstance(rows, list) and len(rows) == 0):
             root_key = "container"
             emit_container_only = True
 
