@@ -2531,6 +2531,11 @@ def _emit_widget_from_schema(
         if not rows or (isinstance(rows, list) and len(rows) == 0):
             root_key = "container"
             emit_container_only = True
+    elif root_key == "image":
+        src = (widget.get("props") or {}).get("src")
+        if not src or (isinstance(src, str) and not src.strip()):
+            root_key = "container"
+            emit_container_only = True
 
     # Widget list item: "- type:" then properties indented 2 more (YAML: value of single key for ESPHome)
     body_indent = "            "  # 12 spaces: value under "- container:" so parser sees one key per list item

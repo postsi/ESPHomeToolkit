@@ -202,6 +202,7 @@ def _patch_lvgl_buffer_size(yaml_text: str) -> str:
 YAML_PATCHES = [
     ("Python bools -> lowercase (compiler fix not yet deployed)", _patch_python_bools_in_yaml),
     ("fix lvgl buffer_size quoting (compiler fix not yet deployed)", _patch_lvgl_buffer_size),
+    ("widgets missing required opts -> container (image/animimg/buttonmatrix/etc, compiler fix not yet deployed)", _patch_animimg_required_src_duration),
 ]
 
 

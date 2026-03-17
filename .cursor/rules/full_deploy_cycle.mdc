@@ -1,0 +1,25 @@
+---
+description: Run the full deploy cycle (test → deploy → HA update → restart → test)
+alwaysApply: false
+globs: "scripts/full_deploy_cycle.md,scripts/deploy-local.sh,tests/test_integration_addon.py"
+---
+
+# Full deploy cycle
+
+**Terminology:** The deploy script has two modes: **fast deploy** (`--fast`; reuses base image) and **full deploy** (no `--fast`; rebuilds base container). This rule is about the **full deploy cycle** — the end-to-end flow (test → deploy → HA update → restart → test). In that cycle always use the script’s **fast** deploy (`deploy-local.sh --fast`), not the script’s full deploy.
+
+When the user asks to **run the full deploy cycle**, **run the deployment cycle**, **do the full cycle**, or similar:
+
+1. **Read and follow** `scripts/full_deploy_cycle.md` step by step. Do not skip steps unless the user explicitly asks to.
+
+2. **Concrete execution:**
+   - **Step 1:** Set `YAML_PATCHES = []` in `tests/test_integration_addon.py`. Run the validate test (`test_esphome_validate_testdummy_project`) with `ESPTOOLKIT_RUN_SLOW=1` and the usual `ESPTOOLKIT_ENTRY_ID` and `ESPTOOLKIT_DEVICE_ID`. If it fails, fix bugs in the compiler (integration and addon `api/views.py`) and/or add minimal YAML patches, then re-run until the test passes.
+   - **Step 2:** Read current version from `esptoolkit_addon/config.yaml`; bump patch (e.g. 1.0.45 → 1.0.46). Run `./scripts/deploy-local.sh --fast <new_version> "Full deploy cycle"` from repo root.
+   - **Step 3:** Call the Home Assistant MCP tool **`ha_update_addon`** with `slug`: `esptoolkit_addon` (or the slug returned by `ha_list_installed_addons` for the ESPToolkit addon).
+   - **Step 4:** Wait 30–60 seconds. Optionally call **`ha_restart_addon`** with the same slug, then wait again.
+   - **Step 5:** Call the Home Assistant MCP tool **`ha_restart`** (no arguments). Wait 60–90 seconds for HA to come back.
+   - **Step 6:** With `YAML_PATCHES` still empty, re-run the same validate test. Report pass or fail; if it fails, report the error and suggest fixing the compiler and re-running the cycle.
+
+3. **Requirements:** The user must have (a) the fast-deploy base image built (`./scripts/build-base.sh`), (b) `GITHUB_TOKEN` or docker login for push, (c) test env vars set, (d) the HA MCP server (e.g. user-HAGrimwood) configured. If any step fails due to missing prereqs, say what is missing and stop.
+
+4. **No separate clean:** This cycle does not run the clean-environment script unless the user asks for it. For a clean-install test, the user can ask for "local deploy" (which runs clean first) or "run clean environment then full deploy cycle".
