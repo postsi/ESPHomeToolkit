@@ -86,8 +86,182 @@ class PanelDesignerView(HomeAssistantView):
         )
 
 
+class PanelDeviceLogView(HomeAssistantView):
+    """Simple log viewer that streams logs via integration websocket proxy."""
+
+    url = f"/{PANEL_URL_PATH}/device-log"
+    name = f"{DOMAIN}:device_log"
+    requires_auth = False
+
+    async def get(self, request):
+        # Minimal HTML/JS so we can add the tab without rebuilding the Designer SPA.
+        return web.Response(
+            text=f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{PANEL_TITLE} — Device Log</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; padding: 16px; font-family: var(--ha-font-family, system-ui); background: var(--ha-background-color, #121212); color: var(--ha-text-color, #e1e1e1); }}
+    .row {{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
+    select, input {{ background: var(--ha-card-background, #1c1c1c); color: inherit; border: 1px solid var(--ha-border-color, #333); border-radius: 8px; padding: 8px 10px; }}
+    button {{ background: var(--ha-primary-color, #03a9f4); color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 600; }}
+    button.secondary {{ background: transparent; border: 1px solid var(--ha-border-color, #333); color: inherit; }}
+    button:disabled {{ opacity: 0.6; cursor: not-allowed; }}
+    .muted {{ color: var(--ha-secondary-text-color, #9aa0a6); font-size: 13px; }}
+    pre {{ margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--ha-border-color, #333); border-radius: 10px; height: calc(100vh - 130px); overflow: auto; white-space: pre-wrap; word-break: break-word; }}
+    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }}
+  </style>
+</head>
+<body>
+  <div class="row">
+    <strong>Device Log</strong>
+    <span class="muted">Stream logs from <code>esphome logs</code> via the add-on.</span>
+  </div>
+  <div class="row" style="margin-top: 10px">
+    <label class="muted">Device</label>
+    <select id="deviceSelect" style="min-width: 220px"></select>
+    <label class="muted">Host/IP (optional)</label>
+    <input id="hostInput" placeholder="e.g. 192.168.1.50" style="min-width: 220px" />
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" class="secondary">Stop</button>
+    <button id="clearBtn" class="secondary">Clear</button>
+  </div>
+  <div id="status" class="muted" style="margin-top: 8px"></div>
+  <pre id="logBox"></pre>
+
+  <script>
+    (function() {{
+      var statusEl = document.getElementById('status');
+      var logBox = document.getElementById('logBox');
+      var deviceSelect = document.getElementById('deviceSelect');
+      var hostInput = document.getElementById('hostInput');
+      var startBtn = document.getElementById('startBtn');
+      var stopBtn = document.getElementById('stopBtn');
+      var clearBtn = document.getElementById('clearBtn');
+
+      function setStatus(s) {{ statusEl.textContent = s || ''; }}
+      function appendLine(line) {{
+        if (line === null || line === undefined) return;
+        logBox.textContent += String(line) + "\\n";
+        logBox.scrollTop = logBox.scrollHeight;
+      }}
+
+      async function getContext() {{
+        const res = await fetch('/api/{DOMAIN}/context', {{ credentials: 'include' }});
+        return res.json();
+      }}
+      async function loadDevices(entryId) {{
+        const res = await fetch('/api/{DOMAIN}/devices?entry_id=' + encodeURIComponent(entryId), {{ credentials: 'include' }});
+        return res.json();
+      }}
+
+      var entryId = '';
+      var ws = null;
+
+      function connectWs() {{
+        try {{ if (ws) ws.close(); }} catch (e) {{}}
+        var proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+        ws = new WebSocket(proto + '//' + location.host + '/api/{DOMAIN}/device_logs/ws?entry_id=' + encodeURIComponent(entryId));
+        ws.onopen = function() {{ setStatus('Connected.'); }};
+        ws.onmessage = function(ev) {{
+          // keepalive is empty string
+          if (ev.data !== '') appendLine(ev.data);
+        }};
+        ws.onclose = function() {{ setStatus('Disconnected.'); }};
+        ws.onerror = function() {{ setStatus('WebSocket error.'); }};
+      }}
+
+      async function init() {{
+        setStatus('Loading context…');
+        const ctx = await getContext();
+        if (!ctx || !ctx.ok) {{
+          setStatus('Not connected: ' + (ctx && ctx.error ? ctx.error : 'unknown'));
+          return;
+        }}
+        entryId = ctx.entry_id || '';
+        if (!entryId) {{
+          setStatus('No active config entry. Configure the add-on first.');
+          return;
+        }}
+        const d = await loadDevices(entryId);
+        const list = (d && d.ok && d.devices) ? d.devices : [];
+        deviceSelect.innerHTML = '';
+        if (!list.length) {{
+          var opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '(no devices)';
+          deviceSelect.appendChild(opt);
+        }} else {{
+          list.forEach(function(dev) {{
+            var opt = document.createElement('option');
+            opt.value = dev.device_id;
+            opt.textContent = dev.name + ' (' + dev.slug + ')';
+            deviceSelect.appendChild(opt);
+          }});
+        }}
+        connectWs();
+        setStatus('Ready.');
+      }}
+
+      startBtn.addEventListener('click', async function() {{
+        const deviceId = deviceSelect.value || '';
+        if (!deviceId) {{ setStatus('Pick a device first.'); return; }}
+        setStatus('Starting logs…');
+        try {{
+          const res = await fetch('/api/{DOMAIN}/device_logs/start?entry_id=' + encodeURIComponent(entryId), {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            credentials: 'include',
+            body: JSON.stringify({{ device_id: deviceId, device: (hostInput.value || '').trim() || null }}),
+          }});
+          const data = await res.json().catch(function() {{ return {{}}; }});
+          if (!res.ok || !data || data.ok !== true) {{
+            setStatus('Start failed: ' + (data && (data.detail || data.error) ? (data.detail || data.error) : ('HTTP ' + res.status)));
+            return;
+          }}
+          setStatus('Logs started.');
+        }} catch (e) {{
+          setStatus('Start failed: ' + (e && e.message ? e.message : String(e)));
+        }}
+      }});
+
+      stopBtn.addEventListener('click', async function() {{
+        setStatus('Stopping…');
+        try {{
+          const res = await fetch('/api/{DOMAIN}/device_logs/stop?entry_id=' + encodeURIComponent(entryId), {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            credentials: 'include',
+            body: JSON.stringify({{}}),
+          }});
+          const data = await res.json().catch(function() {{ return {{}}; }});
+          if (!res.ok || !data || data.ok !== true) {{
+            setStatus('Stop failed: ' + (data && (data.detail || data.error) ? (data.detail || data.error) : ('HTTP ' + res.status)));
+            return;
+          }}
+          setStatus('Stopped.');
+        }} catch (e) {{
+          setStatus('Stop failed: ' + (e && e.message ? e.message : String(e)));
+        }}
+      }});
+
+      clearBtn.addEventListener('click', function() {{ logBox.textContent = ''; }});
+
+      init();
+    }})();
+  </script>
+</body>
+</html>""",
+            content_type="text/html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
+
+
 def _tabbed_panel_html(addon_base_url: str = "") -> str:
-    """HTML for the tabbed panel: Designer (default), ESPHome Output, Setup. No header."""
+    """HTML for the tabbed panel: Designer (default), Device Log, ESPHome Output, Setup. No header."""
     addon_operational_url = (addon_base_url.rstrip("/") + "/?tab=operational") if addon_base_url else ""
     addon_setup_url = (addon_base_url.rstrip("/") + "/?tab=setup") if addon_base_url else ""
     # When no add-on URL, show placeholder instead of empty iframe
@@ -118,12 +292,16 @@ def _tabbed_panel_html(addon_base_url: str = "") -> str:
 <body>
   <div class="tabs">
     <button type="button" class="tab active" data-tab="designer">Designer</button>
+    <button type="button" class="tab" data-tab="device-log">Device Log</button>
     <button type="button" class="tab" data-tab="esphome-output">ESPHome Output</button>
     <button type="button" class="tab" data-tab="setup">Setup</button>
   </div>
   <div class="panels">
     <div id="designer" class="panel iframe-panel active">
       <iframe src="{PANEL_DESIGNER_URL}" title="Designer"></iframe>
+    </div>
+    <div id="device-log" class="panel iframe-panel">
+      <iframe src="/{PANEL_URL_PATH}/device-log" title="Device Log"></iframe>
     </div>
     <div id="esphome-output" class="panel iframe-panel">
       <iframe src="{addon_operational_url}" title="ESPHome Output" style="{operational_iframe_style}"></iframe>
@@ -185,6 +363,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         ])
         hass.http.register_view(PanelIndexView)
         hass.http.register_view(PanelDesignerView)
+        hass.http.register_view(PanelDeviceLogView)
         hass.http.register_view(PanelCheckView)
         # Context so frontend gets entry_id (or "" if no config entry) and doesn't bail before loading schemas
         hass.http.register_view(ContextView)

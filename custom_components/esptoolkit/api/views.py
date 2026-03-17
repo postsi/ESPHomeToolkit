@@ -173,21 +173,24 @@ def _iter_all_widgets(project: dict):
             yield from visit(p.get("widgets") or [])
 
 
-def _get_screensaver_config(project: dict) -> tuple[bool, int]:
-    """If project has a screen saver widget (id starts with 'screensaver_'), return (True, timeout_seconds). Else (False, 60)."""
+def _get_screensaver_config(project: dict) -> tuple[bool, int, str]:
+    """If project has a screen saver widget (id starts with 'screensaver_'), return (True, timeout_seconds, backlight_id). Else (False, 60, 'display_backlight')."""
     for w in _iter_all_widgets(project):
         wid = str(w.get("id") or "").strip()
         if wid.startswith("screensaver_"):
             props = w.get("props") or {}
-            if isinstance(props, dict):
-                timeout = props.get("timeout_seconds")
-                if timeout is not None:
-                    try:
-                        return (True, max(5, min(86400, int(timeout))))
-                    except (TypeError, ValueError):
-                        pass
-            return (True, 60)
-    return (False, 60)
+            if not isinstance(props, dict):
+                return (True, 60, "display_backlight")
+            timeout = 60
+            if props.get("timeout_seconds") is not None:
+                try:
+                    timeout = max(5, min(86400, int(props["timeout_seconds"])))
+                except (TypeError, ValueError):
+                    pass
+            raw_id = str(props.get("backlight_id") or "display_backlight").strip()
+            backlight_id = "".join(c for c in raw_id if c.isalnum() or c == "_") or "display_backlight"
+            return (True, timeout, backlight_id)
+    return (False, 60, "display_backlight")
 
 
 def _compile_screensaver_globals() -> str:
@@ -197,20 +200,31 @@ def _compile_screensaver_globals() -> str:
         "    type: uint32_t\n"
         "    restore_value: no\n"
         "    initial_value: '0'\n"
+        "  - id: etd_screensaver_dimmed\n"
+        "    type: bool\n"
+        "    restore_value: no\n"
+        "    initial_value: 'false'\n"
     )
 
 
-def _compile_screensaver_interval(timeout_seconds: int) -> str:
+def _compile_screensaver_interval(timeout_seconds: int, backlight_id: str = "display_backlight") -> str:
     """YAML body for screen saver interval: every 1s, turn off backlight if idle > timeout."""
     timeout_ms = timeout_seconds * 1000
+    safe_bid = "".join(c for c in backlight_id if c.isalnum() or c == "_") or "display_backlight"
     return (
         "  - interval: 1s\n"
         "    then:\n"
         "      - lambda: |-\n"
         "          if (id(etd_screensaver_last_activity) == 0) {\n"
+        f"            ESP_LOGI(\"screensaver\", \"initialized (timeout={timeout_seconds}s)\");\n"
         "            id(etd_screensaver_last_activity) = millis();\n"
-        "          } else if ((millis() - id(etd_screensaver_last_activity)) >= " + str(timeout_ms) + ") {\n"
-        "            id(display_backlight).turn_off();\n"
+        "          }\n"
+        f"          const uint32_t timeout_ms = {timeout_ms};\n"
+        "          const uint32_t idle_ms = millis() - id(etd_screensaver_last_activity);\n"
+        "          if (!id(etd_screensaver_dimmed) && idle_ms >= timeout_ms) {\n"
+        f"            ESP_LOGI(\"screensaver\", \"blanking backlight (idle=%ums)\", (unsigned)idle_ms);\n"
+        f"            id({safe_bid}).turn_off();\n"
+        "            id(etd_screensaver_dimmed) = true;\n"
         "          }\n"
     )
 
@@ -221,10 +235,15 @@ def _inject_screensaver_on_touch_into_body(touchscreen_body: str, backlight_id: 
         return touchscreen_body
     lines = touchscreen_body.splitlines()
     # List format: "  - id: ...\n    platform: ..." vs single-object: "  platform: ...\n  id: ..."
+    wake_lambda = (
+        "id(etd_screensaver_last_activity) = millis(); "
+        "if (id(etd_screensaver_dimmed)) { ESP_LOGI(\"screensaver\", \"waking (touch)\"); } "
+        "id(etd_screensaver_dimmed) = false;"
+    )
     on_touch_lines = [
         "  on_touch:",
         "    then:",
-        "    - lambda: 'id(etd_screensaver_last_activity) = millis();'",
+        "    - lambda: '" + wake_lambda + "'",
         "    - light.turn_on:",
         "        id: " + backlight_id,
     ]
@@ -237,7 +256,13 @@ def _inject_screensaver_on_touch_into_body(touchscreen_body: str, backlight_id: 
                 first_entry_end = i
                 break
         indent = "    "
-        on_touch_block = [indent + "on_touch:", indent + "  then:", indent + "  - lambda: 'id(etd_screensaver_last_activity) = millis();'", indent + "  - light.turn_on:", indent + "      id: " + backlight_id]
+        on_touch_block = [
+            indent + "on_touch:",
+            indent + "  then:",
+            indent + "  - lambda: '" + wake_lambda + "'",
+            indent + "  - light.turn_on:",
+            indent + "      id: " + backlight_id,
+        ]
         new_lines = lines[:first_entry_end] + on_touch_block + lines[first_entry_end:]
     else:
         # Single-object format: append on_touch at top level (2-space indent)
@@ -1426,7 +1451,7 @@ def _build_compiler_sections(project: dict, device: object | None = None) -> dic
                     out["interval"] = interval_body
 
     # Screen saver: globals + interval when screen saver widget is present
-    has_screensaver, screensaver_timeout = _get_screensaver_config(project)
+    has_screensaver, screensaver_timeout, screensaver_backlight_id = _get_screensaver_config(project)
     if has_screensaver:
         ss_globals = _compile_screensaver_globals()
         if ss_globals.strip():
@@ -1434,7 +1459,7 @@ def _build_compiler_sections(project: dict, device: object | None = None) -> dic
                 out["globals"] = out["globals"].rstrip() + "\n\n" + ss_globals.rstrip()
             else:
                 out["globals"] = ss_globals.rstrip()
-        ss_interval = _compile_screensaver_interval(screensaver_timeout)
+        ss_interval = _compile_screensaver_interval(screensaver_timeout, screensaver_backlight_id)
         if ss_interval.strip():
             if "interval" in out:
                 out["interval"] = out["interval"].rstrip() + "\n\n" + ss_interval.rstrip()
@@ -1866,8 +1891,10 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
         block = pieces[key]
         content = _section_body_from_value(block, key)
         # Screen saver: inject on_touch into first touchscreen entry so touch wakes display
-        if key == "touchscreen" and content and _get_screensaver_config(project)[0]:
-            content = _inject_screensaver_on_touch_into_body(content, "display_backlight")
+        if key == "touchscreen" and content:
+            _has_ss, _ss_to, ss_backlight_id = _get_screensaver_config(project)
+            if _has_ss:
+                content = _inject_screensaver_on_touch_into_body(content, ss_backlight_id)
         # Minimal stub recipe uses id stub_display; lvgl body has no displays key, so prepend for "esphome config" to pass
         if key == "lvgl" and content and display_id == "stub_display" and "  displays:" not in content:
             content = "  displays:\n  - " + display_id + "\n" + content
@@ -2583,7 +2610,7 @@ def _emit_widget_from_schema(
             if k in ("align_to_id", "align_to_align", "align_to_x", "align_to_y", "width_override", "height_override"):
                 continue  # align_to -> block below; width/height_override -> used in geometry
             # Designer-only keys for arc/arc_labeled: never emit (ESPHome arc has no such options).
-            if section == "style" and root_key == "arc" and k in ("tick_color", "label_text_color", "label_text_font", "label_font_size", "tick_interval", "label_interval"):
+            if section == "style" and root_key == "arc" and k in ("tick_color", "tick_width", "tick_length", "label_text_color", "label_text_font", "label_font_size", "tick_interval", "label_interval"):
                 continue
             # Only emit props/style keys that are in the esphome mapping (designer-only keys are omitted).
             if section in ("props", "style") and k not in mapping:
@@ -3868,7 +3895,10 @@ def _compile_lvgl_pages_schema_driven(
                 cx = w_val / 2.0
                 cy = h_val / 2.0
                 r = min(w_val, h_val) / 2.0
-                tick_len = max(2, min(6, min(w_val, h_val) / 40.0))
+                tick_len_auto = max(2, min(6, min(w_val, h_val) / 40.0))
+                tick_length_style = max(0, int(style.get("tick_length") or 0))
+                tick_len = max(2, min(48, tick_length_style)) if tick_length_style > 0 else tick_len_auto
+                tick_width = max(1, min(16, int(style.get("tick_width") or 0) or 3))
                 label_offset = max(4, min(20, min(w_val, h_val) / 10.0))
                 label_r = r + label_offset
                 min_int = int(math.ceil(min_val))
@@ -3944,7 +3974,7 @@ def _compile_lvgl_pages_schema_driven(
                     out_parts.append(f"{cb_arc}points:\n")
                     out_parts.append(f"{cb_arc}  - {pts[0]}\n")
                     out_parts.append(f"{cb_arc}  - {pts[1]}\n")
-                    out_parts.append(f"{cb_arc}line_width: 1\n")
+                    out_parts.append(f"{cb_arc}line_width: {tick_width}\n")
                     out_parts.append(f"{cb_arc}line_color: 0x{tick_color:06X}\n")
                 for i, value in enumerate(label_values):
                     lx_int, ly_int, box, lh = label_boxes[i]
@@ -4080,8 +4110,13 @@ def _compile_lvgl_pages_schema_driven(
         all_widgets = page.get("widgets") or []
         if not isinstance(all_widgets, list):
             all_widgets = []
-        kids = children_map([w for w in all_widgets if isinstance(w, dict)])
-        roots = [w for w in all_widgets if isinstance(w, dict) and not w.get("parent_id")]
+        # Editor-only widgets: keep in project/canvas, but do not emit to device YAML.
+        all_widgets = [
+            w for w in all_widgets
+            if isinstance(w, dict) and not str(w.get("id") or "").strip().startswith("screensaver_")
+        ]
+        kids = children_map(all_widgets)
+        roots = [w for w in all_widgets if not w.get("parent_id")]
         # Display dims for align conversion: extract from recipe_id (e.g. guition_s3_4848s040_480x480)
         recipe_id = str((project.get("hardware") or {}).get("recipe_id", "") or (project.get("device") or {}).get("hardware_recipe_id", "") or "")
         m = re.search(r"(\d{3,4})x(\d{3,4})", recipe_id, re.I) if recipe_id else None
@@ -5125,6 +5160,154 @@ class StateWebSocketView(HomeAssistantView):
         return ws
 
 
+class DeviceLogsProxyWebSocketView(HomeAssistantView):
+    """WebSocket proxy to the add-on's /api/logs/ws without exposing the token to the browser."""
+
+    url = f"/api/{DOMAIN}/device_logs/ws"
+    name = f"api:{DOMAIN}:device_logs_ws"
+    requires_auth = False
+
+    async def get(self, request):
+        import aiohttp
+
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            await ws.send_str("no_active_entry")
+            await ws.close()
+            return ws
+
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            await ws.send_str("no_addon_connection")
+            await ws.close()
+            return ws
+        base_url, token = conn
+
+        addon_ws_url = base_url.rstrip("/") + "/api/logs/ws?token=" + token
+
+        session = aiohttp.ClientSession()
+        try:
+            async with session.ws_connect(addon_ws_url, heartbeat=30) as addon_ws:
+                async def pump_addon_to_client():
+                    async for msg in addon_ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            try:
+                                await ws.send_str(msg.data)
+                            except Exception:
+                                break
+                        elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
+                            break
+
+                async def pump_client_to_addon():
+                    # Client doesn't need to send anything; keep reading so close propagates promptly.
+                    async for msg in ws:
+                        if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
+                            break
+
+                await asyncio.gather(pump_addon_to_client(), pump_client_to_addon())
+        except Exception as e:
+            try:
+                await ws.send_str(f"proxy_error: {str(e)[:200]}")
+            except Exception:
+                pass
+        finally:
+            await session.close()
+            try:
+                await ws.close()
+            except Exception:
+                pass
+        return ws
+
+
+class DeviceLogsStartView(HomeAssistantView):
+    """Start an ESPHome `logs` job in the add-on using compiled YAML."""
+
+    url = f"/api/{DOMAIN}/device_logs/start"
+    name = f"api:{DOMAIN}:device_logs_start"
+    requires_auth = False
+
+    async def post(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
+
+        body = None
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            return self.json({"ok": False, "error": "invalid_json"}, status_code=400)
+
+        device_id = str(body.get("device_id") or "").strip()
+        device_override = body.get("device")
+        device_override = str(device_override).strip() if device_override else None
+        if not device_id:
+            return self.json({"ok": False, "error": "missing_device_id"}, status_code=400)
+
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        device = storage.get_device(device_id)
+        if not device:
+            return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
+
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
+        base_url, token = conn
+
+        recipe_text = _get_recipe_text_for_device(hass, device)
+        try:
+            yaml_content = compile_to_esphome_yaml(device, recipe_text=recipe_text)
+        except Exception as e:
+            return self.json({"ok": False, "error": "compile_failed", "detail": str(e)}, status_code=500)
+
+        ok, result = await _esphome_addon_request(
+            hass,
+            base_url,
+            "api/logs-device",
+            {"config_source": "yaml", "yaml": yaml_content, "device": device_override},
+            token=token,
+        )
+        if ok:
+            return self.json({"ok": True, "result": result})
+        return self.json({"ok": False, "error": "addon_failed", "detail": result}, status_code=502)
+
+
+class DeviceLogsStopView(HomeAssistantView):
+    """Stop the current add-on job (logs)."""
+
+    url = f"/api/{DOMAIN}/device_logs/stop"
+    name = f"api:{DOMAIN}:device_logs_stop"
+    requires_auth = False
+
+    async def post(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "missing_entry_id"}, status_code=400)
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
+        base_url, token = conn
+        ok, result = await _esphome_addon_request(
+            hass,
+            base_url,
+            "api/stop",
+            {},
+            token=token,
+        )
+        if ok:
+            return self.json({"ok": True, "result": result})
+        return self.json({"ok": False, "error": "addon_failed", "detail": result}, status_code=502)
+
+
 class PreviewWidgetYamlView(HomeAssistantView):
     """Return the exact YAML fragment the compiler would emit for one widget."""
 
@@ -5664,6 +5847,9 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(StateBatchView)
     hass.http.register_view(CallServiceView)
     hass.http.register_view(StateWebSocketView)
+    hass.http.register_view(DeviceLogsProxyWebSocketView)
+    hass.http.register_view(DeviceLogsStartView)
+    hass.http.register_view(DeviceLogsStopView)
     hass.http.register_view(EntityCapabilitiesView)
 
     # Plugins

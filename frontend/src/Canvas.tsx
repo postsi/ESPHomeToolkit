@@ -918,7 +918,10 @@ const stageRef = useRef<any>(null);
           {w.type === "arc_labeled" && (() => {
             const labelOffset = Math.max(4, Math.min(20, Math.min(w.w, w.h) / 10));
             const labelR = outerR + labelOffset;
-            const tickLen = Math.max(2, Math.min(6, Math.min(w.w, w.h) / 40));
+            const tickLenAuto = Math.max(2, Math.min(6, Math.min(w.w, w.h) / 40));
+            const tickLengthProp = Number(s.tick_length ?? p.tick_length ?? 0);
+            const tickLen = tickLengthProp > 0 ? Math.max(2, Math.min(48, tickLengthProp)) : tickLenAuto;
+            const tickWidth = Math.max(1, Math.min(16, Number(s.tick_width ?? p.tick_width ?? 3) || 3));
             const labelFontSizeProp = Number(s.label_font_size ?? 0);
             const labelFontId = s.label_text_font ?? p.label_text_font ?? s.text_font ?? p.text_font;
             const labelFontSize =
@@ -958,7 +961,7 @@ const stageRef = useRef<any>(null);
                       y={cy}
                       points={[(outerR - tickLen) * c, (outerR - tickLen) * s_, (outerR + tickLen) * c, (outerR + tickLen) * s_]}
                       stroke={tickColor}
-                      strokeWidth={1}
+                      strokeWidth={tickWidth}
                       listening={false}
                     />
                   );

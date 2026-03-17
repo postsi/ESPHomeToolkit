@@ -204,6 +204,34 @@ class JobRunner:
     def unsubscribe_logs(self, q: asyncio.Queue) -> None:
         self._log_subscribers.discard(q)
 
+    async def stop(self) -> bool:
+        """Terminate the current process, if any. Returns True if a process was stopped."""
+        async with self._lock:
+            proc = self._current_process
+            if proc is None:
+                return False
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                self._current_process = None
+                self._current_command = None
+                self._current_config_path = None
+                return False
+        # Wait outside lock so other API calls don't deadlock.
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                pass
+        await self._broadcast_log("[esptoolkit] stopped current job")
+        return True
+
 
 # Singleton used by API and MCP
 runner = JobRunner()

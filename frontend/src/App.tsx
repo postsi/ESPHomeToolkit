@@ -4588,7 +4588,9 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                         </div>
                       )}
                     </div>
-                    {selectedSchema ? (
+                    {selectedWidget.id && String(selectedWidget.id).startsWith("screensaver_") ? (
+                      <ScreensaverInspector widget={selectedWidget} onChange={updateField} />
+                    ) : selectedSchema ? (
                       <Inspector widget={selectedWidget} schema={selectedSchema} onChange={updateField} assets={assets} assetError={assetError} />
                     ) : (
                       <div className="muted">No schema for this widget type.</div>
@@ -5694,6 +5696,40 @@ function MultiSelectProperties(props: {
 
 // ESPHome LVGL built-in fonts (Montserrat). User can pick these without uploading assets.
 const BUILTIN_LVGL_FONTS = ["montserrat_8","montserrat_10","montserrat_12","montserrat_14","montserrat_16","montserrat_18","montserrat_20","montserrat_22","montserrat_24","montserrat_26","montserrat_28","montserrat_30","montserrat_32","montserrat_34","montserrat_36","montserrat_38","montserrat_40","montserrat_42","montserrat_44","montserrat_46","montserrat_48"];
+
+function ScreensaverInspector(props: { widget: any; onChange: (section: string, key: string, value: any) => void }) {
+  const { widget, onChange } = props;
+  const propsObj = widget?.props || {};
+  const timeout = Number(propsObj.timeout_seconds ?? 60);
+  const backlightId = String(propsObj.backlight_id ?? "display_backlight");
+  return (
+    <div className="section">
+      <div className="sectionTitle" style={{ fontSize: 12 }}>Screen saver</div>
+      <div className="field">
+        <div className="fieldLabel" title="Idle time before display blanks">Timeout (seconds)</div>
+        <input
+          type="number"
+          min={5}
+          max={86400}
+          step={1}
+          value={timeout}
+          onChange={(e) => onChange("props", "timeout_seconds", Math.max(5, Math.min(86400, Number(e.target.value) || 60)))}
+        />
+      </div>
+      <div className="field">
+        <div className="fieldLabel" title="ESPHome light id for the display backlight">Backlight id</div>
+        <input
+          type="text"
+          value={backlightId}
+          onChange={(e) => onChange("props", "backlight_id", e.target.value?.trim() || "display_backlight")}
+          placeholder="display_backlight"
+          style={{ fontFamily: "ui-monospace, monospace" }}
+        />
+      </div>
+      <div className="muted" style={{ fontSize: 11, marginTop: 8 }}>Editor-only: not shown on device. Touch wakes display.</div>
+    </div>
+  );
+}
 
 function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (section: any, key: string, value: any) => void; assets: {name:string; size:number}[]; assetError?: string | null }) {
   const { widget, schema, onChange, assets, assetError } = props;

@@ -531,6 +531,8 @@ interval:
             bg_color: bgTrack,
             radius: 4,
             tick_color: textNormal,
+            tick_width: 3,
+            tick_length: 0,
             label_text_color: textNormal,
             label_text_font: "",
             label_font_size: 0,
@@ -582,7 +584,7 @@ interval:
           y: 0,
           w: 140,
           h: 28,
-          props: { timeout_seconds: defaultTimeout },
+          props: { timeout_seconds: defaultTimeout, backlight_id: "display_backlight" },
           style: { bg_color: bgDark, radius: 6 },
         },
         {

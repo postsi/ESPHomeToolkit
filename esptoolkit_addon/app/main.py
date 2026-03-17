@@ -214,6 +214,38 @@ async def run_config(body: ConfigRequest):
     return result
 
 
+@api.post("/logs-device")
+async def logs_device(body: ConfigRequest):
+    """Run `esphome logs` (streaming) for a config. Optional device = hostname/IP for --device."""
+    log.info("Logs request: config_source=%s filename=%s device=%r", body.config_source, body.filename, body.device)
+    result = await runner.run(
+        "logs",
+        body.config_source,
+        filename=body.filename,
+        yaml_content=body.yaml,
+        device=body.device and body.device.strip() or None,
+    )
+    # esphome logs usually runs until disconnected; if it exits immediately, return its output.
+    if not result["success"]:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": result.get("error", "Logs failed"),
+                "exit_code": result.get("exit_code"),
+                "stdout": result.get("stdout", ""),
+                "stderr": result.get("stderr", ""),
+            },
+        )
+    return result
+
+
+@api.post("/stop")
+async def stop_current_job():
+    """Stop the current running ESPHome job (run/logs/upload/etc)."""
+    stopped = await runner.stop()
+    return {"stopped": bool(stopped)}
+
+
 @api.post("/upload")
 async def upload_config(body: ConfigRequest):
     """Upload firmware (compile if needed then upload). Optional device = hostname/IP for --device."""
