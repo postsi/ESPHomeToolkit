@@ -1,9 +1,13 @@
 """
 Local HTTP proxy: execute requests to allowlisted bases (e.g. Home Assistant).
 Used only by the MCP tool; no REST endpoint. Addon-held HA token; no client-supplied URLs.
+When proxying POST .../compile, sanitizes the response YAML (buffer_size quoting, bool lowercase)
+so clients get valid ESPHome YAML even if the integration hasn't reloaded.
 """
+import json
 import logging
 import os
+import re
 from urllib.parse import urlparse
 
 import httpx
@@ -58,6 +62,23 @@ def _validate_path(path: str) -> str | None:
     if ".." in path:
         return "path must not contain .."
     return None
+
+
+def _sanitize_esphome_yaml_lvgl(yaml_text: str) -> str:
+    """Ensure LVGL-related YAML is valid for ESPHome: quote buffer_size with %, lowercase bools."""
+    if not yaml_text or not yaml_text.strip():
+        return yaml_text
+    # buffer_size: 100% -> quoted when unquoted
+    def _quote_buffer(m):
+        val = m.group(2).rstrip()
+        if "%" in val and not (val.startswith('"') and val.endswith('"')):
+            return f"{m.group(1)} \"{val}\"\n"
+        return m.group(0)
+    yaml_text = re.sub(r"^(\s*buffer_size:)\s*(.*)$", _quote_buffer, yaml_text, flags=re.MULTILINE)
+    # Python bools -> YAML lowercase
+    yaml_text = re.sub(r":\s*False\b", ": false", yaml_text)
+    yaml_text = re.sub(r":\s*True\b", ": true", yaml_text)
+    return yaml_text
 
 
 async def execute_local_http(method: str, path: str, body: str | None = None) -> dict:
@@ -159,6 +180,21 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
         response_body = resp.text
     except Exception:
         response_body = None
+
+    # When proxying compile, sanitize the returned YAML so clients get valid ESPHome (buffer_size, bools)
+    if (
+        method == "POST"
+        and "/compile" in path.split("?")[0]
+        and resp.status_code == 200
+        and response_body
+    ):
+        try:
+            data = json.loads(response_body)
+            if isinstance(data, dict) and "yaml" in data and isinstance(data["yaml"], str):
+                data["yaml"] = _sanitize_esphome_yaml_lvgl(data["yaml"])
+                response_body = json.dumps(data, separators=(",", ":"))
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     return {
         "success": True,
