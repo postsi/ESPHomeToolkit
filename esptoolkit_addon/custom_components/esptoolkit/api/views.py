@@ -5266,7 +5266,7 @@ class DeviceNativeLogsWebSocketView(HomeAssistantView):
             pump_task = asyncio.create_task(pump_logs())
             try:
                 async for msg in ws:
-                if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
+                    if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
                     break
                 if msg.type == web.WSMsgType.TEXT and msg.data:
                     try:
