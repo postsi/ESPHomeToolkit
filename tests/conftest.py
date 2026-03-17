@@ -237,6 +237,16 @@ class HaApiClient:
                 pass
         return status, data
 
+    def put_json(self, path: str, payload: dict) -> tuple[int, dict]:
+        status, body = self.put(path, payload)
+        data = {}
+        if body:
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                pass
+        return status, data
+
 
 def _addon_call(base_url: str, token: str, tool_name: str, **kwargs) -> str:
     """Call any addon MCP tool by name."""

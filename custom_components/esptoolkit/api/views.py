@@ -2624,6 +2624,12 @@ def _emit_widget_from_schema(
         mapping = (esphome.get(section) or {})
         fields = schema.get(section) or {}
         values = dict(widget.get(section) or {})
+        # ESPHome animimg requires src (list of image ids) and duration; emit defaults when missing.
+        if section == "props" and root_key == "animimg":
+            if not values.get("src") and "src" not in values:
+                values["src"] = []
+            if not values.get("duration") and "duration" not in values:
+                values["duration"] = "1000ms"
         # For events: prefer action_binding for this widget (yaml_override or generated from call).
         event_source: dict[str, str] = {}  # event_key -> "auto" | "edited"
         if section == "events" and action_by_event:
@@ -3561,18 +3567,16 @@ def _compile_lvgl_config_body(
     main = lc.get("main") or {}
     out: list[str] = []
 
-    # Main config: disp_bg_color (project.disp_bg_color or lvgl_config.main), buffer_size, etc.
-    disp_bg = project.get("disp_bg_color") or main.get("disp_bg_color")
-    if disp_bg and isinstance(disp_bg, str):
-        s = disp_bg.strip()
-        if s.startswith("#") and re.match(r"^#[0-9A-Fa-f]{6}$", s):
-            out.append(f"  disp_bg_color: 0x{s[1:7].upper()}\n")
-        elif s.startswith("#") and re.match(r"^#[0-9A-Fa-f]{3}$", s):
-            r, g, b = int(s[1], 16) * 17, int(s[2], 16) * 17, int(s[3], 16) * 17
-            out.append(f"  disp_bg_color: 0x{r:02X}{g:02X}{b:02X}\n")
+    # Main config: buffer_size, etc. disp_bg_color is not emitted here because some ESPHome
+    # versions do not accept it in static lvgl config (only via lvgl.update at runtime).
+    # Page bg_color is set below so the visible background is correct.
     buf = main.get("buffer_size")
     if buf and str(buf).strip():
-        out.append(f"  buffer_size: {buf}\n")
+        buf_str = str(buf).strip()
+        # ESPHome expects percentage as quoted string (e.g. "100%") in YAML
+        if "%" in buf_str and not (buf_str.startswith('"') and buf_str.endswith('"')):
+            buf_str = f'"{buf_str}"'
+        out.append(f"  buffer_size: {buf_str}\n")
 
     # style_definitions: list of { id: "...", ...style_props (nested state blocks allowed) }
     style_defs = list(lc.get("style_definitions") or [])
