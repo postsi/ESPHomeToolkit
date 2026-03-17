@@ -4661,7 +4661,12 @@ class DeviceProjectView(HomeAssistantView):
                 recipe_path = _find_recipe_path_by_id(hass, device.hardware_recipe_id)
                 if recipe_path and recipe_path.exists():
                     try:
-                        meta = _extract_recipe_metadata_from_text(recipe_path.read_text("utf-8"), recipe_id=device.hardware_recipe_id)
+                        recipe_text = await hass.async_add_executor_job(
+                            recipe_path.read_text, "utf-8"
+                        )
+                        meta = _extract_recipe_metadata_from_text(
+                            recipe_text, recipe_id=device.hardware_recipe_id
+                        )
                         res = meta.get("resolution")
                         if isinstance(res, dict) and res.get("width") and res.get("height"):
                             project.setdefault("device", {})
@@ -6276,7 +6281,9 @@ class RecipeValidateView(HomeAssistantView):
         if not recipe_path or not recipe_path.exists():
             return self.json({"error": "recipe not found"}, status_code=404)
 
-        recipe_text = recipe_path.read_text("utf-8")
+        recipe_text = await hass.async_add_executor_job(
+            recipe_path.read_text, "utf-8"
+        )
         issues = _validate_recipe_text(recipe_text)
         meta = _extract_recipe_metadata_from_text(recipe_text)
         return self.json({"ok": len(issues) == 0, "issues": issues, "meta": meta})
