@@ -15,6 +15,7 @@ def _build_project():
         build_bindings,
         build_links,
         build_action_bindings,
+        build_esphome_components,
     )
     return {
         "model_version": 1,
@@ -27,6 +28,7 @@ def _build_project():
         "bindings": build_bindings(),
         "links": build_links(),
         "action_bindings": build_action_bindings(),
+        "esphome_components": build_esphome_components(),
     }
 
 def main():

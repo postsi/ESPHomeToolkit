@@ -4588,13 +4588,40 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                         </div>
                       )}
                     </div>
-                    {selectedWidget.id && String(selectedWidget.id).startsWith("screensaver_") ? (
-                      <ScreensaverInspector widget={selectedWidget} onChange={updateField} />
-                    ) : selectedSchema ? (
-                      <Inspector widget={selectedWidget} schema={selectedSchema} onChange={updateField} assets={assets} assetError={assetError} />
-                    ) : (
-                      <div className="muted">No schema for this widget type.</div>
-                    )}
+                    {(() => {
+                      const screensaverWidget =
+                        selectedWidget?.id && String(selectedWidget.id).startsWith("screensaver_")
+                          ? selectedWidget
+                          : (widgets as any[]).find(
+                              (w: any) =>
+                                w?.parent_id === selectedWidget?.id &&
+                                String(w?.id ?? "").startsWith("screensaver_")
+                            );
+                      const screensaverOnChange = (section: string, key: string, value: any) => {
+                        if (!project || !screensaverWidget?.id) return;
+                        const targetId = screensaverWidget.id;
+                        if (targetId === selectedWidgetId) {
+                          updateField(section, key, value);
+                          return;
+                        }
+                        const p2 = clone(project);
+                        const page = p2.pages?.[safePageIndex];
+                        const w = page?.widgets?.find((x: any) => x?.id === targetId);
+                        if (!w) return;
+                        w[section] = w[section] || {};
+                        if (value === undefined) delete w[section][key];
+                        else w[section][key] = value;
+                        setProject(p2);
+                        setProjectDirty(true);
+                      };
+                      return screensaverWidget ? (
+                        <ScreensaverInspector widget={screensaverWidget} onChange={screensaverOnChange} />
+                      ) : selectedSchema ? (
+                        <Inspector widget={selectedWidget} schema={selectedSchema} onChange={updateField} assets={assets} assetError={assetError} />
+                      ) : (
+                        <div className="muted">No schema for this widget type.</div>
+                      );
+                    })()}
                   </>
                 )}
                 {selectedWidgetIds.length > 1 && (

@@ -238,11 +238,24 @@ def build_prebuilt_widgets() -> list[dict]:
     ]
     out.extend(_wrap_in_group(x, y, [{"id": "pb_ct_root", "type": "container", "x": 0, "y": 0, "w": 180, "h": 44, "props": {}, "style": {}}] + raw))
 
-    # 22. List / menu (dropdown)
+    # 22. Clock (label + time SNTP + interval; validates timezone POSIX in config-check)
+    x, y = at()
+    out.append({
+        "id": "pb_clock_lbl",
+        "type": "label",
+        "x": x,
+        "y": y,
+        "w": 100,
+        "h": 28,
+        "props": {"text": "--:--"},
+        "style": {"text_color": TEXT_NORMAL},
+    })
+
+    # 23. List / menu (dropdown)
     x, y = at()
     out.append({"id": "pb_list_menu", "type": "dropdown", "x": x, "y": y, "w": 180, "h": 40, "props": {"options": ["Option A", "Option B", "Option C"]}, "style": {"bg_color": BG_TRACK, "radius": 6}})
 
-    # 23. Numeric keypad (container + 12 buttons)
+    # 24. Numeric keypad (container + 12 buttons)
     x, y = at()
     keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "\u232b"]
     cell_w, cell_h, gap = 44, 40, 6
@@ -257,6 +270,40 @@ def build_prebuilt_widgets() -> list[dict]:
     out.extend(_wrap_in_group(x, y, raw))
 
     return out
+
+
+# Clock prebuilt: time SNTP + interval. Use UTC0 (POSIX); bare "UTC" fails in ESPHome 2026.
+ESPHOME_TIME_SNTP = """
+time:
+  - platform: sntp
+    id: etd_time
+    timezone: "UTC0"
+"""
+
+
+def build_clock_interval_yaml(label_id: str) -> str:
+    """Interval that updates clock label from etd_time (so compiled YAML includes time block)."""
+    return f"""
+interval:
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: {label_id}
+          text: !lambda |-
+            auto t = id(etd_time).now();
+            if (!t.is_valid()) return std::string("--:--");
+            char buf[6];
+            snprintf(buf, sizeof(buf), "%02d:%02d", t.hour, t.minute);
+            return std::string(buf);
+"""
+
+
+def build_esphome_components() -> list:
+    """YAML snippets merged by compiler (prebuilts that add time/interval/etc). Includes clock so validate test covers timezone."""
+    return [
+        {"yaml": ESPHOME_TIME_SNTP.strip(), "_source_root_id": "pb_clock_lbl"},
+        {"yaml": build_clock_interval_yaml("pb_clock_lbl").strip(), "_source_root_id": "pb_clock_lbl"},
+    ]
 
 
 def build_bindings() -> list[dict]:
@@ -321,6 +368,7 @@ def main():
         "bindings": build_bindings(),
         "links": build_links(),
         "action_bindings": build_action_bindings(),
+        "esphome_components": build_esphome_components(),
     }
     print(json.dumps(project, separators=(",", ":")))
 

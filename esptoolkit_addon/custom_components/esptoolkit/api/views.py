@@ -211,11 +211,15 @@ def _compile_screensaver_globals() -> str:
         "    type: bool\n"
         "    restore_value: no\n"
         "    initial_value: 'false'\n"
+        "  - id: etd_screensaver_request_blank\n"
+        "    type: bool\n"
+        "    restore_value: no\n"
+        "    initial_value: 'false'\n"
     )
 
 
 def _compile_screensaver_interval(timeout_seconds: int, backlight_id: str = "display_backlight") -> str:
-    """YAML body for screen saver interval: every 1s, turn off backlight if idle > timeout."""
+    """YAML body for screen saver interval: every 1s, turn off backlight if idle > timeout. Uses light.turn_off action for reliability."""
     timeout_ms = timeout_seconds * 1000
     safe_bid = "".join(c for c in backlight_id if c.isalnum() or c == "_") or "display_backlight"
     return (
@@ -230,9 +234,16 @@ def _compile_screensaver_interval(timeout_seconds: int, backlight_id: str = "dis
         "          const uint32_t idle_ms = millis() - id(etd_screensaver_last_activity);\n"
         "          if (!id(etd_screensaver_dimmed) && idle_ms >= timeout_ms) {\n"
         f"            ESP_LOGI(\"screensaver\", \"blanking backlight (idle=%ums)\", (unsigned)idle_ms);\n"
-        f"            id({safe_bid}).turn_off().perform();\n"
+        "            id(etd_screensaver_request_blank) = true;\n"
         "            id(etd_screensaver_dimmed) = true;\n"
         "          }\n"
+        "      - if:\n"
+        "          condition:\n"
+        "            lambda: 'return id(etd_screensaver_request_blank);'\n"
+        "          then:\n"
+        "            - light.turn_off:\n"
+        f"                id: {safe_bid}\n"
+        "            - lambda: 'id(etd_screensaver_request_blank) = false;'\n"
     )
 
 
