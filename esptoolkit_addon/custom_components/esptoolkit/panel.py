@@ -319,6 +319,7 @@ def _tabbed_panel_html(addon_base_url: str = "") -> str:
     .panel.iframe-panel iframe {{ width: 100%; height: 100%; border: none; }}
     .panel-placeholder {{ padding: 16px; color: var(--ha-secondary-text-color, #888); }}
   </style>
+  <script>if(window.self===window.top){{window.location.replace('/');}}</script>
 </head>
 <body>
   <div class="tabs">
