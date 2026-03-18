@@ -358,6 +358,8 @@ export default function App() {
   const [selectedSchema, setSelectedSchema] = useState<WidgetSchema | null>(null);
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const LAST_DEVICE_KEY = "esptoolkit_last_device";
+  const draftKeyForDevice = (deviceId: string) => `esptoolkit_project_draft:${deviceId}`;
 
   // Derived before any hooks that reference them (avoids TDZ: "Cannot access 'safePageIndex' before initialization").
   const pages = project?.pages ?? [];
@@ -651,6 +653,29 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
       .then(setVersionInfo)
       .catch(() => setVersionInfo(null));
   }, [entryId]);
+
+  // Persist the last selected device so returning to Designer resumes work.
+  useEffect(() => {
+    try {
+      if (selectedDevice) localStorage.setItem(LAST_DEVICE_KEY, selectedDevice);
+    } catch {}
+  }, [selectedDevice]);
+
+  // Auto-restore last device after refresh / panel remount.
+  useEffect(() => {
+    if (!entryId) return;
+    if (selectedDevice) return;
+    if (!devices.length) return;
+    try {
+      const last = localStorage.getItem(LAST_DEVICE_KEY) || "";
+      if (last && devices.some((d) => d.device_id === last)) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        loadDevice(last);
+      }
+    } catch {}
+    // Intentionally do not depend on loadDevice identity (defined inline).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId, devices.length, selectedDevice]);
 
   const selectedDeviceObj = useMemo(() => devices.find((d) => d.device_id === selectedDevice) || null, [devices, selectedDevice]);
   const selectedRecipeId = selectedDeviceObj?.hardware_recipe_id || null;
@@ -1532,11 +1557,32 @@ if (baseId.startsWith("glance_card")) {
       const res = await getProject(entryId, id);
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setSelectedDevice(id);
-      setProject(res.project);
-      setProjectDirty(false);
+      // If we have a local draft (e.g. user navigated away), offer to restore it.
+      let nextProject = res.project;
+      let restoredPageIndex: number | null = null;
+      try {
+        const rawDraft = localStorage.getItem(draftKeyForDevice(id));
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft) as { project?: any; pageIndex?: number; ts?: number };
+          const draftProj = draft?.project;
+          const differs = draftProj && JSON.stringify(draftProj) !== JSON.stringify(res.project);
+          if (differs && window.confirm("Unsaved changes were found for this device. Restore them?")) {
+            nextProject = draftProj;
+            restoredPageIndex = typeof draft?.pageIndex === "number" ? draft.pageIndex : null;
+            setProjectDirty(true);
+          } else {
+            setProjectDirty(false);
+          }
+        } else {
+          setProjectDirty(false);
+        }
+      } catch {
+        setProjectDirty(false);
+      }
+      setProject(nextProject);
       setSelectedWidgetIds([]);
       setSelectedSchema(null);
-      setCurrentPageIndex(0);
+      setCurrentPageIndex(restoredPageIndex != null ? restoredPageIndex : 0);
       setRecentDeviceIds((prev) => {
         const next = [id, ...prev.filter((x) => x !== id)].slice(0, 4);
         try {
@@ -1557,6 +1603,21 @@ if (baseId.startsWith("glance_card")) {
     },
     [pages, safePageIndex]
   );
+
+  // Persist a local draft so navigating away from the HA sidebar doesn't lose work.
+  useEffect(() => {
+    if (!selectedDevice || !project) return;
+    if (!projectDirty) return;
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKeyForDevice(selectedDevice),
+          JSON.stringify({ ts: Date.now(), project, pageIndex: currentPageIndex })
+        );
+      } catch {}
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [selectedDevice, project, projectDirty, currentPageIndex]);
 
   const widgetsFlat = useMemo(() => {
     const out: any[] = [];
@@ -2295,7 +2356,10 @@ function nudgeSelected(dx: number, dy: number, step: number) {
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (projectDirty) e.preventDefault();
+      if (!projectDirty) return;
+      // Required for modern browsers to show the "Leave site?" prompt.
+      e.preventDefault();
+      e.returnValue = "";
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -2447,6 +2511,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
       const res = await putProject(entryId, selectedDevice, project);
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setProjectDirty(false);
+      try { localStorage.removeItem(draftKeyForDevice(selectedDevice)); } catch {}
       setToast({ type: "ok", msg: "Project saved" });
     } finally { setBusy(false); }
   }

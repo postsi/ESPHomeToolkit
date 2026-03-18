@@ -1,0 +1,22 @@
+---
+description: When user asks to deploy the addon, run fast deploy then update addon in HA and restart HA
+alwaysApply: true
+---
+
+# Deploy addon (fast deploy + HA update + restart)
+
+When the user asks to **deploy the addon**, **deploy the add-on**, or similar (and does not ask for the full deploy cycle or local deploy with clean), run this workflow:
+
+1. **Fast deploy** — From repo root, read current version from `esptoolkit_addon/config.yaml`, bump patch (e.g. 1.0.56 → 1.0.57), then run:
+   ```bash
+   ./scripts/deploy-local.sh --fast <new_version> "Short description of changes"
+   ```
+   Prereqs: base image built (`./scripts/build-base.sh` once), `GITHUB_TOKEN` or `docker login ghcr.io`.
+
+2. **Reload add-on store** — Call **user-esptoolkit** MCP tool **`supervisor_store_reload`** (no arguments).
+
+3. **Update addon in HA** — Call **user-HAGrimwood** MCP **`ha_list_installed_addons`**, find the EspToolkit addon slug (e.g. `e7ee47f4_esptoolkit_addon`), then call **`ha_update_addon`** with that `slug`.
+
+4. **Restart Home Assistant** — Call **user-HAGrimwood** MCP **`ha_restart`** (no arguments). A 502 from HA is expected while it restarts; HA is typically back in 30–60 seconds.
+
+Do not run the clean-environment script or the full deploy cycle (validate test) unless the user explicitly asks for them.
