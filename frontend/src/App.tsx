@@ -2546,8 +2546,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         }
         setProjectDirty(false);
       }
-      // If USB serial ports are present, prompt for target (OTA default vs a specific USB port).
-      // OTA should continue without passing --device (normal ESPHome behaviour).
+      // If USB serial ports are present, prompt for target (OTA vs a specific USB port).
+      // For OTA we send device name as name.local so ESPHome targets the wireless device and does not use USB.
       let deviceOverride: string | undefined = undefined;
       try {
         const portsRes: any = await listEsphomePorts(entryId);
@@ -2560,7 +2560,12 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             setDeployTargetOpen(true);
           });
           if (choice == null) return; // cancelled
-          if (choice.startsWith("usb:")) deviceOverride = choice.slice("usb:".length);
+          if (choice === "ota") {
+            const name = (selectedDeviceObj?.slug || selectedDeviceObj?.device_id || selectedDevice || "").trim();
+            deviceOverride = name ? `${name}.local` : undefined;
+          } else if (choice.startsWith("usb:")) {
+            deviceOverride = choice.slice("usb:".length);
+          }
         }
       } catch {
         // If ports listing fails, fall back to legacy behaviour (OTA).
