@@ -182,18 +182,20 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
         response_body = None
 
     # When proxying compile, sanitize the returned YAML so clients get valid ESPHome (buffer_size, bools)
+    path_part = (path or "").split("?")[0]
     if (
         method == "POST"
-        and "/compile" in path.split("?")[0]
+        and ("compile" in path_part or "/compile" in path)
         and resp.status_code == 200
         and response_body
+        and "yaml" in response_body
     ):
         try:
             data = json.loads(response_body)
             if isinstance(data, dict) and "yaml" in data and isinstance(data["yaml"], str):
                 data["yaml"] = _sanitize_esphome_yaml_lvgl(data["yaml"])
                 response_body = json.dumps(data, separators=(",", ":"))
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
     return {
