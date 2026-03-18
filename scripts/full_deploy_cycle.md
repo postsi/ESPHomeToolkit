@@ -56,15 +56,14 @@ Run from repo root.
 - Using the **Home Assistant MCP server** (e.g. user-HAGrimwood), call **`ha_update_addon`** with `slug`: the EspToolkit slug from `ha_list_installed_addons` (e.g. `e7ee47f4_esptoolkit_addon`, not just `esptoolkit_addon`).
 - This pulls the new image and updates the addon. Wait for the call to complete (may take 1–2 minutes).
 
-### 4. Wait for addon to be running (optional but recommended)
+### 4. Wait for addon to be running (required)
 
-- Optionally call **`ha_restart_addon`** with the same slug so the addon restarts with the new code and copies the integration into `custom_components` (if your addon does that on start).
-- Or poll **`ha_addon_info`** (or addon status) until the addon is running. Suggested wait: **30–60 seconds** after update/restart.
+- After update, the addon must **run** so it can copy the new integration from the addon image into **`/config/custom_components/esptoolkit`**. You know the addon is back when the **esptoolkit MCP connection is restored**: call an esptoolkit MCP tool (e.g. **`esphome_version`**) until it returns successfully instead of timing out — then the addon is up and has had time to copy. Optionally call **`ha_restart_addon`** with the same slug to force a fresh start so the copy runs. Avoid long fixed sleeps; poll the MCP.
 
-### 5. Restart Home Assistant
+### 5. Restart Home Assistant (required)
 
-- Using the same MCP, call **`ha_restart`** (no arguments). This restarts HA Core so it loads the updated integration from the addon’s `custom_components` (if applicable).
-- **HA will be unavailable for about 30–60 seconds.** Wait **60–90 seconds** (or poll HA health) before the next step.
+- Using the same MCP, call **`ha_restart`** (no arguments). HA must restart so it **loads the new integration** from `/config/custom_components/esptoolkit` that the addon just copied. Without this, HA keeps running the old integration code.
+- **HA will be unavailable for about 30–60 seconds.** Wait until the esptoolkit MCP works again (e.g. **`local_http`** to HA succeeds) or poll HA (e.g. **`ha_addon_info`**) before running the test — avoid long fixed sleeps.
 
 ### 6. Re-run validate test (no patches)
 
@@ -86,8 +85,8 @@ Run from repo root.
 | 1 | Clear `YAML_PATCHES`, run validate test; fix bugs / add patches until test passes. |
 | 2 | Bump version (script does it), run **fast** deploy: `./scripts/deploy-local.sh --fast <version> "message"` (not full deploy). |
 | 3 | MCP: `supervisor_store_reload` (esptoolkit), then `ha_update_addon` (slug from `ha_list_installed_addons`). |
-| 4 | Wait 30–60 s; optionally `ha_restart_addon`. |
-| 5 | MCP: `ha_restart` (restart HA); wait 60–90 s. |
+| 4 | Poll **esptoolkit MCP** (e.g. `esphome_version`) until it responds → addon is back and has copied integration; optionally `ha_restart_addon`. |
+| 5 | MCP: `ha_restart` (restart HA so it loads new integration); poll MCP or HA until back (e.g. `local_http` succeeds). |
 | 6 | Re-run validate test (patches still cleared). |
 
 ---
