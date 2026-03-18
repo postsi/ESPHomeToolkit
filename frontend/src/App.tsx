@@ -1824,7 +1824,8 @@ if (baseId.startsWith("glance_card")) {
     setSelectedWidgetIds(kids.map((k) => k.id));
   }
 
-  // v0.18: Z-order within the current page list (only within same parent).
+  // v0.18: Z-order within the current page list (only within same parent). List order = draw order (first = back, last = front).
+  // Back = send selection to very back of sibling group; Front = bring to very front (one click reveals/hides correctly).
   function moveZ(direction: "front" | "back") {
     if (!project) return;
     if (!selectedWidgetIds.length) return;
@@ -1841,20 +1842,19 @@ if (baseId.startsWith("glance_card")) {
     }
     const idxs = sel.map((w) => list.findIndex((x) => x && x.id === w.id)).filter((i) => i >= 0).sort((a, b) => a - b);
     if (!idxs.length) return;
-    // We'll treat the list order as z-order; move block up/down by 1.
-    if (direction === "front") {
-      const last = idxs[idxs.length - 1];
-      if (last >= list.length - 1) return;
-      const block = idxs.map((i) => list[i]);
-      // remove from back to front
-      for (let i = idxs.length - 1; i >= 0; i--) list.splice(idxs[i], 1);
-      list.splice(last + 1 - idxs.length + 1, 0, ...block);
+    const block = idxs.map((i) => list[i]);
+    // Remove selected from list (back to front so indices stay valid)
+    for (let i = idxs.length - 1; i >= 0; i--) list.splice(idxs[i], 1);
+    // Siblings = same parent_id in the list after removal; insert so selection goes to very back or very front
+    const siblingIndices = list
+      .map((w, i) => (w && (w.parent_id || "") === parentId ? i : -1))
+      .filter((i) => i >= 0);
+    if (direction === "back") {
+      const insertAt = siblingIndices.length > 0 ? siblingIndices[0] : 0;
+      list.splice(insertAt, 0, ...block);
     } else {
-      const first = idxs[0];
-      if (first <= 0) return;
-      const block = idxs.map((i) => list[i]);
-      for (let i = idxs.length - 1; i >= 0; i--) list.splice(idxs[i], 1);
-      list.splice(first - 1, 0, ...block);
+      const insertAt = siblingIndices.length > 0 ? siblingIndices[siblingIndices.length - 1] + 1 : list.length;
+      list.splice(insertAt, 0, ...block);
     }
     setProject(p2, true);
     setProjectDirty(true);

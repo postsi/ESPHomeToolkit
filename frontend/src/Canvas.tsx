@@ -1519,7 +1519,11 @@ const stageRef = useRef<any>(null);
       <Layer>
         {gridLines()}
         {(() => {
-          const topLevel = widgets.filter((w) => !w.parent_id);
+          // List order = z-order (first = back, last = front). Sort roots by index so draw order matches.
+          const order = new Map(widgets.map((w, i) => [w.id, i]));
+          const topLevel = widgets
+            .filter((w) => !w.parent_id)
+            .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
           return topLevel.map((w) => renderWidget(w, selectedSet.has(w.id)));
         })()}
         <Transformer

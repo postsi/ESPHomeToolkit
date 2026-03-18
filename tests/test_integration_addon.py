@@ -249,6 +249,26 @@ def test_addon_compile_minimal(addon_url, addon_token):
     assert len(result) > 0
 
 
+def _discover_entry_and_device(ha_api) -> tuple[str | None, str | None]:
+    """Discover entry_id and device_id via integration API when env vars not set. Prefer device slug 'testdummy'."""
+    status, data = ha_api.get_json("/api/esptoolkit/context")
+    if status != 200 or not data.get("entry_id"):
+        return None, None
+    eid = (data.get("entry_id") or "").strip()
+    if not eid:
+        return None, None
+    status2, data2 = ha_api.get_json(f"/api/esptoolkit/devices?entry_id={eid}")
+    if status2 != 200 or not data2.get("devices"):
+        return eid, None
+    devices = data2["devices"]
+    for d in devices:
+        if (d.get("slug") or d.get("device_id") or "").strip().lower() == "testdummy":
+            return eid, (d.get("device_id") or d.get("slug") or "").strip()
+    if devices:
+        return eid, (devices[0].get("device_id") or devices[0].get("slug") or "").strip()
+    return eid, None
+
+
 def test_esphome_validate_testdummy_project(
     ha_api, api_path, addon_url, addon_token, entry_id, device_id
 ):
@@ -258,10 +278,13 @@ def test_esphome_validate_testdummy_project(
     in the compiler and mirrored here; after deploy, clear YAML_PATCHES for full test.
     """
     if not entry_id or not device_id:
-        pytest.skip("ESPTOOLKIT_ENTRY_ID and ESPTOOLKIT_DEVICE_ID required")
+        entry_id, device_id = _discover_entry_and_device(ha_api) or (None, None)
+    if not entry_id or not device_id:
+        pytest.skip("ESPTOOLKIT_ENTRY_ID and ESPTOOLKIT_DEVICE_ID required (or add TestDummy device and use addon)")
     # 1) Get compiled YAML for the stored project
+    compile_path = f"/api/esptoolkit/devices/{device_id}/compile?entry_id={entry_id}"
     status, data = ha_api.post_json(
-        api_path(f"devices/{device_id}/compile"),
+        compile_path,
         {},
     )
     assert status == 200, f"Compile request failed: {status}"
