@@ -49,11 +49,12 @@ binary_sensor:
     name: "API Connected"
 `;
 
+// POSIX timezone: ESPHome expects "name+offset" (e.g. UTC0). Bare "UTC" triggers "Expected offset after timezone name".
 const ESPHOME_TIME_SNTP = `
 time:
   - platform: sntp
     id: etd_time
-    timezone: "UTC"
+    timezone: "UTC0"
 `;
 
 /** Wrap multiple widgets in a root container so they move together. Children get parent_id and relative positions. */
