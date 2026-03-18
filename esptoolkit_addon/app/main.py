@@ -406,6 +406,32 @@ async def public_info(request: Request):
     return {"mcp_base_url": base, "addon_version": addon_version}
 
 
+@app.post("/api/public/generate-token")
+async def public_generate_token():
+    """Generate a new API token (no auth). Saves to file, restarts add-on. Use from Setup page when no token is set yet."""
+    import httpx
+    regenerate_token_and_save()
+    log.warning("API token generated via Setup page; add-on will restart.")
+    msg_after = "Reload this page in a moment and click \"Load MCP config\" to see the new token."
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
+    if supervisor_token:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.post(
+                    "http://supervisor/addons/self/restart",
+                    headers={"Authorization": f"Bearer {supervisor_token}"},
+                )
+                r.raise_for_status()
+            return {"success": True, "message": f"API token generated. Add-on is restarting. {msg_after}", "restart_triggered": True}
+        except Exception as e:
+            log.exception("Failed to restart add-on after token generation: %s", e)
+    return {
+        "success": True,
+        "message": f"API token generated. Restart the add-on manually (Settings → Add-ons → EspToolkit → Restart), then {msg_after}",
+        "restart_triggered": False,
+    }
+
+
 @app.get("/api/public/mcp-config")
 async def get_mcp_config(request: Request):
     """Return pre-built MCP config blocks using the current API token (single source of truth). No auth so Setup page can load it."""

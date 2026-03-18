@@ -40,6 +40,8 @@
     <div class="card">
       <h2>1. API token</h2>
       <p>The add-on uses a single API token everywhere (MCP, API, this page). If you have not set one in <strong>Settings → Add-ons → EspToolkit → Configuration</strong>, the add-on auto-generates one on first start. To change the token, set <strong>api_token</strong> in Configuration and restart the add-on.</p>
+      <p class="mb"><button type="button" id="generate-token" class="primary">Generate API token</button> <span id="generate-token-msg"></span></p>
+      <p style="font-size:0.9em; opacity:0.9;">Generates a new token and restarts the add-on. After reload, click &quot;Load MCP config&quot; below. If you already set <strong>api_token</strong> in Add-on Configuration, that value is used instead.</p>
     </div>
     <div class="card">
       <h2>2. MCP (Cursor / VSCode)</h2>
@@ -188,6 +190,25 @@
       }
     }
 
+    async function generateToken() {
+      const msgEl = document.getElementById('generate-token-msg');
+      const btn = document.getElementById('generate-token');
+      msgEl.textContent = '…';
+      msgEl.className = '';
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(API_BASE + '/api/public/generate-token', { method: 'POST' });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.detail || res.statusText || 'Request failed');
+        msgEl.textContent = d.message || 'Token generated. Add-on is restarting.';
+        msgEl.style.color = 'var(--accent)';
+      } catch (e) {
+        msgEl.textContent = 'Error: ' + (e.message || e);
+        msgEl.classList.add('error');
+      }
+      if (btn) btn.disabled = false;
+    }
+
     async function regenerateToken() {
       const msgEl = document.getElementById('regenerate-msg');
       msgEl.textContent = '…';
@@ -226,6 +247,7 @@
     }
 
     document.getElementById('load-mcp-config').onclick = loadMcpConfig;
+    document.getElementById('generate-token').onclick = generateToken;
     document.getElementById('regenerate-token').onclick = regenerateToken;
     document.getElementById('test-mcp').onclick = testMcpConnection;
 
