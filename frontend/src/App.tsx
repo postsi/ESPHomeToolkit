@@ -505,6 +505,12 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
   // About / licenses modal
   const [aboutOpen, setAboutOpen] = useState<boolean>(false);
 
+  // Deploy target prompt (USB vs OTA)
+  const [deployTargetOpen, setDeployTargetOpen] = useState(false);
+  const [deployTargetPorts, setDeployTargetPorts] = useState<string[]>([]);
+  const [deployTargetChoice, setDeployTargetChoice] = useState<string>("ota"); // "ota" or "usb:<port>"
+  const deployTargetResolveRef = useRef<((choice: string | null) => void) | null>(null);
+
   // v0.62: Built-in self-check (verification suite) — runs backend checks without deploying.
   const [selfCheckBusy, setSelfCheckBusy] = useState<boolean>(false);
   const [selfCheckResult, setSelfCheckResult] = useState<any>(null);
@@ -2540,28 +2546,24 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         }
         setProjectDirty(false);
       }
-      // If a USB serial device is present, ESPHome may not be able to decide target.
-      // Prompt user to deploy wirelessly (enter host/IP) or choose the correct USB port.
+      // If USB serial ports are present, prompt for target (OTA default vs a specific USB port).
+      // OTA should continue without passing --device (normal ESPHome behaviour).
       let deviceOverride: string | undefined = undefined;
       try {
         const portsRes: any = await listEsphomePorts(entryId);
         const ports: string[] = portsRes?.ok && Array.isArray(portsRes?.ports) ? portsRes.ports : [];
         if (ports.length) {
-          const useUsb = window.confirm(
-            `USB serial device(s) detected on the HA host:\\n\\n${ports.join("\\n")}\\n\\nOK = deploy via USB (select port)\\nCancel = deploy wirelessly (enter host/IP)`
-          );
-          if (useUsb) {
-            const chosen = window.prompt("Select USB port for ESPHome upload:", ports[0] || "");
-            if (chosen == null || !chosen.trim()) return;
-            deviceOverride = chosen.trim();
-          } else {
-            const host = window.prompt("Deploy wirelessly to host (hostname or IP):", "");
-            if (host == null || !host.trim()) return;
-            deviceOverride = host.trim();
-          }
+          const choice = await new Promise<string | null>((resolve) => {
+            deployTargetResolveRef.current = resolve;
+            setDeployTargetPorts(ports);
+            setDeployTargetChoice("ota");
+            setDeployTargetOpen(true);
+          });
+          if (choice == null) return; // cancelled
+          if (choice.startsWith("usb:")) deviceOverride = choice.slice("usb:".length);
         }
       } catch {
-        // If ports listing fails, fall back to legacy behaviour.
+        // If ports listing fails, fall back to legacy behaviour (OTA).
       }
 
       const res: any = await deployExport(selectedDevice, entryId, deviceOverride);
@@ -3589,6 +3591,92 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         onCopy={copyDevice}
         onDelete={removeDevice}
       />
+
+      {deployTargetOpen && (
+        <div
+          className="modalOverlay"
+          onClick={() => {
+            setDeployTargetOpen(false);
+            const r = deployTargetResolveRef.current;
+            deployTargetResolveRef.current = null;
+            r?.(null);
+          }}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modalHeader">
+              <div className="title">Deploy target</div>
+              <button
+                className="ghost"
+                onClick={() => {
+                  setDeployTargetOpen(false);
+                  const r = deployTargetResolveRef.current;
+                  deployTargetResolveRef.current = null;
+                  r?.(null);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="muted" style={{ fontSize: 12 }}>
+                USB serial device(s) detected on the Home Assistant host. Choose how to upload firmware.
+              </div>
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <input
+                  type="radio"
+                  name="deployTarget"
+                  value="ota"
+                  checked={deployTargetChoice === "ota"}
+                  onChange={() => setDeployTargetChoice("ota")}
+                  style={{ marginTop: 3 }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600 }}>OTA (wireless)</div>
+                  <div className="muted" style={{ fontSize: 12 }}>Default ESPHome behaviour. No device override.</div>
+                </div>
+              </label>
+              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "6px 0" }} />
+              <div style={{ fontSize: 12, fontWeight: 600 }}>USB serial</div>
+              {(deployTargetPorts || []).map((p) => (
+                <label key={p} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input
+                    type="radio"
+                    name="deployTarget"
+                    value={`usb:${p}`}
+                    checked={deployTargetChoice === `usb:${p}`}
+                    onChange={() => setDeployTargetChoice(`usb:${p}`)}
+                  />
+                  <code style={{ fontSize: 12 }}>{p}</code>
+                </label>
+              ))}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setDeployTargetOpen(false);
+                    const r = deployTargetResolveRef.current;
+                    deployTargetResolveRef.current = null;
+                    r?.(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setDeployTargetOpen(false);
+                    const r = deployTargetResolveRef.current;
+                    deployTargetResolveRef.current = null;
+                    r?.(deployTargetChoice);
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editDeviceModalOpen && selectedDeviceObj && (
         <div className="modalOverlay" onClick={() => setEditDeviceModalOpen(false)}>
