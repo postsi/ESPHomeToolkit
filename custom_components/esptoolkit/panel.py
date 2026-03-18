@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 
-from .const import DOMAIN, PANEL_TITLE, PANEL_PAGE_URL, PANEL_DESIGNER_URL, PANEL_URL_PATH, STATIC_URL_PATH
+from .const import DOMAIN, PANEL_TITLE, PANEL_IFRAME_URL, PANEL_DESIGNER_URL, PANEL_URL_PATH, STATIC_URL_PATH
 from .api.views import register_api_views, ContextView, DevicesView, SchemasView, SchemaDetailView, RecipesView
 
 _LOGGER = logging.getLogger(__name__)
@@ -319,7 +319,6 @@ def _tabbed_panel_html(addon_base_url: str = "") -> str:
     .panel.iframe-panel iframe {{ width: 100%; height: 100%; border: none; }}
     .panel-placeholder {{ padding: 16px; color: var(--ha-secondary-text-color, #888); }}
   </style>
-  <script>if(window.self===window.top){{window.location.replace('/');}}</script>
 </head>
 <body>
   <div class="tabs">
@@ -365,8 +364,8 @@ def _tabbed_panel_html(addon_base_url: str = "") -> str:
 
 
 class PanelIndexView(HomeAssistantView):
-    """Serves the tabbed wrapper at /esptoolkit (Designer, ESPHome Output, Setup)."""
-    url = PANEL_PAGE_URL
+    """Serves the tabbed wrapper at /esptoolkit/panel (Designer, Device Log, etc.). Only loaded in iframe so /esptoolkit can be handled by HA frontend (sidebar + panel)."""
+    url = PANEL_IFRAME_URL
     name = f"{DOMAIN}:panel"
     requires_auth = False
 
@@ -405,7 +404,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(RecipesView)
         hass.http.register_view(DevicesView)
         hass.data[DOMAIN]["_designer_routes_registered"] = True
-        _LOGGER.warning("EspToolkit panel routes registered: %s, %s, and API (schemas/recipes).", PANEL_PAGE_URL, PANEL_DESIGNER_URL)
+        _LOGGER.warning("EspToolkit panel routes registered: %s, %s, and API (schemas/recipes).", PANEL_IFRAME_URL, PANEL_DESIGNER_URL)
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     frontend.async_register_built_in_panel(
         hass,
@@ -413,7 +412,7 @@ async def async_register_designer_panel(hass: HomeAssistant) -> None:
         sidebar_title=PANEL_TITLE,
         sidebar_icon="mdi:gesture-tap",
         frontend_url_path=PANEL_URL_PATH,
-        config={"url": PANEL_PAGE_URL},
+        config={"url": PANEL_IFRAME_URL},
         require_admin=True,
     )
     _LOGGER.debug("Designer panel registered at /%s", PANEL_URL_PATH)

@@ -28,8 +28,8 @@ CONF_DEFAULT_LOG_LEVEL = "default_log_level"
 STORAGE_VERSION = 1
 
 # --- Panel (root-level paths like working esphome_touch_designer; /api/ caused 404) ---
-PANEL_URL_PATH = "esptoolkit"  # sidebar panel id (frontend_url_path)
-PANEL_PAGE_URL = f"/{PANEL_URL_PATH}"  # Tabbed wrapper (Overview + Designer tab)
+PANEL_URL_PATH = "esptoolkit"  # sidebar panel id (frontend_url_path); HA frontend handles GET /esptoolkit
+PANEL_IFRAME_URL = f"/{PANEL_URL_PATH}/panel"  # Tabbed wrapper served only in iframe so /esptoolkit can show HA sidebar
 PANEL_DESIGNER_URL = f"/{PANEL_URL_PATH}/designer"  # Raw Designer SPA (iframe or direct)
 PANEL_TITLE = "EspToolkit"
 
