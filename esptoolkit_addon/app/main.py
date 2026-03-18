@@ -21,6 +21,9 @@ if not getattr(_se, "NotFound", None):
 import asyncio
 import logging
 import subprocess
+import os
+from pathlib import Path
+from glob import glob
 from pathlib import Path
 
 # Logging to stdout so it appears in the add-on Log tab in HA
@@ -316,6 +319,35 @@ async def list_configs():
         except ValueError:
             continue
     return {"configs": sorted(files)}
+
+
+@api.get("/ports")
+async def list_serial_ports():
+    """Best-effort serial port list for ESPHome uploads (USB plugged into HA host)."""
+    ports: list[str] = []
+    # Prefer stable by-id symlinks if present
+    try:
+        by_id = Path("/dev/serial/by-id")
+        if by_id.exists():
+            for p in sorted(by_id.iterdir()):
+                try:
+                    if p.is_symlink() or p.is_file():
+                        ports.append(str(p))
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    # Common Linux device nodes used by ESP32/USB serial adapters
+    for pat in ("/dev/ttyUSB*", "/dev/ttyACM*", "/dev/cu.usb*", "/dev/tty.SLAB_USBtoUART*"):
+        try:
+            for p in sorted(glob(pat)):
+                if p not in ports and os.path.exists(p):
+                    ports.append(p)
+        except Exception:
+            continue
+    # De-dupe and keep deterministic ordering
+    ports = sorted(dict.fromkeys(ports))
+    return {"ports": ports}
 
 
 @api.post("/setup-complete")

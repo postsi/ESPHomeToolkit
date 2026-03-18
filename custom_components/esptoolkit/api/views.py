@@ -2270,6 +2270,35 @@ async def _esphome_addon_request(
         return False, str(e)
 
 
+async def _esphome_addon_get(
+    hass: HomeAssistant,
+    base_url: str,
+    path: str,
+    token: str | None = None,
+) -> tuple[bool, dict]:
+    """Call ESPHome add-on HTTP API (GET JSON). Returns (ok, data)."""
+    import aiohttp
+    url = base_url.rstrip("/") + "/" + path.lstrip("/")
+    headers = {}
+    if token and token.strip():
+        headers["Authorization"] = f"Bearer {token.strip()}"
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    return False, {"error": f"HTTP {resp.status}", "detail": text[:500]}
+                try:
+                    return True, await resp.json()
+                except Exception:
+                    return False, {"error": "invalid_json", "detail": text[:500]}
+    except asyncio.TimeoutError:
+        return False, {"error": "timeout", "detail": "Request timed out"}
+    except Exception as e:
+        return False, {"error": "request_failed", "detail": str(e)}
+
+
 def _schemas_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "schemas" / "widgets"
 
@@ -5970,6 +5999,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(ParseYamlView)
     hass.http.register_view(DeployView)
     hass.http.register_view(DeployBuildView)
+    hass.http.register_view(EsphomePortsView)
     hass.http.register_view(DeviceExportPreviewView)
     hass.http.register_view(DeviceExportView)
     hass.http.register_view(DeviceValidateExportView)
@@ -6033,6 +6063,29 @@ class AssetsUploadView(HomeAssistantView):
         outp = _assets_dir(hass) / name
         outp.write_bytes(raw)
         return self.json({"ok": True, "name": name, "size": len(raw)})
+
+
+class EsphomePortsView(HomeAssistantView):
+    """List serial ports seen by the EspToolkit add-on (for deploy prompt)."""
+
+    url = f"/api/{DOMAIN}/esphome/ports"
+    name = f"api:{DOMAIN}:esphome_ports"
+    requires_auth = False
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        conn = _get_addon_connection(hass, entry_id)
+        if not conn:
+            return self.json({"ok": False, "error": "no_addon_connection", "detail": "EspToolkit add-on not configured."}, status_code=503)
+        base_url, token = conn
+        ok, data = await _esphome_addon_get(hass, base_url, "api/ports", token=token)
+        if not ok:
+            return self.json({"ok": False, **(data or {})}, status_code=502)
+        ports = data.get("ports") if isinstance(data, dict) else None
+        return self.json({"ok": True, "ports": ports if isinstance(ports, list) else []})
 
 import yaml
 

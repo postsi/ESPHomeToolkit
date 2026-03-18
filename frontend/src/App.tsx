@@ -23,6 +23,7 @@ import {
   deleteDevice,
   deploy,
   deployExport,
+  listEsphomePorts,
   exportDeviceYamlPreview,
   exportDeviceYamlWithExpectedHash,
   getVersion,
@@ -2539,7 +2540,31 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         }
         setProjectDirty(false);
       }
-      const res: any = await deployExport(selectedDevice, entryId);
+      // If a USB serial device is present, ESPHome may not be able to decide target.
+      // Prompt user to deploy wirelessly (enter host/IP) or choose the correct USB port.
+      let deviceOverride: string | undefined = undefined;
+      try {
+        const portsRes: any = await listEsphomePorts(entryId);
+        const ports: string[] = portsRes?.ok && Array.isArray(portsRes?.ports) ? portsRes.ports : [];
+        if (ports.length) {
+          const useUsb = window.confirm(
+            `USB serial device(s) detected on the HA host:\\n\\n${ports.join("\\n")}\\n\\nOK = deploy via USB (select port)\\nCancel = deploy wirelessly (enter host/IP)`
+          );
+          if (useUsb) {
+            const chosen = window.prompt("Select USB port for ESPHome upload:", ports[0] || "");
+            if (chosen == null || !chosen.trim()) return;
+            deviceOverride = chosen.trim();
+          } else {
+            const host = window.prompt("Deploy wirelessly to host (hostname or IP):", "");
+            if (host == null || !host.trim()) return;
+            deviceOverride = host.trim();
+          }
+        }
+      } catch {
+        // If ports listing fails, fall back to legacy behaviour.
+      }
+
+      const res: any = await deployExport(selectedDevice, entryId, deviceOverride);
       if (res?.ok) {
         setToast({ type: "ok", msg: res.path ? `Deployed: ${res.path}` : "Deployed" });
       } else {

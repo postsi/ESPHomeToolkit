@@ -257,6 +257,13 @@ export async function deployExport(device_id: string, entry_id: string, device?:
   return apiPost(u.toString(), body);
 }
 
+/** List serial ports seen by the add-on (used to disambiguate deploy target). */
+export async function listEsphomePorts(entry_id: string): Promise<{ ok: boolean; ports?: string[]; error?: string; detail?: string }> {
+  const u = new URL(`${API_BASE}/esphome/ports`, window.location.origin);
+  u.searchParams.set("entry_id", entry_id);
+  return apiGet(u.toString());
+}
+
 /** Integration and add-on versions for the Designer UI. */
 export async function getVersion(entry_id?: string): Promise<{ integration: string; addon: string | null }> {
   const u = new URL(`${API_BASE}/version`, window.location.origin);
