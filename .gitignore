@@ -31,3 +31,9 @@ Thumbs.db
 _src_api/
 _src_designer/
 *.log
+
+# Secrets (do not commit)
+.env
+.env.*
+!.env.example
+.github-token

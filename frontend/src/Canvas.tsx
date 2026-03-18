@@ -199,6 +199,8 @@ const stageRef = useRef<any>(null);
     const textColor = toFillColor(s.text_color ?? p.text_color, "#e5e7eb");
     // Arc children in a group: transparent base so concentric rings don't cover each other.
     const isArcChild = !!(w.type && String(w.type).toLowerCase().includes("arc") && w.parent_id);
+    // Standalone arc/arc_labeled: transparent base so only the arc track and labels are visible.
+    const isArcOrArcLabeled = w.type === "arc" || w.type === "arc_labeled";
     const fontId = s.text_font ?? p.text_font;
     const fontSize = Math.max(8, Math.min(48, fontSizeFromFontId(fontId) ?? 16)); // Canvas preview: mimic font id size
 
@@ -320,9 +322,9 @@ const stageRef = useRef<any>(null);
           rotation={transformAngle}
           scaleX={transformZoom}
           scaleY={transformZoom}
-          fill={isArcChild ? "transparent" : fillColor}
-          stroke={isArcChild ? "transparent" : border}
-          strokeWidth={isArcChild ? 0 : borderWidth}
+          fill={isArcChild || isArcOrArcLabeled ? "transparent" : fillColor}
+          stroke={isArcChild || isArcOrArcLabeled ? "transparent" : border}
+          strokeWidth={isArcChild || isArcOrArcLabeled ? 0 : borderWidth}
           cornerRadius={radius}
           opacity={opacity}
           {...(hasShadow && {
