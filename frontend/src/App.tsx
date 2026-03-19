@@ -632,7 +632,9 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
           }
         }
       } else {
-        setImportYamlErr((result as any).error ?? "Import failed");
+        const err = (result as any).error ?? "Import failed";
+        const detail = String((result as any).detail || "").trim();
+        setImportYamlErr(detail ? `${err}: ${detail}` : err);
       }
     } catch (e: any) {
       setImportYamlErr(String(e?.message ?? e));

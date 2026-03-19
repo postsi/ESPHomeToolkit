@@ -6522,11 +6522,22 @@ def _build_recipe_fingerprint(yaml_text: str) -> str:
     return "\n".join(parts)
 
 
+def _relax_recipe_fingerprint(fp: str) -> str:
+    """Remove volatile fragments from fingerprint for fallback matching."""
+    if not fp:
+        return ""
+    lines = [ln.strip() for ln in fp.splitlines() if ln.strip()]
+    # Ignore esphome section in relaxed mode; name/min_version can vary between equivalent configs.
+    lines = [ln for ln in lines if not ln.startswith("esphome:")]
+    return "\n".join(lines)
+
+
 def _match_recipe_by_fingerprint(hass: HomeAssistant, import_fingerprint: str) -> str | None:
     """Return recipe_id of first recipe whose fingerprint equals import_fingerprint, else None.
     Prefers builtin over user recipes."""
     if not import_fingerprint or not import_fingerprint.strip():
         return None
+    import_relaxed = _relax_recipe_fingerprint(import_fingerprint)
     recipes = list_all_recipes(hass)
     builtin_first = sorted(recipes, key=lambda r: (0 if r.get("builtin") else 1, str(r.get("id") or "")))
     for r in builtin_first:
@@ -6540,6 +6551,8 @@ def _match_recipe_by_fingerprint(hass: HomeAssistant, import_fingerprint: str) -
             continue
         recipe_fp = _build_recipe_fingerprint(recipe_text)
         if recipe_fp.strip() == import_fingerprint.strip():
+            return rid
+        if import_relaxed and _relax_recipe_fingerprint(recipe_fp).strip() == import_relaxed.strip():
             return rid
     return None
 
@@ -6833,6 +6846,7 @@ class ImportFromYamlView(HomeAssistantView):
                 try:
                     norm_yaml, meta = _normalize_recipe_yaml(raw_yaml, label=device_name)
                 except Exception as e:
+                    log.append(f"Recipe create failed: {e}")
                     return {"ok": False, "error": "recipe_create_failed", "detail": str(e)}
                 root = _user_recipes_root(hass) / "user"
                 root.mkdir(parents=True, exist_ok=True)
