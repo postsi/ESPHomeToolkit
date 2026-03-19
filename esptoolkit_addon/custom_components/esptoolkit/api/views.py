@@ -6501,6 +6501,10 @@ def _extract_recipe_metadata(model: dict, yaml_text: str, label: str | None = No
 
     # Resolution heuristics: look for width/height in display (top-level or dimensions block)
     width = height = None
+    # Known MIPI / board display models when width/height are implied by the driver
+    _DISPLAY_MODEL_RESOLUTION: dict[str, tuple[int, int]] = {
+        "jc1060p470": (1024, 600),
+    }
     try:
         displays = model.get("display")
         if isinstance(displays, list) and displays:
@@ -6512,6 +6516,12 @@ def _extract_recipe_metadata(model: dict, yaml_text: str, label: str | None = No
                 if isinstance(dims, dict) and (width is None or height is None):
                     width = dims.get("width") or width
                     height = dims.get("height") or height
+                model_name = d0.get("model")
+                if model_name is not None and (not isinstance(width, int) or not isinstance(height, int)):
+                    mk = str(model_name).strip().lower()
+                    wh = _DISPLAY_MODEL_RESOLUTION.get(mk)
+                    if wh:
+                        width, height = wh
     except Exception:
         pass
     # fallback regex
@@ -6558,24 +6568,7 @@ def _normalize_recipe_yaml(raw_text: str, label: str | None = None) -> tuple[str
     - Dumps canonical YAML (sorted keys, consistent indentation)
     - Re-inserts the marker comment under lvgl:
     """
-    def _load_yaml_lenient_unknown_tags(text: str):
-        """Load YAML while tolerating unknown tags such as !secret and !lambda."""
-        class _LenientLoader(yaml.SafeLoader):
-            pass
-
-        def _unknown_tag(loader, tag_suffix, node):
-            if isinstance(node, yaml.ScalarNode):
-                return loader.construct_scalar(node)
-            if isinstance(node, yaml.SequenceNode):
-                return loader.construct_sequence(node)
-            if isinstance(node, yaml.MappingNode):
-                return loader.construct_mapping(node)
-            return None
-
-        _LenientLoader.add_multi_constructor("!", _unknown_tag)
-        return yaml.load(text, Loader=_LenientLoader)
-
-    model = _load_yaml_lenient_unknown_tags(raw_text) or {}
+    model = _yaml_import.load_yaml_lenient(raw_text) or {}
     if not isinstance(model, dict):
         raise ValueError("Top-level YAML must be a mapping/object")
 
@@ -6723,7 +6716,7 @@ def _extract_recipe_metadata_from_text(recipe_text: str, recipe_id: str | None =
     """
     meta: dict = {"label": None}
     try:
-        model = yaml.safe_load(recipe_text) or {}
+        model = _yaml_import.load_yaml_lenient(recipe_text) or {}
         if isinstance(model, dict):
             meta = _extract_recipe_metadata(model, recipe_text, label=None)
     except Exception:
@@ -6998,7 +6991,10 @@ class ImportFromYamlView(HomeAssistantView):
             lvgl_body = (sections.get("lvgl") or "").strip()
             if not lvgl_body:
                 lvgl_body = _yaml_import.extract_lvgl_section_from_full_yaml(raw_yaml)
-            pages = _yaml_import.parse_lvgl_section_to_pages(lvgl_body)
+            lvgl_warn: list[str] = []
+            pages = _yaml_import.parse_lvgl_section_to_pages(lvgl_body, warn=lvgl_warn)
+            for w in lvgl_warn:
+                log.append(w)
             widget_count = sum(len(p.get("widgets") or []) for p in pages)
             log.append(f"Parsed {len(pages)} page(s), {widget_count} widget(s).")
 
@@ -7024,7 +7020,19 @@ class ImportFromYamlView(HomeAssistantView):
             project["links"] = links
             project["action_bindings"] = []
             project["scripts"] = scripts
-            project["device"] = {"hardware_recipe_id": recipe_id, "screen": {}}
+            screen: dict = {}
+            try:
+                rmeta = _extract_recipe_metadata_from_text(raw_yaml, recipe_id)
+                res = rmeta.get("resolution") if isinstance(rmeta, dict) else None
+                if isinstance(res, dict):
+                    rw = res.get("width")
+                    rh = res.get("height")
+                    if isinstance(rw, int) and isinstance(rh, int) and rw > 0 and rh > 0:
+                        screen = {"width": rw, "height": rh}
+                        log.append(f"Display resolution (import): {rw}×{rh}")
+            except Exception as e:
+                log.append(f"Resolution hint skipped: {e}")
+            project["device"] = {"hardware_recipe_id": recipe_id, "screen": screen}
             disp_bg = None
             try:
                 first_page = pages[0] if pages else {}

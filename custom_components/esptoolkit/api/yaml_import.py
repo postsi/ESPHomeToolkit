@@ -7,6 +7,25 @@ from pathlib import Path
 
 import yaml
 
+
+def load_yaml_lenient(text: str):
+    """Parse YAML while tolerating unknown tags such as !secret and !lambda (ESPHome)."""
+    class _LenientLoader(yaml.SafeLoader):
+        pass
+
+    def _unknown_tag(loader, tag_suffix, node):
+        if isinstance(node, yaml.ScalarNode):
+            return loader.construct_scalar(node)
+        if isinstance(node, yaml.SequenceNode):
+            return loader.construct_sequence(node)
+        if isinstance(node, yaml.MappingNode):
+            return loader.construct_mapping(node)
+        return None
+
+    _LenientLoader.add_multi_constructor("!", _unknown_tag)
+    return yaml.load(text, Loader=_LenientLoader)
+
+
 # Keys that are geometry (widget root), not props/style/events.
 _GEOM_KEYS = frozenset({"id", "x", "y", "width", "height", "align"})
 # ESPHome uses width/height; Designer uses w/h.
@@ -179,19 +198,26 @@ def _emit_then_block(then_dict: dict) -> str:
     return yaml.safe_dump(then_dict, default_flow_style=False, allow_unicode=True, width=120).strip()
 
 
-def parse_lvgl_section_to_pages(lvgl_section_str: str) -> list[dict]:
+def parse_lvgl_section_to_pages(lvgl_section_str: str, warn: list | None = None) -> list[dict]:
     """Parse lvgl section YAML string into list of pages with widgets (Designer format).
-    lvgl_section_str can be the full 'lvgl:\\n  pages: ...' or just the body (content under lvgl:)."""
+    lvgl_section_str can be the full 'lvgl:\\n  pages: ...' or just the body (content under lvgl:).
+
+    warn: if provided, append human-readable messages on parse failure or suspicious empty results.
+    """
     if not (lvgl_section_str or "").strip():
         return [{"page_id": "main", "name": "Main", "widgets": []}]
     s = lvgl_section_str.strip()
     if not s.startswith("lvgl") and not s.startswith("pages"):
         s = "lvgl:\n" + lvgl_section_str
     try:
-        data = yaml.safe_load(s)
-    except Exception:
+        data = load_yaml_lenient(s)
+    except Exception as e:
+        if warn is not None:
+            warn.append(f"LVGL parse failed (empty canvas): {e}")
         return [{"page_id": "main", "name": "Main", "widgets": []}]
-    if not isinstance(data, dict):
+    if data is None or not isinstance(data, dict):
+        if warn is not None:
+            warn.append("LVGL parse returned empty document.")
         return [{"page_id": "main", "name": "Main", "widgets": []}]
     lvgl_data = data.get("lvgl") or data
     if not isinstance(lvgl_data, dict):
@@ -220,6 +246,11 @@ def parse_lvgl_section_to_pages(lvgl_section_str: str) -> list[dict]:
         })
     if not out_pages:
         return [{"page_id": "main", "name": "Main", "widgets": []}]
+    wc = sum(len(p.get("widgets") or []) for p in out_pages)
+    if warn is not None and wc == 0 and re.search(r"\bwidgets\s*:", lvgl_section_str):
+        warn.append(
+            "LVGL parsed but 0 widgets found while `widgets:` appears in source — check structure or unsupported blocks."
+        )
     return out_pages
 
 
@@ -253,7 +284,7 @@ def _parse_section_list(section_key: str, body: str) -> list[dict]:
     # Section body is indented; wrap so YAML parses as one key -> list.
     wrapped = section_key + ":\n" + body
     try:
-        data = yaml.safe_load(wrapped)
+        data = load_yaml_lenient(wrapped)
     except Exception:
         return []
     if not isinstance(data, dict):
@@ -436,7 +467,7 @@ def reverse_bindings_and_links(sections: dict[str, str], widget_ids: set[str]) -
         # interval section can be list of blocks: - interval: 1s \n then: ...
         try:
             wrapped = "interval:\n" + interval_body
-            data = yaml.safe_load(wrapped)
+            data = load_yaml_lenient(wrapped)
         except Exception:
             data = {}
         interval_blocks = data.get("interval") if isinstance(data, dict) else []

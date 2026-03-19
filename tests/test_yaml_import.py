@@ -39,6 +39,33 @@ def test_parse_lvgl_section_to_pages_empty():
     assert pages[0].get("widgets") == []
 
 
+def test_parse_lvgl_tolerates_unknown_tags():
+    """!secret / !lambda etc. must not zero out the whole LVGL tree (lenient load)."""
+    body = """
+pages:
+  - id: main
+    widgets:
+      - label:
+          id: lbl1
+          text: Hi
+      - button:
+          id: b1
+          width: 80
+          height: 40
+          on_click:
+            then:
+              - homeassistant.action:
+                  action: climate.turn_on
+                  data:
+                    entity_id: !secret some_climate
+"""
+    pages = yi.parse_lvgl_section_to_pages("lvgl:\n" + body)
+    widgets = pages[0].get("widgets") or []
+    assert len(widgets) == 2
+    ids = {w.get("id") for w in widgets}
+    assert "lbl1" in ids and "b1" in ids
+
+
 def test_parse_lvgl_section_to_pages_single_label():
     """Single label widget is parsed to one page with one widget."""
     yaml_body = """
