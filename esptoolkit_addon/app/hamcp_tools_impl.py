@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -31,9 +31,27 @@ from app.hamcp_hacs import (
     hacs_uninstall,
 )
 
-from app.tool_engines import execute_ha_rest, execute_ha_rest_json, execute_ha_service, execute_supervisor_rest
+from app.tool_engines import (
+    execute_ha_rest,
+    execute_ha_rest_json,
+    execute_ha_service,
+    execute_supervisor_api_data,
+    execute_supervisor_raw_text,
+    execute_supervisor_rest,
+)
 
 log = logging.getLogger("esphome_api.hamcp_tools_impl")
+
+
+def _comma_entity_filter(val: Any) -> str:
+    """Comma-separated entity ids for history/logbook query params."""
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        parts = [str(x).strip() for x in val if str(x).strip()]
+        return ",".join(parts)
+    return str(val).strip()
+
 
 HELPER_FILES: dict[str, str] = {
     "input_boolean": "input_boolean.yaml",
@@ -263,8 +281,14 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
 
     if tool_name == "ha_get_area_registry_entry":
         aid = (a.get("area_id") or "").strip()
-        res = await ha_ws_call({"type": "config/area_registry/get", "area_id": aid})
-        return _j({"success": True, "area": res})
+        if not aid:
+            return _j({"success": False, "error": "area_id required"})
+        # HA Core has no stable WS "get" for areas on all versions — resolve from list.
+        reg = await ha_ws_call({"type": "config/area_registry/list"})
+        for ar in reg if isinstance(reg, list) else []:
+            if isinstance(ar, dict) and ar.get("area_id") == aid:
+                return _j({"success": True, "area": ar})
+        return _j({"success": False, "error": f"area not found: {aid}"})
 
     if tool_name == "ha_create_area":
         msg = {"type": "config/area_registry/create", "name": a.get("name") or ""}
@@ -293,12 +317,20 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
 
     if tool_name == "ha_get_device_registry_entry":
         did = (a.get("device_id") or "").strip()
-        res = await ha_ws_call({"type": "config/device_registry/get", "device_id": did})
-        inc = a.get("include_entities")
-        out: dict[str, Any] = {"success": True, "device": res}
-        if inc:
-            reg = await ha_ws_call({"type": "config/entity_registry/list"})
-            out["entities"] = [e for e in reg if e.get("device_id") == did]
+        if not did:
+            return _j({"success": False, "error": "device_id required"})
+        reg = await ha_ws_call({"type": "config/device_registry/list"})
+        device: dict[str, Any] | None = None
+        for dev in reg if isinstance(reg, list) else []:
+            if isinstance(dev, dict) and dev.get("id") == did:
+                device = dev
+                break
+        if not device:
+            return _j({"success": False, "error": f"device not found: {did}"})
+        out: dict[str, Any] = {"success": True, "device": device}
+        if a.get("include_entities"):
+            ereg = await ha_ws_call({"type": "config/entity_registry/list"})
+            out["entities"] = [e for e in ereg if isinstance(e, dict) and e.get("device_id") == did]
         return _j(out)
 
     if tool_name == "ha_update_device_registry":
@@ -486,28 +518,223 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
         return _j({"success": True, "message": "Restart initiated"})
 
     if tool_name == "ha_get_logs":
-        limit = int(a.get("limit") or 100)
+        limit = max(1, int(a.get("limit") or 100))
+        try:
+            entries = await ha_ws_call({"type": "system_log/list"}, timeout=60.0)
+            if isinstance(entries, list) and entries:
+                tail = entries[-limit:]
+                lines: list[str] = []
+                for e in tail:
+                    if isinstance(e, dict):
+                        msg_parts = e.get("message") or []
+                        line = f"{e.get('timestamp')} {e.get('level')} {e.get('name')}: {' | '.join(str(m) for m in msg_parts)}"
+                        lines.append(line)
+                    else:
+                        lines.append(str(e))
+                return _j(
+                    {
+                        "success": True,
+                        "source": "system_log",
+                        "count": len(tail),
+                        "entries": tail,
+                        "lines": lines,
+                    }
+                )
+        except Exception as e_ws:
+            ws_err = str(e_ws)
+        else:
+            ws_err = ""
         raw = await execute_ha_rest("GET", "/api/error_log")
         if "Body: " in raw:
             body = raw.split("Body: ", 1)[-1].strip()
         else:
             body = raw
-        lines = body.splitlines()
-        return _j({"success": True, "lines": lines[-limit:], "count": min(len(lines), limit)})
+        lines_out = body.splitlines()
+        if not lines_out or (len(lines_out) == 1 and "404" in lines_out[0]):
+            return _j(
+                {
+                    "success": False,
+                    "error": ws_err or "error_log empty or unavailable",
+                    "lines": [],
+                    "count": 0,
+                }
+            )
+        return _j(
+            {
+                "success": True,
+                "source": "error_log",
+                "lines": lines_out[-limit:],
+                "count": min(len(lines_out), limit),
+            }
+        )
 
     if tool_name == "ha_logbook_entries":
         end = a.get("end_time")
-        start = a.get("start_time") or (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S%z")
+        start = a.get("start_time") or datetime.now(timezone.utc).isoformat()
         path = f"/api/logbook/{quote(str(start), safe='')}"
         qs: list[str] = []
         if end:
             qs.append(f"end_time={quote(str(end), safe='')}")
-        if a.get("entity_id"):
-            qs.append(f"entity={quote(a['entity_id'], safe='')}")
+        ent = _comma_entity_filter(a.get("entity_ids") or a.get("entity_id"))
+        if ent:
+            qs.append(f"entity={quote(ent, safe='')}")
+        if a.get("period") is not None:
+            qs.append(f"period={int(a['period'])}")
+        if a.get("context_id"):
+            qs.append(f"context_id={quote(str(a['context_id']), safe='')}")
         if qs:
             path += "?" + "&".join(qs)
         data = await execute_ha_rest_json("GET", path)
         return _j({"success": True, "entries": data})
+
+    if tool_name == "ha_get_logbook_events":
+        st = (a.get("start_time") or "").strip()
+        if not st:
+            return _j({"success": False, "error": "start_time required (ISO 8601)"})
+        msg: dict[str, Any] = {"type": "logbook/get_events", "start_time": st}
+        et = a.get("end_time")
+        if et:
+            msg["end_time"] = str(et).strip()
+        eids = a.get("entity_ids")
+        if isinstance(eids, list) and eids:
+            msg["entity_ids"] = [str(x).strip() for x in eids if str(x).strip()]
+        elif a.get("entity_id"):
+            msg["entity_ids"] = [str(a["entity_id"]).strip()]
+        dids = a.get("device_ids")
+        if isinstance(dids, list) and dids:
+            msg["device_ids"] = [str(x).strip() for x in dids if str(x).strip()]
+        if a.get("context_id"):
+            msg["context_id"] = str(a["context_id"]).strip()
+        try:
+            events = await ha_ws_call(msg, timeout=180.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "events": events})
+
+    if tool_name == "ha_get_history":
+        feid = _comma_entity_filter(a.get("filter_entity_id") or a.get("entity_ids") or a.get("entity_id"))
+        if not feid:
+            return _j(
+                {
+                    "success": False,
+                    "error": "filter_entity_id, entity_id, or entity_ids required (recorder state history)",
+                }
+            )
+        qs: list[str] = [f"filter_entity_id={quote(feid, safe='')}"]
+        end = (a.get("end_time") or "").strip()
+        if end:
+            qs.append(f"end_time={quote(end, safe='')}")
+        if a.get("significant_changes_only") is False:
+            qs.append("significant_changes_only=0")
+        if a.get("minimal_response"):
+            qs.append("minimal_response")
+        if a.get("no_attributes"):
+            qs.append("no_attributes")
+        if a.get("skip_initial_state"):
+            qs.append("skip_initial_state")
+        qstr = "&".join(qs)
+        start = (a.get("start_time") or "").strip()
+        if start:
+            path = f"/api/history/period/{quote(start, safe='')}?{qstr}"
+        else:
+            path = f"/api/history/period?{qstr}"
+        try:
+            data = await execute_ha_rest_json("GET", path)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "history": data})
+
+    if tool_name == "ha_list_recorder_statistic_ids":
+        msg: dict[str, Any] = {"type": "recorder/list_statistic_ids"}
+        st = a.get("statistic_type")
+        if st in ("mean", "sum"):
+            msg["statistic_type"] = st
+        try:
+            res = await ha_ws_call(msg, timeout=180.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "statistic_ids": res})
+
+    if tool_name == "ha_get_recorder_statistics_metadata":
+        msg: dict[str, Any] = {"type": "recorder/get_statistics_metadata"}
+        ids = a.get("statistic_ids")
+        if isinstance(ids, list) and ids:
+            msg["statistic_ids"] = [str(x).strip() for x in ids if str(x).strip()]
+        try:
+            res = await ha_ws_call(msg, timeout=180.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "metadata": res})
+
+    if tool_name == "ha_get_recorder_statistics":
+        ids = a.get("statistic_ids")
+        if not isinstance(ids, list) or not ids:
+            return _j({"success": False, "error": "statistic_ids (non-empty list) required"})
+        st = (a.get("start_time") or "").strip()
+        if not st:
+            return _j({"success": False, "error": "start_time required (ISO 8601)"})
+        period = (a.get("period") or "hour").strip()
+        if period not in ("5minute", "hour", "day", "week", "month", "year"):
+            return _j(
+                {
+                    "success": False,
+                    "error": "period must be one of: 5minute, hour, day, week, month, year",
+                }
+            )
+        msg: dict[str, Any] = {
+            "type": "recorder/statistics_during_period",
+            "start_time": st,
+            "statistic_ids": [str(x).strip() for x in ids if str(x).strip()],
+            "period": period,
+        }
+        et = (a.get("end_time") or "").strip()
+        if et:
+            msg["end_time"] = et
+        types = a.get("types")
+        if isinstance(types, list) and types:
+            msg["types"] = types
+        units = a.get("units")
+        if isinstance(units, dict) and units:
+            msg["units"] = units
+        try:
+            res = await ha_ws_call(msg, timeout=300.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "data": res})
+
+    if tool_name == "ha_get_recorder_statistic":
+        sid = (a.get("statistic_id") or "").strip()
+        if not sid:
+            return _j({"success": False, "error": "statistic_id required"})
+        msg: dict[str, Any] = {"type": "recorder/statistic_during_period", "statistic_id": sid}
+        if a.get("start_time"):
+            msg["start_time"] = str(a["start_time"]).strip()
+        if a.get("end_time"):
+            msg["end_time"] = str(a["end_time"]).strip()
+        dur = a.get("duration")
+        if isinstance(dur, dict):
+            msg["duration"] = dur
+        off = a.get("offset")
+        if isinstance(off, dict):
+            msg["offset"] = off
+        types = a.get("types")
+        if isinstance(types, list) and types:
+            msg["types"] = types
+        units = a.get("units")
+        if isinstance(units, dict) and units:
+            msg["units"] = units
+        try:
+            res = await ha_ws_call(msg, timeout=180.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "statistic_id": sid, "data": res})
+
+    if tool_name == "ha_validate_recorder_statistics":
+        try:
+            issues = await ha_ws_call({"type": "recorder/validate_statistics"}, timeout=180.0)
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "issues": issues})
 
     # ——— Files ———
     if tool_name == "ha_read_file":
@@ -566,9 +793,33 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
         return await execute_supervisor_rest("GET", f"/addons/{slug}/info")
     if tool_name == "ha_addon_logs":
         slug = (a.get("slug") or "").strip()
+        if not slug:
+            return _j({"success": False, "error": "slug required"})
         lines = a.get("lines")
-        q = f"?lines={int(lines)}" if lines else ""
-        return await execute_supervisor_rest("GET", f"/addons/{slug}/log{q}")
+        enc = quote(slug, safe="")
+        paths = (
+            f"/addons/{enc}/logs/latest",
+            f"/addons/{enc}/logs",
+            f"/addons/{enc}/log",
+        )
+        text = ""
+        last_err = ""
+        for path in paths:
+            try:
+                text = await execute_supervisor_raw_text("GET", path, timeout=120.0)
+                break
+            except Exception as e:
+                last_err = str(e)
+                continue
+        else:
+            return _j({"success": False, "error": f"Could not fetch logs: {last_err}"})
+        if lines:
+            try:
+                n = max(1, int(lines))
+                text = "\n".join(text.splitlines()[-n:])
+            except (TypeError, ValueError):
+                pass
+        return _j({"success": True, "slug": slug, "log": text})
     if tool_name == "ha_install_addon":
         slug = (a.get("slug") or "").strip()
         return await execute_supervisor_rest("POST", f"/addons/{slug}/install", None, timeout=600.0)
@@ -589,14 +840,32 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
         return await execute_supervisor_rest("POST", f"/addons/{slug}/update", None, timeout=600.0)
     if tool_name == "ha_get_addon_options":
         slug = (a.get("slug") or "").strip()
-        r = await execute_supervisor_rest("GET", f"/addons/{slug}/options")
-        return r
+        if not slug:
+            return _j({"success": False, "error": "slug required"})
+        # Supervisor exposes options on GET /addons/{slug}/info (no GET /options).
+        try:
+            info = await execute_supervisor_api_data("GET", f"/addons/{quote(slug, safe='')}/info")
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        if not isinstance(info, dict):
+            return _j({"success": False, "error": "unexpected info payload"})
+        return _j({"success": True, "slug": slug, "options": info.get("options")})
     if tool_name == "ha_set_addon_options":
         slug = (a.get("slug") or "").strip()
         opts = a.get("options")
         if not isinstance(opts, dict):
             return _j({"success": False, "error": "options object required"})
         return await execute_supervisor_rest("POST", f"/addons/{slug}/options", {"options": opts})
+    if tool_name == "ha_addon_stats":
+        slug = (a.get("slug") or "").strip()
+        if not slug:
+            return _j({"success": False, "error": "slug required"})
+        try:
+            stats = await execute_supervisor_api_data("GET", f"/addons/{quote(slug, safe='')}/stats")
+        except Exception as e:
+            return _j({"success": False, "error": str(e)})
+        return _j({"success": True, "slug": slug, "stats": stats})
+
     if tool_name == "ha_list_repositories":
         return await execute_supervisor_rest("GET", "/store/repositories")
     if tool_name == "ha_add_repository":

@@ -93,3 +93,68 @@ async def execute_supervisor_rest(
         return f"Status: {resp.status_code}\nBody: {text}"
     except Exception as e:
         return f"Error: {e}"
+
+
+async def execute_supervisor_api_data(
+    method: str,
+    path: str,
+    body_obj: dict[str, Any] | None = None,
+    timeout: float = 60.0,
+) -> Any:
+    """
+    Call Supervisor REST and return the JSON `data` field from {"result":"ok","data":...}.
+    Raises RuntimeError on transport failure, non-2xx, or result != ok.
+    """
+    token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("SUPERVISOR_TOKEN not set (addon not running under Supervisor)")
+    url = "http://supervisor" + (path if path.startswith("/") else f"/{path}")
+    headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
+    content: bytes | None = None
+    if body_obj is not None:
+        headers["Content-Type"] = "application/json"
+        content = json.dumps(body_obj, separators=(",", ":")).encode("utf-8")
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.request(method.upper(), url, headers=headers, content=content)
+    text = resp.text if resp.text is not None else ""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Supervisor HTTP {resp.status_code}: {text[:800]}")
+    if not text.strip():
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Supervisor returned non-JSON: {text[:300]}") from e
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Unexpected Supervisor JSON: {text[:300]}")
+    if payload.get("result") != "ok":
+        raise RuntimeError(str(payload.get("message") or payload))
+    return payload.get("data")
+
+
+async def execute_supervisor_raw_text(
+    method: str,
+    path: str,
+    *,
+    body_obj: dict[str, Any] | None = None,
+    timeout: float = 120.0,
+    max_chars: int = 512_000,
+) -> str:
+    """GET/POST Supervisor path and return response body as text (e.g. journal logs)."""
+    token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("SUPERVISOR_TOKEN not set (addon not running under Supervisor)")
+    url = "http://supervisor" + (path if path.startswith("/") else f"/{path}")
+    headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
+    content: bytes | None = None
+    if body_obj is not None:
+        headers["Content-Type"] = "application/json"
+        content = json.dumps(body_obj, separators=(",", ":")).encode("utf-8")
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.request(method.upper(), url, headers=headers, content=content)
+    text = resp.text if resp.text is not None else ""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Supervisor HTTP {resp.status_code}: {text[:800]}")
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n... (truncated)"
+    return text

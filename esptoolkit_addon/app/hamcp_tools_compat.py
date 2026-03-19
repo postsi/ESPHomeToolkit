@@ -1,7 +1,7 @@
 """
 HAMCPTools — compatibility MCP surface for Home Assistant (`ha_*` tool names).
 
-Exposes the same 81 tool names; execution is delegated to
+Exposes HAMCP `ha_*` tool names (incl. history & recorder stats); execution is delegated to
 `hamcp_tools_impl.dispatch_hamcp_full` (HA REST, WebSocket, Supervisor,
 /config filesystem, git checkpoint, HACS helpers).
 """
@@ -12,6 +12,13 @@ from app.hamcp_tools_impl import dispatch_hamcp_full
 dispatch_hamcp_tool = dispatch_hamcp_full
 
 HAMCP_TOOL_NAMES: list[str] = [
+    "ha_addon_stats",
+    "ha_get_history",
+    "ha_get_recorder_statistic",
+    "ha_get_recorder_statistics",
+    "ha_get_recorder_statistics_metadata",
+    "ha_list_recorder_statistic_ids",
+    "ha_validate_recorder_statistics",
     "ha_check_theme_config",
     "ha_reload_themes",
     "ha_delete_theme",
@@ -43,6 +50,7 @@ HAMCP_TOOL_NAMES: list[str] = [
     "ha_hacs_status",
     "ha_uninstall_hacs",
     "ha_install_hacs",
+    "ha_get_logbook_events",
     "ha_logbook_entries",
     "ha_git_diff",
     "ha_end_checkpoint",
