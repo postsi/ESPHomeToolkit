@@ -6988,7 +6988,7 @@ class ImportFromYamlView(HomeAssistantView):
             log.append(f"Device id: {device_id}")
 
             log.append("Parsing LVGL to project pages…")
-            lvgl_body = (sections.get("lvgl") or "").strip()
+            lvgl_body = (sections.get("lvgl") or "").rstrip()
             if not lvgl_body:
                 lvgl_body = _yaml_import.extract_lvgl_section_from_full_yaml(raw_yaml)
             lvgl_warn: list[str] = []

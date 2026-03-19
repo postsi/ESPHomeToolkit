@@ -255,6 +255,28 @@ def test_reverse_scripts_thermostat_inc_dec():
     assert dec["entity_id"] == "climate.living_room"
 
 
+def test_parse_lvgl_preserves_indent_buffer_size_then_pages():
+    """Designer emits lvgl: with buffer_size before pages; body indent must not be stripped."""
+    full = """
+lvgl:
+  buffer_size: "100%"
+  pages:
+    - id: main_page
+      widgets:
+        - label:
+            id: lbl1
+            text: Hi
+globals:
+  - id: g
+"""
+    body = yi.extract_lvgl_section_from_full_yaml(full)
+    assert body.split("\n")[0].startswith(" ")
+    pages = yi.parse_lvgl_section_to_pages(body)
+    assert len(pages) == 1
+    assert len(pages[0].get("widgets") or []) == 1
+    assert pages[0]["widgets"][0].get("id") == "lbl1"
+
+
 def test_extract_lvgl_section_from_full_yaml():
     """extract_lvgl_section_from_full_yaml returns content under lvgl: until next top-level key."""
     full = """

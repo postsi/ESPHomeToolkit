@@ -204,11 +204,17 @@ def parse_lvgl_section_to_pages(lvgl_section_str: str, warn: list | None = None)
 
     warn: if provided, append human-readable messages on parse failure or suspicious empty results.
     """
-    if not (lvgl_section_str or "").strip():
+    raw = lvgl_section_str or ""
+    if not raw.strip():
         return [{"page_id": "main", "name": "Main", "widgets": []}]
-    s = lvgl_section_str.strip()
-    if not s.startswith("lvgl") and not s.startswith("pages"):
-        s = "lvgl:\n" + lvgl_section_str
+    # Never use strip() on the whole body — it removes the first line's indent and
+    # breaks YAML (e.g. buffer_size/pages under lvgl become top-level garbage → 0 widgets).
+    body_for_parse = raw.rstrip()
+    t = body_for_parse.lstrip("\r\n")
+    if not (t.startswith("lvgl") or t.startswith("pages")):
+        s = "lvgl:\n" + body_for_parse
+    else:
+        s = body_for_parse
     try:
         data = load_yaml_lenient(s)
     except Exception as e:
@@ -272,7 +278,8 @@ def extract_lvgl_section_from_full_yaml(full_yaml: str) -> str:
             if stripped and (len(line) - len(stripped)) <= indent_lvgl and re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*\s*:", stripped):
                 break
             out.append(line)
-    return "\n".join(out).strip()
+    # rstrip only — strip() would remove leading indent from the first body line (same bug as import).
+    return "\n".join(out).rstrip()
 
 
 def _parse_section_list(section_key: str, body: str) -> list[dict]:
