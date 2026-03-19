@@ -19,7 +19,7 @@ WIDGET_TYPES = [
     "spinner", "switch", "tabview", "textarea", "tileview",
 ]
 
-# HA entities chosen via HAGrimwood MCP: rich properties for coverage
+# HA entities chosen via Home Assistant MCP (HAMCPTools): rich properties for coverage
 # light.table_led_lights: supported_color_modes hs + color_temp, brightness
 LIGHT_ENTITY = "light.table_led_lights"
 # sensor.iphone_battery_level: 0-100 for bar/label

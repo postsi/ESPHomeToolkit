@@ -19,7 +19,7 @@ This process runs the validate test, deploys the addon using the **fast** deploy
 - **Base image** for fast deploy: run `./scripts/build-base.sh` once.
 - **Push to registry:** `GITHUB_TOKEN` set (or `docker login ghcr.io`) so `deploy-local.sh` can push.
 - **Test env:** `ESPTOOLKIT_ENTRY_ID`, `ESPTOOLKIT_DEVICE_ID`; addon URL/token via `ESPTOOLKIT_ADDON_URL` / `ESPTOOLKIT_ADDON_TOKEN` or `~/.cursor/mcp.json` (esptoolkit).
-- **HA MCP:** Home Assistant MCP server (e.g. **user-HAGrimwood**) configured so the agent can call `ha_update_addon`, `ha_restart_addon`, `ha_restart`.
+- **HA MCP:** Home Assistant MCP server (**HAMCPTools** — tools named `ha_*`) configured so the agent can call `ha_update_addon`, `ha_restart_addon`, `ha_restart`.
 - **Addon slug:** Usually `esptoolkit_addon`; if your install uses a different slug (e.g. with repo prefix), resolve it via `ha_list_installed_addons` and use that slug below.
 
 ---
@@ -53,7 +53,7 @@ Run from repo root.
 ### 3. Update the addon in Home Assistant
 
 - **Refresh the add-on store** so the Supervisor sees the new version: call the **esptoolkit addon MCP** (user-esptoolkit) tool **`supervisor_store_reload`** (no arguments). The addon calls the Supervisor API so new versions appear. If your addon version does not expose this tool yet, refresh manually: **Settings → Add-ons → Add-on store** → ⋮ → **Reload** (or reload the addon repository).
-- Using the **Home Assistant MCP server** (e.g. user-HAGrimwood), call **`ha_update_addon`** with `slug`: the EspToolkit slug from `ha_list_installed_addons` (e.g. `e7ee47f4_esptoolkit_addon`, not just `esptoolkit_addon`).
+- Using the **Home Assistant MCP** (HAMCPTools), call **`ha_update_addon`** with `slug`: the EspToolkit slug from `ha_list_installed_addons` (e.g. `e7ee47f4_esptoolkit_addon`, not just `esptoolkit_addon`).
 - This pulls the new image and updates the addon. Wait for the call to complete (may take 1–2 minutes).
 
 ### 4. Wait for addon to be running (required)
@@ -93,7 +93,7 @@ Run from repo root.
 
 ## Verify deployed code (optional)
 
-You can confirm what code is actually running on the HA server using the **Home Assistant MCP** (e.g. user-HAGrimwood):
+You can confirm what code is actually running on the HA server using the **Home Assistant MCP** (HAMCPTools):
 
 - **`ha_list_files`** with path `custom_components/esptoolkit` — list integration files on the server.
 - **`ha_read_file`** with path `custom_components/esptoolkit/manifest.json` — check the **version** (e.g. `1.0.48`).

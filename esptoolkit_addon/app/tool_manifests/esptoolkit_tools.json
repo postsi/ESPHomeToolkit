@@ -1,0 +1,88 @@
+{
+  "manifest_version": "1.0",
+  "namespace": "esptoolkit",
+  "tools": [
+    {
+      "name": "esphome_version",
+      "description": "Return the installed ESPHome version and add-on version.",
+      "executor": "builtin",
+      "handler": "esphome_version",
+      "risk": "read"
+    },
+    {
+      "name": "esphome_configs_list",
+      "description": "List YAML config filenames in the ESPHome config directory (/config/esphome).",
+      "executor": "builtin",
+      "handler": "esphome_configs_list",
+      "risk": "read"
+    },
+    {
+      "name": "esphome_status",
+      "description": "Return current job status: idle or running command and recent log tail.",
+      "executor": "builtin",
+      "handler": "esphome_status",
+      "risk": "read"
+    },
+    {
+      "name": "esphome_config_check",
+      "description": "Validate an ESPHome config. Use config_source 'file' with filename (e.g. device.yaml) or 'yaml' with yaml content.",
+      "executor": "builtin",
+      "handler": "esphome_command",
+      "args": {
+        "command": "config"
+      },
+      "risk": "write"
+    },
+    {
+      "name": "esphome_compile",
+      "description": "Compile an ESPHome config. Use config_source 'file' with filename or 'yaml' with yaml content.",
+      "executor": "builtin",
+      "handler": "esphome_command",
+      "args": {
+        "command": "compile"
+      },
+      "risk": "write"
+    },
+    {
+      "name": "esphome_run",
+      "description": "Run ESPHome (validate, compile, upload). Use config_source 'file' with filename or 'yaml' with yaml content.",
+      "executor": "builtin",
+      "handler": "esphome_command",
+      "args": {
+        "command": "run"
+      },
+      "risk": "write"
+    },
+    {
+      "name": "esphome_upload",
+      "description": "Upload firmware. Use config_source 'file' with filename or 'yaml' with yaml content.",
+      "executor": "builtin",
+      "handler": "esphome_command",
+      "args": {
+        "command": "upload"
+      },
+      "risk": "write"
+    },
+    {
+      "name": "esphome_update",
+      "description": "Update ESPHome to the latest version (pip install -U esphome). Returns output.",
+      "executor": "builtin",
+      "handler": "esphome_update",
+      "risk": "destructive"
+    },
+    {
+      "name": "supervisor_store_reload",
+      "description": "Reload the Home Assistant add-on store so new addon versions appear (e.g. after pushing a new image). Calls Supervisor API POST /store/reload. Requires addon to run under Supervisor with SUPERVISOR_TOKEN. Returns success message or error.",
+      "executor": "builtin",
+      "handler": "supervisor_store_reload",
+      "risk": "write"
+    },
+    {
+      "name": "local_http",
+      "description": "Execute an HTTP request to the local Home Assistant instance (or other allowlisted base). Only reachable via MCP; not exposed as REST. By default uses Supervisor proxy (http://supervisor/core) with SUPERVISOR_TOKEN. Optional override via ha_base_url and ha_token in add-on options. method: GET, POST, PUT, PATCH, or DELETE. path: path and optional query, e.g. /api/states or /api/config/config_entries/entry. body: optional request body (e.g. JSON string) for POST/PUT/PATCH. Returns response status, headers, and body as text.",
+      "executor": "builtin",
+      "handler": "local_http",
+      "risk": "write"
+    }
+  ]
+}

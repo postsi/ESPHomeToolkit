@@ -20,6 +20,6 @@ When the user asks to **run the full deploy cycle**, **run the deployment cycle*
    - **Step 5:** Call the Home Assistant MCP tool **`ha_restart`** (no arguments). Wait until HA is back by **polling** (e.g. esptoolkit **`local_http`** or HA MCP responds) before step 6. Do not use long fixed sleeps.
    - **Step 6:** With `YAML_PATCHES` still empty, re-run the same validate test. Report pass or fail; if it fails, report the error and suggest fixing the compiler and re-running the cycle.
 
-3. **Requirements:** The user must have (a) the fast-deploy base image built (`./scripts/build-base.sh`), (b) `GITHUB_TOKEN` or docker login for push, (c) test env vars set, (d) the HA MCP server (e.g. user-HAGrimwood) configured. If any step fails due to missing prereqs, say what is missing and stop.
+3. **Requirements:** The user must have (a) the fast-deploy base image built (`./scripts/build-base.sh`), (b) `GITHUB_TOKEN` or docker login for push, (c) test env vars set, (d) a **Home Assistant MCP** configured with HAMCPTools (`ha_*` tools). If any step fails due to missing prereqs, say what is missing and stop.
 
 4. **No separate clean:** This cycle does not run the clean-environment script unless the user asks for it. For a clean-install test, the user can ask for "local deploy" (which runs clean first) or "run clean environment then full deploy cycle".
