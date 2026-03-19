@@ -1429,6 +1429,111 @@ def _apply_ota_password(yaml_text: str, ota_password: str | None) -> str:
     return "\n".join(lines)
 
 
+def _apply_wifi_settings(yaml_text: str, device_settings: dict | None) -> str:
+    """Set/insert wifi network ssid/password from device settings.
+
+    device_settings keys:
+    - wifi_ssid (optional): blank -> !secret wifi_ssid
+    - wifi_password (optional): blank -> !secret wifi_password
+    """
+    settings = device_settings if isinstance(device_settings, dict) else {}
+    ssid_raw = str(settings.get("wifi_ssid") or "").strip()
+    pwd_raw = str(settings.get("wifi_password") or "").strip()
+    # If nothing is provided, keep existing YAML unchanged.
+    if not ssid_raw and not pwd_raw:
+        return yaml_text
+
+    ssid_val = json.dumps(ssid_raw) if ssid_raw else "!secret wifi_ssid"
+    pwd_val = json.dumps(pwd_raw) if pwd_raw else "!secret wifi_password"
+
+    lines = yaml_text.splitlines()
+    wifi_start = next((i for i, ln in enumerate(lines) if re.match(r"^\s*wifi:\s*$", ln)), -1)
+    if wifi_start < 0:
+        out = yaml_text.rstrip() + "\n\n" + _default_wifi_yaml().rstrip() + "\n"
+        lines = out.splitlines()
+        wifi_start = next((i for i, ln in enumerate(lines) if re.match(r"^\s*wifi:\s*$", ln)), -1)
+        if wifi_start < 0:
+            return out
+
+    wifi_end = len(lines)
+    for i in range(wifi_start + 1, len(lines)):
+        ln = lines[i]
+        if ln and not ln.startswith(" ") and not ln.startswith("\t"):
+            wifi_end = i
+            break
+
+    block = lines[wifi_start:wifi_end]
+    networks_idx = next((i for i, ln in enumerate(block) if re.match(r"^\s*networks\s*:\s*$", ln)), -1)
+    if networks_idx < 0:
+        # Add a minimal networks list under wifi:
+        block.insert(1, "  networks:")
+        block.insert(2, "    - ssid: " + ssid_val)
+        block.insert(3, "      password: " + pwd_val)
+        lines[wifi_start:wifi_end] = block
+        return "\n".join(lines)
+
+    net_indent = len(block[networks_idx]) - len(block[networks_idx].lstrip())
+    item_idx = -1
+    for i in range(networks_idx + 1, len(block)):
+        ln = block[i]
+        if not ln.strip():
+            continue
+        indent = len(ln) - len(ln.lstrip())
+        if indent <= net_indent:
+            break
+        if re.match(r"^\s*-\s+", ln):
+            item_idx = i
+            break
+    if item_idx < 0:
+        item_idx = networks_idx + 1
+        block.insert(item_idx, "    - ssid: " + ssid_val)
+        block.insert(item_idx + 1, "      password: " + pwd_val)
+        lines[wifi_start:wifi_end] = block
+        return "\n".join(lines)
+
+    item_indent = len(block[item_idx]) - len(block[item_idx].lstrip())
+    item_end = len(block)
+    for i in range(item_idx + 1, len(block)):
+        ln = block[i]
+        if not ln.strip():
+            continue
+        indent = len(ln) - len(ln.lstrip())
+        if indent <= net_indent:
+            item_end = i
+            break
+        if indent == item_indent and re.match(r"^\s*-\s+", ln):
+            item_end = i
+            break
+
+    ssid_set = False
+    pwd_set = False
+    for i in range(item_idx, item_end):
+        ln = block[i]
+        if re.match(r"^\s*-\s*ssid\s*:", ln):
+            prefix = re.match(r"^(\s*-\s*ssid\s*:\s*)", ln)
+            block[i] = (prefix.group(1) if prefix else "    - ssid: ") + ssid_val
+            ssid_set = True
+        elif re.match(r"^\s*ssid\s*:", ln):
+            prefix = re.match(r"^(\s*ssid\s*:\s*)", ln)
+            block[i] = (prefix.group(1) if prefix else "      ssid: ") + ssid_val
+            ssid_set = True
+        elif re.match(r"^\s*password\s*:", ln):
+            prefix = re.match(r"^(\s*password\s*:\s*)", ln)
+            block[i] = (prefix.group(1) if prefix else "      password: ") + pwd_val
+            pwd_set = True
+
+    insert_idx = item_idx + 1
+    if not ssid_set:
+        block.insert(insert_idx, "      ssid: " + ssid_val)
+        insert_idx += 1
+        item_end += 1
+    if not pwd_set:
+        block.insert(insert_idx, "      password: " + pwd_val)
+
+    lines[wifi_start:wifi_end] = block
+    return "\n".join(lines)
+
+
 def _default_logger_yaml() -> str:
     """Default logger section when recipe does not include one. ESPHome requires logger to be configured."""
     return """logger:
@@ -2211,6 +2316,7 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
         out_parts.append(f"{key}:\n{content.rstrip()}\n\n")
     out = "".join(out_parts).rstrip() + "\n"
     out = out.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
+    out = _apply_wifi_settings(out, getattr(device, "device_settings", None))
     out = _apply_ota_password(out, getattr(device, "ota_password", None))
     out = _sanitize_esphome_yaml_lvgl(out)
     return out
@@ -4899,6 +5005,7 @@ class DevicesView(HomeAssistantView):
                     "hardware_recipe_id": d.hardware_recipe_id,
                     "api_key": d.api_key,
                     "ota_password": d.ota_password,
+                    "device_settings": d.device_settings or {},
                 }
                 for d in storage.state.devices.values()
             ]
@@ -6451,7 +6558,24 @@ def _normalize_recipe_yaml(raw_text: str, label: str | None = None) -> tuple[str
     - Dumps canonical YAML (sorted keys, consistent indentation)
     - Re-inserts the marker comment under lvgl:
     """
-    model = yaml.safe_load(raw_text) or {}
+    def _load_yaml_lenient_unknown_tags(text: str):
+        """Load YAML while tolerating unknown tags such as !secret and !lambda."""
+        class _LenientLoader(yaml.SafeLoader):
+            pass
+
+        def _unknown_tag(loader, tag_suffix, node):
+            if isinstance(node, yaml.ScalarNode):
+                return loader.construct_scalar(node)
+            if isinstance(node, yaml.SequenceNode):
+                return loader.construct_sequence(node)
+            if isinstance(node, yaml.MappingNode):
+                return loader.construct_mapping(node)
+            return None
+
+        _LenientLoader.add_multi_constructor("!", _unknown_tag)
+        return yaml.load(text, Loader=_LenientLoader)
+
+    model = _load_yaml_lenient_unknown_tags(raw_text) or {}
     if not isinstance(model, dict):
         raise ValueError("Top-level YAML must be a mapping/object")
 

@@ -337,9 +337,13 @@ export default function App() {
   const [newDeviceWizardSlug, setNewDeviceWizardSlug] = useState("");
   const [newDeviceWizardApiKey, setNewDeviceWizardApiKey] = useState("");
   const [newDeviceWizardOtaPassword, setNewDeviceWizardOtaPassword] = useState("");
+  const [newDeviceWizardWifiSsid, setNewDeviceWizardWifiSsid] = useState("");
+  const [newDeviceWizardWifiPassword, setNewDeviceWizardWifiPassword] = useState("");
 
   const [editDeviceRecipeId, setEditDeviceRecipeId] = useState<string>("");
   const [newDeviceOtaPassword, setNewDeviceOtaPassword] = useState("");
+  const [newDeviceWifiSsid, setNewDeviceWifiSsid] = useState("");
+  const [newDeviceWifiPassword, setNewDeviceWifiPassword] = useState("");
 
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const projectHist = useHistory<ProjectModel | null>(null);
@@ -1469,12 +1473,17 @@ if (baseId.startsWith("glance_card")) {
         slug: newDeviceSlug.trim() || undefined,
         api_key: newDeviceApiKey.trim() || undefined,
         ota_password: newDeviceOtaPassword.trim() || undefined,
+        device_settings: {
+          ...((selectedDeviceObj as any)?.device_settings || {}),
+          wifi_ssid: newDeviceWifiSsid.trim() || "",
+          wifi_password: newDeviceWifiPassword.trim() || "",
+        },
         hardware_recipe_id: editDeviceRecipeId.trim() || undefined,
       });
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setToast({ type: "ok", msg: "Device updated" });
       setEditDeviceModalOpen(false);
-      setNewDeviceId(""); setNewDeviceName(""); setNewDeviceSlug(""); setNewDeviceApiKey(""); setNewDeviceOtaPassword(""); setEditDeviceRecipeId("");
+      setNewDeviceId(""); setNewDeviceName(""); setNewDeviceSlug(""); setNewDeviceApiKey(""); setNewDeviceOtaPassword(""); setEditDeviceRecipeId(""); setNewDeviceWifiSsid(""); setNewDeviceWifiPassword("");
       await refresh();
     } finally { setBusy(false); }
   }
@@ -1502,6 +1511,10 @@ if (baseId.startsWith("glance_card")) {
         hardware_recipe_id: newDeviceWizardRecipe.id,
         api_key: newDeviceWizardApiKey.trim() || undefined,
         ota_password: newDeviceWizardOtaPassword.trim() || undefined,
+        device_settings: {
+          wifi_ssid: newDeviceWizardWifiSsid.trim() || "",
+          wifi_password: newDeviceWizardWifiPassword.trim() || "",
+        },
       });
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setToast({ type: "ok", msg: "Device created" });
@@ -1513,6 +1526,8 @@ if (baseId.startsWith("glance_card")) {
       setNewDeviceWizardSlug("");
       setNewDeviceWizardApiKey("");
       setNewDeviceWizardOtaPassword("");
+      setNewDeviceWizardWifiSsid("");
+      setNewDeviceWizardWifiPassword("");
       await refresh();
       await loadDevice(did);
     } finally { setBusy(false); }
@@ -1525,6 +1540,8 @@ if (baseId.startsWith("glance_card")) {
     setNewDeviceSlug(selectedDeviceObj.slug || selectedDeviceObj.device_id || "");
     setNewDeviceApiKey(selectedDeviceObj.api_key ?? "");
     setNewDeviceOtaPassword(selectedDeviceObj.ota_password ?? "");
+    setNewDeviceWifiSsid(String((selectedDeviceObj as any)?.device_settings?.wifi_ssid ?? ""));
+    setNewDeviceWifiPassword(String((selectedDeviceObj as any)?.device_settings?.wifi_password ?? ""));
     setEditDeviceRecipeId(selectedDeviceObj.hardware_recipe_id ?? "");
     setEditDeviceModalOpen(true);
   }
@@ -1538,6 +1555,8 @@ if (baseId.startsWith("glance_card")) {
     setNewDeviceWizardSlug("");
     setNewDeviceWizardApiKey("");
     setNewDeviceWizardOtaPassword("");
+    setNewDeviceWizardWifiSsid("");
+    setNewDeviceWizardWifiPassword("");
     refreshRecipes(); // Refetch recipes when wizard opens (handles late load or retry)
   }
 
@@ -3824,6 +3843,25 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               Required for Home Assistant API. Visible for debugging. Saves with device; paste into ESPHome secrets or ensure it matches configuration.yaml.
             </div>
+            <label className="label">WiFi SSID</label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={newDeviceWifiSsid}
+              onChange={(e) => setNewDeviceWifiSsid(e.target.value)}
+              placeholder="Optional; blank = !secret wifi_ssid"
+            />
+            <label className="label">WiFi password</label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={newDeviceWifiPassword}
+              onChange={(e) => setNewDeviceWifiPassword(e.target.value)}
+              placeholder="Optional; blank = !secret wifi_password"
+            />
+            <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              Stored per-device. If password is blank, compiler uses <code>!secret wifi_password</code>.
+            </div>
             <label className="label">OTA password</label>
             <input
               type="text"
@@ -3954,6 +3992,22 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   <button type="button" className="secondary" onClick={regenerateWizardApiKey} title="Generate new API key">Regenerate</button>
                   <button type="button" className="secondary" disabled={!newDeviceWizardApiKey} onClick={() => newDeviceWizardApiKey && navigator.clipboard.writeText(newDeviceWizardApiKey)} title="Copy to clipboard">Copy</button>
                 </div>
+                <label className="label">WiFi SSID</label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={newDeviceWizardWifiSsid}
+                  onChange={(e) => setNewDeviceWizardWifiSsid(e.target.value)}
+                  placeholder="Optional; blank = !secret wifi_ssid"
+                />
+                <label className="label">WiFi password</label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={newDeviceWizardWifiPassword}
+                  onChange={(e) => setNewDeviceWizardWifiPassword(e.target.value)}
+                  placeholder="Optional; blank = !secret wifi_password"
+                />
                 <label className="label">OTA password</label>
                 <input
                   type="text"
