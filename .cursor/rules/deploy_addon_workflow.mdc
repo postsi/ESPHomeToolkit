@@ -15,7 +15,7 @@ When the user asks to **deploy the addon**, **deploy the add-on**, or similar (a
 
 2. **Reload add-on store** — Call **user-esptoolkit** MCP tool **`supervisor_store_reload`** (no arguments).
 
-3. **Update addon in HA** — On your **Home Assistant MCP** (HAMCPTools / `ha_*` tools), call **`ha_list_installed_addons`**, find the EspToolkit addon slug (e.g. `e7ee47f4_esptoolkit_addon`), then call **`ha_update_addon`** with that `slug`.
+3. **Update addon in HA** — On your **Home Assistant MCP** (HAMCPTools / `ha_*` tools), call **`ha_list_installed_addons`**, find the EspToolkit addon slug (e.g. `e7ee47f4_esptoolkit_addon`), then call **`ha_update_addon`** with that `slug`. (Supervisor blocks an add-on from updating **itself** via raw `POST /addons/.../update`; EspToolkit routes that case through Core **`hassio.addon_update`** — if you still see 403 on an older add-on version, update EspToolkit once from the UI, then MCP self-update works.)
 
 4. **Restart Home Assistant** — On the same MCP, call **`ha_restart`** (no arguments). A 502 from HA is expected while it restarts; HA is typically back in 30–60 seconds.
 

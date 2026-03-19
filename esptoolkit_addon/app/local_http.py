@@ -81,7 +81,9 @@ def _sanitize_esphome_yaml_lvgl(yaml_text: str) -> str:
     return yaml_text
 
 
-async def execute_local_http(method: str, path: str, body: str | None = None) -> dict:
+async def execute_local_http(
+    method: str, path: str, body: str | None = None, *, timeout: float = 30.0
+) -> dict:
     """
     Execute a single HTTP request to an allowlisted base (e.g. HA).
     method: GET, POST, PUT, PATCH, DELETE.
@@ -144,7 +146,7 @@ async def execute_local_http(method: str, path: str, body: str | None = None) ->
         headers["Content-Type"] = "application/json"
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.request(
                 method,
                 url,

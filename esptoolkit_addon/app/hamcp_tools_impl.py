@@ -837,6 +837,25 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
         return await execute_supervisor_rest("POST", f"/addons/{slug}/restart")
     if tool_name == "ha_update_addon":
         slug = (a.get("slug") or "").strip()
+        if not slug:
+            return _j({"success": False, "error": "slug required"})
+        # Supervisor blocks POST /addons/{slug}/update when the caller IS that add-on
+        # ("Add-on … can't update itself!"). Core's hassio.addon_update runs outside that
+        # request context and succeeds for self-update.
+        self_slug = ""
+        try:
+            self_info = await execute_supervisor_api_data("GET", "/addons/self/info")
+            if isinstance(self_info, dict):
+                self_slug = str(self_info.get("slug") or "").strip()
+        except Exception:
+            pass
+        if self_slug and slug == self_slug:
+            return await execute_ha_service(
+                "hassio",
+                "addon_update",
+                {"addon": slug},
+                timeout=600.0,
+            )
         return await execute_supervisor_rest("POST", f"/addons/{slug}/update", None, timeout=600.0)
     if tool_name == "ha_get_addon_options":
         slug = (a.get("slug") or "").strip()

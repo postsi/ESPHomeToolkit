@@ -27,22 +27,32 @@ def _format_local_http_response(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-async def execute_ha_rest(method: str, path: str, body_obj: dict[str, Any] | list[Any] | None = None) -> str:
+async def execute_ha_rest(
+    method: str,
+    path: str,
+    body_obj: dict[str, Any] | list[Any] | None = None,
+    *,
+    timeout: float = 30.0,
+) -> str:
     body = None
     if body_obj is not None:
         body = json.dumps(body_obj, separators=(",", ":"))
-    result = await execute_local_http(method=method, path=path, body=body)
+    result = await execute_local_http(method=method, path=path, body=body, timeout=timeout)
     return _format_local_http_response(result)
 
 
 async def execute_ha_rest_json(
-    method: str, path: str, body_obj: dict[str, Any] | list[Any] | None = None
+    method: str,
+    path: str,
+    body_obj: dict[str, Any] | list[Any] | None = None,
+    *,
+    timeout: float = 30.0,
 ) -> Any:
     """Call HA REST and parse JSON body; raises on error status or invalid JSON."""
     body = None
     if body_obj is not None:
         body = json.dumps(body_obj, separators=(",", ":"))
-    result = await execute_local_http(method=method, path=path, body=body)
+    result = await execute_local_http(method=method, path=path, body=body, timeout=timeout)
     if not result.get("success"):
         raise RuntimeError(result.get("error", "request failed"))
     status = result.get("status_code")
@@ -62,6 +72,8 @@ async def execute_ha_service(
     service: str,
     service_data: dict[str, Any] | None = None,
     target: dict[str, Any] | None = None,
+    *,
+    timeout: float = 30.0,
 ) -> str:
     payload: dict[str, Any] = {}
     if service_data:
@@ -69,7 +81,7 @@ async def execute_ha_service(
     if target:
         payload["target"] = target
     path = f"/api/services/{domain}/{service}"
-    return await execute_ha_rest("POST", path, payload)
+    return await execute_ha_rest("POST", path, payload, timeout=timeout)
 
 
 async def execute_supervisor_rest(
