@@ -4,6 +4,7 @@ export type DeviceSummary = {
   name: string;
   hardware_recipe_id?: string | null;
   api_key?: string | null;
+  ota_password?: string | null;
 };
 
 export type WidgetSchemaIndexItem = {
@@ -84,7 +85,7 @@ export async function listDevices(entryId: string): Promise<ApiOk<{ devices: Dev
 
 export async function upsertDevice(
   entryId: string,
-  payload: { device_id: string; name?: string; slug?: string; hardware_recipe_id?: string | null; api_key?: string | null }
+  payload: { device_id: string; name?: string; slug?: string; hardware_recipe_id?: string | null; api_key?: string | null; ota_password?: string | null }
 ): Promise<ApiOk<{}> | ApiErr> {
   const res = await fetch(url("devices", entryId), {
     method: "POST",
@@ -274,4 +275,36 @@ export async function getVersion(entry_id?: string): Promise<{ integration: stri
     integration: (data as any)?.integration ?? "",
     addon: (data as any)?.addon ?? null,
   };
+}
+
+/** Import device from full ESPHome YAML. Returns device_id, recipe_id, log. */
+export type ImportFromYamlResult = {
+  ok: boolean;
+  device_id?: string;
+  recipe_id?: string;
+  created_recipe?: boolean;
+  project_summary?: { pages: number; widget_count: number; bindings_count: number; links_count: number };
+  log?: string[];
+  error?: string;
+  detail?: string;
+};
+
+export async function importFromYaml(
+  yamlText: string,
+  deviceNameOverride?: string,
+  entry_id?: string
+): Promise<ImportFromYamlResult> {
+  const u = new URL(`${API_BASE}/import/from-yaml`, window.location.origin);
+  if (entry_id) u.searchParams.set("entry_id", entry_id);
+  const res = await fetch(u.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml: yamlText, device_name_override: deviceNameOverride || undefined }),
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return { ok: false, error: (data as any)?.error ?? "import_failed", detail: (data as any)?.detail, log: (data as any)?.log ?? [] };
+  }
+  return data as ImportFromYamlResult;
 }

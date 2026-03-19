@@ -87,6 +87,7 @@ class DeviceProject:
     name: str
     hardware_recipe_id: str | None = None
     api_key: str | None = None  # ESPHome API encryption key (32-byte base64)
+    ota_password: str | None = None
     device_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
     project: dict[str, Any] = dataclasses.field(default_factory=_default_project)
 
@@ -116,6 +117,7 @@ class DashboardStorage:
                 name=d.get("name", d["device_id"]),
                 hardware_recipe_id=d.get("hardware_recipe_id"),
                 api_key=d.get("api_key"),
+                ota_password=d.get("ota_password"),
                 device_settings=d.get("device_settings", {}),
                 project=_migrate_project(d.get("project")),
             )
@@ -131,6 +133,7 @@ class DashboardStorage:
                     "name": d.name,
                     "hardware_recipe_id": d.hardware_recipe_id,
                     "api_key": d.api_key,
+                    "ota_password": d.ota_password,
                     "device_settings": d.device_settings,
                     "project": d.project,
                 }

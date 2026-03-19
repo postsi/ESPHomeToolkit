@@ -14,6 +14,8 @@ import os
 import re
 import secrets
 
+from . import yaml_import as _yaml_import
+
 RECIPES_BUILTIN_DIR = Path(__file__).resolve().parent.parent / "recipes" / "builtin"
 
 # Placeholder in hardware recipes for the device name; compiler replaces with device slug (YAML-quoted).
@@ -689,13 +691,17 @@ def _compile_ha_bindings(project: dict) -> str:
     if not isinstance(links, list):
         links = []
 
-    # Build a map: (kind, entity_id, attribute) -> list[link]
+    # Build a map: (kind, entity_id, attribute) -> list[link] (HA entity links only).
+    # Links with source.type in ("local_switch", "local_climate", "interval") are handled elsewhere.
     link_map: dict[tuple[str, str, str], list[dict]] = {}
     for ln in links:
         if not isinstance(ln, dict):
             continue
         src = ln.get("source") or {}
         tgt = ln.get("target") or {}
+        src_type = str(src.get("type") or "").strip()
+        if src_type in ("local_switch", "local_climate", "interval"):
+            continue
         entity_id = str(src.get("entity_id") or "").strip()
         kind = str(src.get("kind") or "state").strip()
         attr = str(src.get("attribute") or "").strip()
@@ -1102,6 +1108,196 @@ def _compile_ha_bindings(project: dict) -> str:
     return "".join(out).rstrip() + "\n" if any(out) else ""
 
 
+def _get_local_switch_links(project: dict) -> list[tuple[str, str, dict]]:
+    """Return list of (switch_id, state, target) for links with source.type == 'local_switch'."""
+    links = project.get("links") or []
+    out: list[tuple[str, str, dict]] = []
+    for ln in links:
+        if not isinstance(ln, dict):
+            continue
+        src = ln.get("source") or {}
+        if str(src.get("type") or "").strip() != "local_switch":
+            continue
+        switch_id = str(src.get("switch_id") or "").strip()
+        state = str(src.get("state") or "on").strip().lower()
+        if state not in ("on", "off"):
+            state = "on"
+        tgt = ln.get("target") or {}
+        if not switch_id or not tgt:
+            continue
+        out.append((switch_id, state, tgt))
+    return out
+
+
+def _inject_local_switch_links_into_section(switch_body: str, project: dict) -> str:
+    """Append link-driven on_turn_on/on_turn_off actions into existing switch section body."""
+    if not (switch_body or "").strip():
+        return switch_body
+    links_by_switch: dict[str, list[tuple[str, dict]]] = {}  # switch_id -> [(state, target), ...]
+    for switch_id, state, tgt in _get_local_switch_links(project):
+        links_by_switch.setdefault(switch_id, []).append((state, tgt))
+    if not links_by_switch:
+        return switch_body
+    # Split into list items (each "  - platform: ..." block)
+    items = re.split(r"\n(?=  - )", switch_body)
+    result: list[str] = []
+    for item in items:
+        if not item.strip():
+            result.append(item)
+            continue
+        # Find id: switch_id in this item
+        id_m = re.search(r"\bid:\s*([a-zA-Z0-9_]+)", item)
+        if not id_m:
+            result.append(item)
+            continue
+        sid = id_m.group(1)
+        link_list = links_by_switch.get(sid)
+        if not link_list:
+            result.append(item)
+            continue
+        # For each (state, target) append yaml_override to on_turn_on or on_turn_off
+        for state, tgt in link_list:
+            override = (tgt.get("yaml_override") or "").strip()
+            if not override:
+                continue
+            # Indent for list under on_turn_on (6 spaces for "- ", 8 for continuation)
+            def indent_action(ln: str) -> str:
+                if ln.strip().startswith("-"):
+                    return "      " + ln
+                return "        " + ln
+            action_lines = "\n".join(indent_action(ln) for ln in override.splitlines())
+            key = "on_turn_on" if state == "on" else "on_turn_off"
+            key_marker = f"\n    {key}:"
+            if key_marker in item:
+                idx = item.find(key_marker)
+                start = idx + len(key_marker)
+                rest = item[start:]
+                # Next key at same indent (4 spaces + letter)
+                match = re.search(r"\n    [a-zA-Z_]", rest)
+                insert_pos = start + match.start() if match else len(item)
+                item = item[:insert_pos] + "\n" + action_lines + "\n" + item[insert_pos:]
+            else:
+                item = item.rstrip() + f"\n    {key}:\n{action_lines}\n"
+        result.append(item)
+    return "\n".join(result).rstrip() + "\n" if result else switch_body
+
+
+def _get_local_climate_links(project: dict) -> list[tuple[str, str, dict]]:
+    """Return list of (climate_id, state, target) for links with source.type == 'local_climate'."""
+    links = project.get("links") or []
+    out: list[tuple[str, str, dict]] = []
+    for ln in links:
+        if not isinstance(ln, dict):
+            continue
+        src = ln.get("source") or {}
+        if str(src.get("type") or "").strip() != "local_climate":
+            continue
+        climate_id = str(src.get("climate_id") or "").strip()
+        state = str(src.get("state") or "HEAT").strip().upper()
+        if state not in ("HEAT", "IDLE", "OFF"):
+            continue
+        tgt = ln.get("target") or {}
+        if not climate_id or not tgt:
+            continue
+        out.append((climate_id, state, tgt))
+    return out
+
+
+def _inject_local_climate_links_into_section(climate_body: str, project: dict) -> str:
+    """Append link-driven heat_action/idle_action/off_mode into existing climate section body."""
+    if not (climate_body or "").strip():
+        return climate_body
+    links_by_climate: dict[str, list[tuple[str, dict]]] = {}  # climate_id -> [(state, target), ...]
+    for climate_id, state, tgt in _get_local_climate_links(project):
+        links_by_climate.setdefault(climate_id, []).append((state, tgt))
+    if not links_by_climate:
+        return climate_body
+    items = re.split(r"\n(?=  - )", climate_body)
+    result: list[str] = []
+    for item in items:
+        if not item.strip():
+            result.append(item)
+            continue
+        id_m = re.search(r"\bid:\s*([a-zA-Z0-9_]+)", item)
+        if not id_m:
+            result.append(item)
+            continue
+        cid = id_m.group(1)
+        link_list = links_by_climate.get(cid)
+        if not link_list:
+            result.append(item)
+            continue
+        for state, tgt in link_list:
+            override = (tgt.get("yaml_override") or "").strip()
+            if not override:
+                continue
+            key = {"HEAT": "heat_action", "IDLE": "idle_action", "OFF": "off_mode"}.get(state, "heat_action")
+            def indent_action(ln: str) -> str:
+                if ln.strip().startswith("-"):
+                    return "      " + ln
+                return "        " + ln
+            action_lines = "\n".join(indent_action(ln) for ln in override.splitlines())
+            key_marker = f"\n    {key}:"
+            if key_marker in item:
+                idx = item.find(key_marker)
+                start = idx + len(key_marker)
+                rest = item[start:]
+                match = re.search(r"\n    [a-zA-Z_]", rest)
+                insert_pos = start + match.start() if match else len(item)
+                item = item[:insert_pos] + "\n" + action_lines + "\n" + item[insert_pos:]
+            else:
+                item = item.rstrip() + f"\n    {key}:\n{action_lines}\n"
+        result.append(item)
+    return "\n".join(result).rstrip() + "\n" if result else climate_body
+
+
+def _get_interval_links(project: dict) -> list[dict]:
+    """Return list of links with source.type == 'interval'. Each has source.interval_seconds, source.updates[]."""
+    links = project.get("links") or []
+    out: list[dict] = []
+    for ln in links:
+        if not isinstance(ln, dict):
+            continue
+        src = ln.get("source") or {}
+        if str(src.get("type") or "").strip() != "interval":
+            continue
+        out.append(ln)
+    return out
+
+
+def _compile_interval_links_yaml(project: dict) -> str:
+    """Emit interval section body from project.links with source.type == 'interval'."""
+    interval_links = _get_interval_links(project)
+    if not interval_links:
+        return ""
+    out: list[str] = []
+    for ln in interval_links:
+        src = ln.get("source") or {}
+        sec = int(src.get("interval_seconds") or 1)
+        updates = src.get("updates") or []
+        if not updates:
+            continue
+        out.append(f"  - interval: {sec}s")
+        out.append("    then:")
+        for u in updates:
+            if not isinstance(u, dict):
+                continue
+            yaml_override = (u.get("yaml_override") or "").strip()
+            if yaml_override:
+                for line in yaml_override.splitlines():
+                    out.append("      " + line)
+            else:
+                wid = str(u.get("widget_id") or "").strip()
+                action = str(u.get("action") or "label_text").strip()
+                local_id = str(u.get("local_id") or "").strip()
+                if wid and local_id:
+                    out.append(f"      - lvgl.label.update:")
+                    out.append(f"          id: {wid}")
+                    out.append(f"          text: !lambda return id({local_id}).state;")
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
 def _compile_scripts(project: dict) -> str:
     """Emit ESPHome script: block for project.scripts (e.g. thermostat +/- setpoint inc/dec).
 
@@ -1185,6 +1381,52 @@ def _default_ota_yaml() -> str:
     return """ota:
   - platform: esphome
 """
+
+
+def _apply_ota_password(yaml_text: str, ota_password: str | None) -> str:
+    """Set/insert OTA password into top-level ota block when provided."""
+    password = (ota_password or "").strip()
+    if not password:
+        return yaml_text
+
+    line = f"password: {json.dumps(password)}"
+    lines = yaml_text.splitlines()
+    ota_start = next((i for i, ln in enumerate(lines) if re.match(r"^\s*ota:\s*$", ln)), -1)
+
+    # If no ota block exists, append a minimal one.
+    if ota_start < 0:
+        out = yaml_text.rstrip() + "\n\nota:\n  - platform: esphome\n    " + line + "\n"
+        return out
+
+    # Locate the end of the top-level ota block.
+    ota_end = len(lines)
+    for i in range(ota_start + 1, len(lines)):
+        ln = lines[i]
+        if ln and not ln.startswith(" ") and not ln.startswith("\t"):
+            ota_end = i
+            break
+
+    block = lines[ota_start:ota_end]
+    for i, ln in enumerate(block):
+        if re.match(r"^\s*password\s*:", ln):
+            indent = re.match(r"^(\s*)", ln).group(1) if re.match(r"^(\s*)", ln) else "  "
+            block[i] = f"{indent}{line}"
+            lines[ota_start:ota_end] = block
+            return "\n".join(lines)
+
+    # No password found; inject under first list item when possible.
+    inserted = False
+    for i, ln in enumerate(block):
+        if re.match(r"^\s*-\s+", ln):
+            indent = re.match(r"^(\s*)", ln).group(1) if re.match(r"^(\s*)", ln) else "  "
+            block.insert(i + 1, f"{indent}  {line}")
+            inserted = True
+            break
+    if not inserted:
+        block.insert(1, f"  {line}")
+
+    lines[ota_start:ota_end] = block
+    return "\n".join(lines)
 
 
 def _default_logger_yaml() -> str:
@@ -1911,6 +2153,10 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
                     merged_body = user_body or auto_body
             else:
                 merged_body = user_body if user_body else auto_body
+        if key == "interval":
+            interval_from_links = _compile_interval_links_yaml(project)
+            if interval_from_links:
+                merged_body = ((merged_body or "").rstrip() + "\n\n" + interval_from_links).strip() if merged_body else interval_from_links
         if merged_body or key in ("wifi", "ota", "logger"):
             merged_body = (merged_body or "").lstrip("\n\r").rstrip()
             pieces[key] = _section_full_block(key, merged_body)
@@ -1928,6 +2174,10 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
             continue
         block = pieces[key]
         content = _section_body_from_value(block, key)
+        if key == "switch" and content:
+            content = _inject_local_switch_links_into_section(content, project)
+        if key == "climate" and content:
+            content = _inject_local_climate_links_into_section(content, project)
         # Screen saver: inject on_touch into first touchscreen entry so touch wakes display
         if key == "touchscreen" and content:
             _has_ss, _ss_to, ss_backlight_id = _get_screensaver_config(project)
@@ -1961,6 +2211,7 @@ def _compile_to_esphome_yaml_section_based(device: DeviceProject, recipe_text: s
         out_parts.append(f"{key}:\n{content.rstrip()}\n\n")
     out = "".join(out_parts).rstrip() + "\n"
     out = out.replace(ETD_DEVICE_NAME_PLACEHOLDER, json.dumps(device.slug or "device"))
+    out = _apply_ota_password(out, getattr(device, "ota_password", None))
     out = _sanitize_esphome_yaml_lvgl(out)
     return out
 
@@ -2164,7 +2415,7 @@ from ..const import (
     DOMAIN,
     PLUGINS_DIR,
 )
-from ..storage import DeviceProject
+from ..storage import DeviceProject, _default_project
 
 
 def _active_entry_id(hass: HomeAssistant) -> str | None:
@@ -4647,6 +4898,7 @@ class DevicesView(HomeAssistantView):
                     "name": d.name,
                     "hardware_recipe_id": d.hardware_recipe_id,
                     "api_key": d.api_key,
+                    "ota_password": d.ota_password,
                 }
                 for d in storage.state.devices.values()
             ]
@@ -4665,11 +4917,14 @@ class DevicesView(HomeAssistantView):
 
         existing = storage.get_device(body["device_id"])
         api_key = body.get("api_key")
+        ota_password = body.get("ota_password")
         if existing is not None:
             api_key = api_key if api_key is not None and str(api_key).strip() else existing.api_key
+            ota_password = ota_password if ota_password is not None else existing.ota_password
         else:
             if not api_key or not str(api_key).strip():
                 api_key = base64.b64encode(secrets.token_bytes(32)).decode()
+            ota_password = ota_password if ota_password is not None and str(ota_password).strip() else None
 
         project = body.get("project")
         if project is None and existing is not None:
@@ -4685,6 +4940,7 @@ class DevicesView(HomeAssistantView):
             name=body.get("name", body["device_id"]),
             hardware_recipe_id=body.get("hardware_recipe_id"),
             api_key=api_key or None,
+            ota_password=(str(ota_password).strip() if ota_password is not None and str(ota_password).strip() else None),
             device_settings=device_settings if device_settings is not None else {},
             project=project if project is not None else DeviceProject.__dataclass_fields__["project"].default_factory(),  # type: ignore
         )
@@ -6008,6 +6264,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Project backup/restore
     hass.http.register_view(DeviceProjectExportView)
     hass.http.register_view(DeviceProjectImportView)
+    hass.http.register_view(ImportFromYamlView)
 
     # Assets
     hass.http.register_view(AssetsListView)
@@ -6240,6 +6497,52 @@ def _normalize_recipe_yaml(raw_text: str, label: str | None = None) -> tuple[str
         meta["label"] = " • ".join(parts) if parts else "Custom recipe"
 
     return dumped, meta
+
+# Section keys used for recipe fingerprint (hardware identity for matching import to recipe).
+_RECIPE_FINGERPRINT_KEYS = (
+    "esphome", "esp32", "esp8266", "rp2040", "esp32_hosted", "psram", "esp_ldo",
+    "i2c", "spi", "display", "touchscreen", "output", "light",
+)
+
+
+def _build_recipe_fingerprint(yaml_text: str) -> str:
+    """Build a normalized string from hardware sections for recipe matching.
+    Strips device name in esphome, normalizes whitespace and order."""
+    sections = _yaml_str_to_section_map(yaml_text)
+    parts: list[str] = []
+    for key in _RECIPE_FINGERPRINT_KEYS:
+        body = (sections.get(key) or "").strip()
+        if not body:
+            continue
+        if key == "esphome":
+            body = re.sub(r"^\s*name\s*:\s*.*$", "  name: __PLACEHOLDER__", body, count=1, flags=re.MULTILINE)
+        body = re.sub(r"#.*$", "", body, flags=re.MULTILINE)
+        body = re.sub(r"\s+", " ", body).strip()
+        parts.append(f"{key}:{body}")
+    return "\n".join(parts)
+
+
+def _match_recipe_by_fingerprint(hass: HomeAssistant, import_fingerprint: str) -> str | None:
+    """Return recipe_id of first recipe whose fingerprint equals import_fingerprint, else None.
+    Prefers builtin over user recipes."""
+    if not import_fingerprint or not import_fingerprint.strip():
+        return None
+    recipes = list_all_recipes(hass)
+    builtin_first = sorted(recipes, key=lambda r: (0 if r.get("builtin") else 1, str(r.get("id") or "")))
+    for r in builtin_first:
+        rid = r.get("id")
+        path = r.get("path")
+        if not rid or not path:
+            continue
+        try:
+            recipe_text = Path(path).read_text("utf-8")
+        except Exception:
+            continue
+        recipe_fp = _build_recipe_fingerprint(recipe_text)
+        if recipe_fp.strip() == import_fingerprint.strip():
+            return rid
+    return None
+
 
 def _find_recipe_path_by_id(hass: HomeAssistant, recipe_id: str) -> Path | None:
     for r in list_all_recipes(hass):
@@ -6481,6 +6784,158 @@ class RecipeImportView(HomeAssistantView):
         })
 
 
+class ImportFromYamlView(HomeAssistantView):
+    """Import full ESPHome YAML: match/create recipe, create device, reverse LVGL to project, save."""
+
+    url = f"/api/{DOMAIN}/import/from-yaml"
+    name = f"api:{DOMAIN}:import_from_yaml"
+    requires_auth = False
+
+    async def post(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry", "log": []}, status_code=500)
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry", "log": []}, status_code=500)
+
+        body = await request.json()
+        raw_yaml = str(body.get("yaml") or "").strip()
+        device_name_override = str(body.get("device_name_override") or "").strip() or None
+        log: list[str] = []
+
+        if not raw_yaml:
+            return self.json({"ok": False, "error": "yaml_required", "log": []}, status_code=400)
+
+        def _run_import() -> dict:
+            nonlocal log
+            log.append("Parsing YAML sections…")
+            sections = _yaml_str_to_section_map(raw_yaml)
+            esphome_body = (sections.get("esphome") or "").strip()
+            device_name = device_name_override
+            if not device_name and esphome_body:
+                name_m = re.search(r"^\s*name\s*:\s*(.+)$", esphome_body, re.MULTILINE)
+                if name_m:
+                    device_name = name_m.group(1).strip().strip('"\'')
+            if not device_name:
+                device_name = "imported-device"
+            log.append(f"Device name: {device_name}")
+
+            log.append("Matching recipe…")
+            fingerprint = _build_recipe_fingerprint(raw_yaml)
+            recipe_id = _match_recipe_by_fingerprint(hass, fingerprint)
+            created_recipe = False
+            if recipe_id:
+                log.append(f"Matched recipe: {recipe_id}")
+            else:
+                log.append("No match; creating new user recipe.")
+                try:
+                    norm_yaml, meta = _normalize_recipe_yaml(raw_yaml, label=device_name)
+                except Exception as e:
+                    return {"ok": False, "error": "recipe_create_failed", "detail": str(e)}
+                root = _user_recipes_root(hass) / "user"
+                root.mkdir(parents=True, exist_ok=True)
+                rid = _slugify(device_name or "recipe")
+                target_dir = root / rid
+                if target_dir.exists():
+                    h = hashlib.sha1(norm_yaml.encode("utf-8")).hexdigest()[:6]
+                    target_dir = root / f"{rid}_{h}"
+                target_dir.mkdir(parents=True, exist_ok=True)
+                (target_dir / "recipe.yaml").write_text(norm_yaml, encoding="utf-8")
+                (target_dir / "metadata.json").write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
+                recipe_id = target_dir.name
+                created_recipe = True
+                log.append(f"Created recipe: {recipe_id}")
+
+            slug = re.sub(r"[^a-z0-9]+", "_", (device_name or "").lower()).strip("_") or "device"
+            device_id = slug
+            existing = storage.get_device(device_id)
+            if existing:
+                device_id = f"{slug}_{hashlib.sha1(raw_yaml.encode()).hexdigest()[:6]}"
+                slug = device_id
+            log.append(f"Device id: {device_id}")
+
+            log.append("Parsing LVGL to project pages…")
+            lvgl_body = (sections.get("lvgl") or "").strip()
+            if not lvgl_body:
+                lvgl_body = _yaml_import.extract_lvgl_section_from_full_yaml(raw_yaml)
+            pages = _yaml_import.parse_lvgl_section_to_pages(lvgl_body)
+            widget_count = sum(len(p.get("widgets") or []) for p in pages)
+            log.append(f"Parsed {len(pages)} page(s), {widget_count} widget(s).")
+
+            widget_ids = set()
+            for p in pages:
+                for w in p.get("widgets") or []:
+                    if isinstance(w, dict) and w.get("id"):
+                        widget_ids.add(str(w["id"]))
+
+            log.append("Reversing bindings and links…")
+            bindings, links = _yaml_import.reverse_bindings_and_links(sections, widget_ids)
+            log.append(f"Found {len(bindings)} binding(s), {len(links)} link(s).")
+
+            scripts = _yaml_import.reverse_scripts(sections)
+            if scripts:
+                log.append(f"Parsed {len(scripts)} script(s) (thermostat inc/dec).")
+
+            default_project = _default_project()
+            project = dict(default_project)
+            project["model_version"] = 1
+            project["pages"] = pages
+            project["bindings"] = bindings
+            project["links"] = links
+            project["action_bindings"] = []
+            project["scripts"] = scripts
+            project["device"] = {"hardware_recipe_id": recipe_id, "screen": {}}
+            disp_bg = None
+            try:
+                first_page = pages[0] if pages else {}
+                if isinstance(first_page, dict):
+                    bg = first_page.get("bg_color")
+                    if bg is not None:
+                        if isinstance(bg, int):
+                            disp_bg = f"#{bg:06x}"
+                        else:
+                            disp_bg = str(bg)
+            except Exception:
+                pass
+            if disp_bg:
+                project["disp_bg_color"] = disp_bg
+            # Omit "script" from sections when we parsed any into project.scripts to avoid duplicate emit
+            section_keys_omit = {"lvgl", "esphome"}
+            if scripts:
+                section_keys_omit.add("script")
+            project["sections"] = {k: v for k, v in sections.items() if k not in section_keys_omit and (v or "").strip()}
+
+            device = DeviceProject(
+                device_id=device_id,
+                slug=slug,
+                name=device_name or device_id,
+                hardware_recipe_id=recipe_id,
+                api_key=None,
+                device_settings={},
+                project=project,
+            )
+            storage.upsert_device(device)
+            log.append("Saved device and project.")
+
+            return {
+                "ok": True,
+                "device_id": device_id,
+                "recipe_id": recipe_id,
+                "created_recipe": created_recipe,
+                "project_summary": {"pages": len(pages), "widget_count": widget_count, "bindings_count": len(bindings), "links_count": len(links)},
+                "log": log,
+            }
+
+        try:
+            result = await hass.async_add_executor_job(_run_import)
+        except Exception as e:
+            log.append(f"Error: {e}")
+            return self.json({"ok": False, "error": "import_failed", "detail": str(e), "log": log}, status_code=500)
+        return self.json(result)
+
+
 class DeviceProjectExportView(HomeAssistantView):
     """Export the current device project model as JSON (for backups / cross-chat portability)."""
 
@@ -6506,6 +6961,7 @@ class DeviceProjectExportView(HomeAssistantView):
             "name": device.name,
             "hardware_recipe_id": device.hardware_recipe_id,
             "api_key": device.api_key,
+            "ota_password": device.ota_password,
             "project": device.project,
         }
         return self.json({"ok": True, "export": payload})
@@ -6548,6 +7004,8 @@ class DeviceProjectImportView(HomeAssistantView):
             device.hardware_recipe_id = export.get("hardware_recipe_id") or None
         if export.get("api_key") is not None:
             device.api_key = str(export["api_key"]).strip() or None
+        if export.get("ota_password") is not None:
+            device.ota_password = str(export["ota_password"]).strip() or None
 
         storage.upsert_device(device)
         await storage.async_save()

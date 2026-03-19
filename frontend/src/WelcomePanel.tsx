@@ -16,6 +16,8 @@ export interface WelcomePanelProps {
   onAddDevice: () => void;
   /** Called when user clicks "Manage devices" (opens manage modal). */
   onManageDevices: () => void;
+  /** Called when user clicks "Import YAML" (opens import modal). */
+  onImportYaml?: () => void;
   /** Optional: recipe labels by id for display. */
   recipeLabels?: Record<string, string>;
 }
@@ -27,6 +29,7 @@ export default function WelcomePanel({
   onOpenDevicePicker,
   onAddDevice,
   onManageDevices,
+  onImportYaml,
   recipeLabels = {},
 }: WelcomePanelProps) {
   const recentDevices = recentDeviceIds
@@ -135,6 +138,16 @@ export default function WelcomePanel({
             Copy, rename, or delete devices and their UIs.
           </span>
         </div>
+        {onImportYaml && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <button type="button" className="secondary" onClick={onImportYaml} style={{ padding: "12px 16px", fontSize: 15 }}>
+              Import YAML
+            </button>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Import a device from full ESPHome YAML. Recipe is matched or created; LVGL UI is reverse-engineered into the Designer.
+            </span>
+          </div>
+        )}
       </div>
 
       {devices.length === 0 && (

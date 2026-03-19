@@ -33,6 +33,7 @@ import {
   getContext,
   getProject,
   getWidgetSchema,
+  importFromYaml,
   listAssets,
   listDevices,
   listWidgetSchemas,
@@ -335,8 +336,10 @@ export default function App() {
   const [newDeviceWizardName, setNewDeviceWizardName] = useState("");
   const [newDeviceWizardSlug, setNewDeviceWizardSlug] = useState("");
   const [newDeviceWizardApiKey, setNewDeviceWizardApiKey] = useState("");
+  const [newDeviceWizardOtaPassword, setNewDeviceWizardOtaPassword] = useState("");
 
   const [editDeviceRecipeId, setEditDeviceRecipeId] = useState<string>("");
+  const [newDeviceOtaPassword, setNewDeviceOtaPassword] = useState("");
 
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const projectHist = useHistory<ProjectModel | null>(null);
@@ -477,7 +480,7 @@ async function onUploadAssetFile(file: File) {
 
 const [lintOpen, setLintOpen] = useState<boolean>(false);
   const [paletteTab, setPaletteTab] = useState<"std" | "cards" | "widgets">("std");
-  const [inspectorTab, setInspectorTab] = useState<"properties" | "bindings" | "builder" | "yaml">("properties");
+  const [inspectorTab, setInspectorTab] = useState<"properties" | "bindings" | "builder" | "yaml" | "importlog">("properties");
   const [editingWidgetId, setEditingWidgetId] = useState<string>("");
   useEffect(() => {
     setEditingWidgetId("");
@@ -547,6 +550,14 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
   // When user changes bound entity on an action that has custom YAML: prompt Keep or Reset
   const [actionEntityChangePending, setActionEntityChangePending] = useState<{ widgetId: string; event: string; newEntityId: string } | null>(null);
 
+  // YAML import: modal + Import log tab
+  const [importYamlOpen, setImportYamlOpen] = useState<boolean>(false);
+  const [importYamlText, setImportYamlText] = useState<string>("");
+  const [importYamlNameOverride, setImportYamlNameOverride] = useState<string>("");
+  const [importYamlBusy, setImportYamlBusy] = useState<boolean>(false);
+  const [importYamlErr, setImportYamlErr] = useState<string>("");
+  const [importLogLines, setImportLogLines] = useState<string[]>([]);
+
   // Live HA state for design-time preview (bound widgets show current HA values).
   const [liveEntityStates, setLiveEntityStates] = useState<Record<string, { state: string; attributes: Record<string, any> }>>({});
 
@@ -599,8 +610,37 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
     }
   }
 
-
-
+  async function doImportYaml() {
+    setImportYamlBusy(true);
+    setImportYamlErr("");
+    try {
+      const result = await importFromYaml(importYamlText, importYamlNameOverride.trim() || undefined, entryId || undefined);
+      const logLines = Array.isArray(result.log) ? result.log : [];
+      setImportLogLines(logLines);
+      if (result.ok) {
+        setImportYamlOpen(false);
+        setImportYamlText("");
+        setImportYamlNameOverride("");
+        setToast({ type: "success", msg: `Imported device: ${(result as any).device_id ?? "ok"}` });
+        if (entryId) {
+          const listRes = await listDevices(entryId);
+          if (listRes.ok) setDevices(listRes.devices);
+          const deviceId = (result as any).device_id;
+          if (deviceId) {
+            setSelectedDevice(deviceId);
+            await loadDevice(deviceId);
+          }
+        }
+      } else {
+        setImportYamlErr((result as any).error ?? "Import failed");
+      }
+    } catch (e: any) {
+      setImportYamlErr(String(e?.message ?? e));
+      setImportLogLines([]);
+    } finally {
+      setImportYamlBusy(false);
+    }
+  }
 
   async function refresh() {
     if (!entryId) {
@@ -1426,12 +1466,13 @@ if (baseId.startsWith("glance_card")) {
         name: newDeviceName.trim(),
         slug: newDeviceSlug.trim() || undefined,
         api_key: newDeviceApiKey.trim() || undefined,
+        ota_password: newDeviceOtaPassword.trim() || undefined,
         hardware_recipe_id: editDeviceRecipeId.trim() || undefined,
       });
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setToast({ type: "ok", msg: "Device updated" });
       setEditDeviceModalOpen(false);
-      setNewDeviceId(""); setNewDeviceName(""); setNewDeviceSlug(""); setNewDeviceApiKey(""); setEditDeviceRecipeId("");
+      setNewDeviceId(""); setNewDeviceName(""); setNewDeviceSlug(""); setNewDeviceApiKey(""); setNewDeviceOtaPassword(""); setEditDeviceRecipeId("");
       await refresh();
     } finally { setBusy(false); }
   }
@@ -1458,6 +1499,7 @@ if (baseId.startsWith("glance_card")) {
         slug: newDeviceWizardSlug.trim() || undefined,
         hardware_recipe_id: newDeviceWizardRecipe.id,
         api_key: newDeviceWizardApiKey.trim() || undefined,
+        ota_password: newDeviceWizardOtaPassword.trim() || undefined,
       });
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setToast({ type: "ok", msg: "Device created" });
@@ -1468,6 +1510,7 @@ if (baseId.startsWith("glance_card")) {
       setNewDeviceWizardName("");
       setNewDeviceWizardSlug("");
       setNewDeviceWizardApiKey("");
+      setNewDeviceWizardOtaPassword("");
       await refresh();
       await loadDevice(did);
     } finally { setBusy(false); }
@@ -1479,6 +1522,7 @@ if (baseId.startsWith("glance_card")) {
     setNewDeviceName(selectedDeviceObj.name || "");
     setNewDeviceSlug(selectedDeviceObj.slug || selectedDeviceObj.device_id || "");
     setNewDeviceApiKey(selectedDeviceObj.api_key ?? "");
+    setNewDeviceOtaPassword(selectedDeviceObj.ota_password ?? "");
     setEditDeviceRecipeId(selectedDeviceObj.hardware_recipe_id ?? "");
     setEditDeviceModalOpen(true);
   }
@@ -1491,6 +1535,7 @@ if (baseId.startsWith("glance_card")) {
     setNewDeviceWizardName("");
     setNewDeviceWizardSlug("");
     setNewDeviceWizardApiKey("");
+    setNewDeviceWizardOtaPassword("");
     refreshRecipes(); // Refetch recipes when wizard opens (handles late load or retry)
   }
 
@@ -1543,6 +1588,7 @@ if (baseId.startsWith("glance_card")) {
         name: newName,
         slug: newSlug,
         hardware_recipe_id: source?.hardware_recipe_id ?? null,
+        ota_password: source?.ota_password ?? null,
       });
       if (!upsertRes.ok) return setToast({ type: "error", msg: upsertRes.error });
       const putRes = await putProject(entryId, newDeviceId, projRes.project);
@@ -2571,17 +2617,26 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         // If ports listing fails, fall back to legacy behaviour (OTA).
       }
 
-      const res: any = await deployExport(selectedDevice, entryId, deviceOverride);
-      if (res?.ok) {
-        setToast({ type: "ok", msg: res.path ? `Deployed: ${res.path}` : "Deployed" });
-      } else {
-        const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
-        setToast({ type: "error", msg });
-      }
+      setBusy(false); // Release UI immediately; deploy continues in background.
+      setToast({ type: "ok", msg: "Deploy started…" });
+      void (async () => {
+        try {
+          const res: any = await deployExport(selectedDevice, entryId, deviceOverride);
+          if (res?.ok) {
+            setToast({ type: "ok", msg: res.path ? `Deployed: ${res.path}` : "Deployed" });
+          } else {
+            const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
+            setToast({ type: "error", msg });
+          }
+        } catch (e: any) {
+          setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
+        }
+      })();
+      return;
     } catch (e: any) {
       setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
     } finally {
-      setBusy(false); // re-enable Deploy / Deploy to Host when request completes (add-on exits with --no-logs)
+      setBusy(false);
     }
   }
 
@@ -2600,17 +2655,26 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         }
         setProjectDirty(false);
       }
-      const res: any = await deployExport(selectedDevice, entryId, host.trim());
-      if (res?.ok) {
-        setToast({ type: "ok", msg: res.path ? `Deployed to ${host.trim()}: ${res.path}` : `Deployed to ${host.trim()}` });
-      } else {
-        const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
-        setToast({ type: "error", msg });
-      }
+      setBusy(false); // Release UI immediately; deploy continues in background.
+      setToast({ type: "ok", msg: `Deploy to ${host.trim()} started…` });
+      void (async () => {
+        try {
+          const res: any = await deployExport(selectedDevice, entryId, host.trim());
+          if (res?.ok) {
+            setToast({ type: "ok", msg: res.path ? `Deployed to ${host.trim()}: ${res.path}` : `Deployed to ${host.trim()}` });
+          } else {
+            const msg = (res?.detail ?? res?.error ?? "Deploy failed").slice(0, 300);
+            setToast({ type: "error", msg });
+          }
+        } catch (e: any) {
+          setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
+        }
+      })();
+      return;
     } catch (e: any) {
       setToast({ type: "error", msg: `Deploy failed: ${e?.message ?? "unknown error"}` });
     } finally {
-      setBusy(false); // re-enable buttons when request completes
+      setBusy(false);
     }
   }
 
@@ -3196,6 +3260,32 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         </div>
       )}
 
+      {importYamlOpen && (
+        <div className="modalOverlay" onClick={() => !importYamlBusy && setImportYamlOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Import device from YAML</h3>
+            <div className="muted" style={{ marginTop: 4 }}>
+              Paste full ESPHome device YAML. We match or create a hardware recipe and reverse the LVGL UI into the Designer.
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <div className="fieldLabel">Device name override (optional)</div>
+              <input value={importYamlNameOverride} onChange={(e) => setImportYamlNameOverride(e.target.value)} placeholder="Leave empty to use esphome.name from YAML" />
+            </div>
+            <div className="field">
+              <div className="fieldLabel">Device YAML</div>
+              <YamlEditor value={importYamlText} onChange={setImportYamlText} minHeight={220} placeholder="Paste full ESPHome YAML here…" />
+            </div>
+            {importYamlErr && <div className="error" style={{ marginTop: 10 }}>{importYamlErr}</div>}
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button className="ghost" onClick={() => !importYamlBusy && setImportYamlOpen(false)}>Close</button>
+              <button disabled={importYamlBusy || !importYamlText.trim()} onClick={doImportYaml}>
+                {importYamlBusy ? "Importing…" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {recipeMgrOpen && (
         <div className="modalOverlay" onClick={() => setRecipeMgrOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -3732,6 +3822,17 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               Required for Home Assistant API. Visible for debugging. Saves with device; paste into ESPHome secrets or ensure it matches configuration.yaml.
             </div>
+            <label className="label">OTA password</label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={newDeviceOtaPassword}
+              onChange={(e) => setNewDeviceOtaPassword(e.target.value)}
+              placeholder="Optional; blank = no OTA password"
+            />
+            <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              Optional. When set, compiler writes this into the top-level <code>ota:</code> block.
+            </div>
             {!entryId && (
               <div className="muted" style={{ marginTop: 6 }}>
                 Integration not ready.
@@ -3851,6 +3952,14 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   <button type="button" className="secondary" onClick={regenerateWizardApiKey} title="Generate new API key">Regenerate</button>
                   <button type="button" className="secondary" disabled={!newDeviceWizardApiKey} onClick={() => newDeviceWizardApiKey && navigator.clipboard.writeText(newDeviceWizardApiKey)} title="Copy to clipboard">Copy</button>
                 </div>
+                <label className="label">OTA password</label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={newDeviceWizardOtaPassword}
+                  onChange={(e) => setNewDeviceWizardOtaPassword(e.target.value)}
+                  placeholder="Optional; blank = no OTA password"
+                />
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
                     className="secondary"
@@ -4391,6 +4500,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               onOpenDevicePicker={() => setOpenDevicePickerOpen(true)}
               onAddDevice={openNewDeviceWizard}
               onManageDevices={() => setManageDevicesOpen(true)}
+              onImportYaml={() => { setImportYamlOpen(true); setImportYamlText(""); setImportYamlNameOverride(""); setImportYamlErr(""); setImportLogLines([]); }}
             />
           ) : (
             <>
@@ -4636,6 +4746,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             <button type="button" className={`panelTab ${inspectorTab === "builder" ? "active" : ""}`} onClick={() => setInspectorTab("builder")}>Binding Builder</button>
             <button type="button" className={`panelTab ${inspectorTab === "bindings" ? "active" : ""}`} onClick={() => setInspectorTab("bindings")}>HA Bindings</button>
             <button type="button" className={`panelTab ${inspectorTab === "yaml" ? "active" : ""}`} onClick={() => setInspectorTab("yaml")}>YAML</button>
+            <button type="button" className={`panelTab ${inspectorTab === "importlog" ? "active" : ""}`} onClick={() => setInspectorTab("importlog")} title="Import and debug log">Import log</button>
           </div>
           <div className="panelContent">
             {selectedWidgetIds.length === 0 && (
@@ -5642,6 +5753,22 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                     </>
                   );
                 })()}
+              </div>
+            )}
+            {inspectorTab === "importlog" && (
+              <div className="section">
+                <div className="sectionTitle">Import log</div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 8 }}>Output from the last YAML import (Import YAML on the welcome screen).</div>
+                {importLogLines.length === 0 ? (
+                  <div className="muted" style={{ padding: 12, fontSize: 12 }}>No import log yet. Use Import YAML from the welcome screen.</div>
+                ) : (
+                  <>
+                    <pre style={{ margin: 0, padding: 10, fontSize: 11, background: "rgba(0,0,0,0.3)", borderRadius: 6, overflow: "auto", maxHeight: 320, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      {importLogLines.join("\n")}
+                    </pre>
+                    <button type="button" className="secondary" style={{ marginTop: 8, fontSize: 11 }} onClick={() => setImportLogLines([])}>Clear log</button>
+                  </>
+                )}
               </div>
             )}
           </div>
