@@ -4229,6 +4229,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               className="ghost"
               onClick={() => {
                 if (projectDirty && !window.confirm("You have unsaved changes. Go to device list anyway? Changes will be lost.")) return;
+                try { localStorage.removeItem(LAST_DEVICE_KEY); } catch {}
                 setSelectedDevice("");
                 setProject(null, true);
                 setSelectedWidgetIds([]);
