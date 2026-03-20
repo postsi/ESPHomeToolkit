@@ -145,12 +145,17 @@ const stageRef = useRef<any>(null);
   }, [widgets]);
 
   const childrenByParent = useMemo(() => {
+    const order = new Map(widgets.map((w, i) => [w.id, i]));
     const m = new Map<string, Widget[]>();
     for (const w of widgets) {
       if (!w.parent_id) continue;
       let arr = m.get(w.parent_id);
       if (!arr) { arr = []; m.set(w.parent_id, arr); }
       arr.push(w);
+    }
+    // Stable draw order: match `widgets` list order (DFS flatten from import), last = on top (LVGL-like).
+    for (const arr of m.values()) {
+      arr.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     }
     return m;
   }, [widgets]);
