@@ -850,11 +850,29 @@ async def _dispatch(tool_name: str, a: dict[str, Any]) -> str:
         except Exception:
             pass
         if self_slug and slug == self_slug:
-            return await execute_ha_service(
+            service_resp = await execute_ha_service(
                 "hassio",
                 "addon_update",
                 {"addon": slug},
                 timeout=600.0,
+            )
+            # Some HA cores don't expose hassio.addon_update; in those environments,
+            # fall back to Supervisor update and return whichever attempt is more useful.
+            service_text = str(service_resp or "")
+            if (
+                "Status: 200" in service_text
+                or "Status: 201" in service_text
+                or "Status: 202" in service_text
+            ):
+                return service_resp
+            sup_resp = await execute_supervisor_rest("POST", f"/addons/{slug}/update", None, timeout=600.0)
+            sup_text = str(sup_resp or "")
+            if "Status: 200" in sup_text or "Status: 202" in sup_text:
+                return sup_resp
+            return (
+                f"{service_text}\n"
+                f"(fallback supervisor update attempt)\n"
+                f"{sup_text}"
             )
         return await execute_supervisor_rest("POST", f"/addons/{slug}/update", None, timeout=600.0)
     if tool_name == "ha_get_addon_options":
