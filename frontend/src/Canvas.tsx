@@ -344,8 +344,8 @@ const stageRef = useRef<any>(null);
               setDragAtLimit(r.atLimit);
               return { x: r.x, y: r.y };
             }}
-        onClick={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.parent_id || w.id, !!e.evt.shiftKey)}
-        onTap={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.parent_id || w.id, !!(e.evt as any).shiftKey)}
+        onClick={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.id, !!e.evt.shiftKey)}
+        onTap={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.id, !!(e.evt as any).shiftKey)}
         onDragMove={simDraggable ? handleSimDragMove : undefined}
         onDragStart={!simulationMode ? () => {
           // snapshot selected positions
@@ -513,7 +513,8 @@ const stageRef = useRef<any>(null);
     }
 
     // Container: render children inside a group. With children, use a positioned Group so arcs/widgets render in local coords and the whole group is the drag target.
-    if (type === "container" || type.includes("container")) {
+    // ESPHome LVGL uses `obj` for generic containers; treat it like `container` in preview so its children render/select.
+    if (type === "container" || type.includes("container") || type === "obj") {
       const kids = childrenByParent.get(w.id) || [];
       const clip = !!(p.clip_children ?? p.clipChildren);
       if (kids.length > 0) {
@@ -554,8 +555,8 @@ const stageRef = useRef<any>(null);
               setDragAtLimit(r.atLimit);
               return { x: r.x, y: r.y };
             } : undefined}
-            onClick={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.parent_id || w.id, !!e.evt.shiftKey)}
-            onTap={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.parent_id || w.id, !!(e.evt as any).shiftKey)}
+            onClick={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.id, !!e.evt.shiftKey)}
+            onTap={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => onSelect(w.id, !!(e.evt as any).shiftKey)}
             onDragStart={!simulationMode ? () => {
               const snap0: Record<string, { x: number; y: number }> = {};
               for (const id of selectedIds.length ? selectedIds : [w.id]) {
