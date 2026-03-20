@@ -295,3 +295,59 @@ wifi:
     assert "pages:" in extracted
     assert "main" in extracted
     assert "wifi:" not in extracted
+
+
+def test_parse_lvgl_align_center_converts_to_topleft_for_root():
+    """Imported LVGL align offsets should be converted to top-left for Designer canvas math."""
+    body = """
+pages:
+  - id: main
+    widgets:
+      - obj:
+          id: root_box
+          align: CENTER
+          x: 0
+          y: 0
+          width: 200
+          height: 100
+"""
+    pages = yi.parse_lvgl_section_to_pages(body, root_parent_w=1024, root_parent_h=600)
+    widgets = pages[0].get("widgets") or []
+    assert len(widgets) == 1
+    w = widgets[0]
+    assert w.get("id") == "root_box"
+    assert w.get("x") == 412
+    assert w.get("y") == 250
+
+
+def test_parse_lvgl_child_align_center_converts_with_parent_size():
+    """Nested child align offsets are converted using parent widget size."""
+    body = """
+pages:
+  - id: main
+    widgets:
+      - obj:
+          id: parent
+          x: 100
+          y: 50
+          width: 200
+          height: 100
+          widgets:
+            - label:
+                id: child
+                align: CENTER
+                x: 0
+                y: 0
+                width: 100
+                height: 50
+                text: Hi
+"""
+    pages = yi.parse_lvgl_section_to_pages(body, root_parent_w=1024, root_parent_h=600)
+    widgets = pages[0].get("widgets") or []
+    by_id = {w.get("id"): w for w in widgets}
+    assert by_id["parent"]["x"] == 100
+    assert by_id["parent"]["y"] == 50
+    # Child top-left in parent-local coordinates: centered 100x50 inside 200x100 => (50, 25)
+    assert by_id["child"]["x"] == 50
+    assert by_id["child"]["y"] == 25
+    assert by_id["child"].get("parent_id") == "parent"

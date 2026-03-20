@@ -2333,25 +2333,12 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     if (!project) return;
     const w = widgets.find((x: any) => x && x.id === id);
     if (!w) return;
-    // Find root parent if this widget is a child (for grouped prebuilts)
-    let rootId = id;
-    let current = w;
-    while (current?.parent_id) {
-      const parent = widgets.find((x: any) => x && x.id === current.parent_id);
-      if (parent) {
-        rootId = parent.id;
-        current = parent;
-      } else {
-        break;
-      }
-    }
     setSelectedWidgetIds((prev) => {
-      if (!additive) return [rootId];
-      if (prev.includes(rootId)) return prev.filter((x) => x !== rootId);
-      return [...prev, rootId];
+      if (!additive) return [id];
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
     });
-    const rootW = widgets.find((x: any) => x && x.id === rootId);
-    const sr = await getWidgetSchema(rootW?.type ?? w.type);
+    const sr = await getWidgetSchema(w.type);
     if (sr.ok) setSelectedSchema(sr.schema);
   }
 

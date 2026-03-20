@@ -78,7 +78,51 @@ def _root_key_to_widget_type(root_key: str, body: dict) -> str:
     return root_key or "container"
 
 
-def _parse_widget_from_block(block: dict, parent_id: str | None) -> dict | None:
+def _lvgl_align_offset_to_topleft(
+    align: str,
+    x_val: int,
+    y_val: int,
+    w_val: int,
+    h_val: int,
+    parent_w: int | None,
+    parent_h: int | None,
+) -> tuple[int, int]:
+    """Convert LVGL align offset coordinates to top-left coordinates.
+
+    LVGL stores x/y as offsets from an anchor point when align != TOP_LEFT.
+    Designer stores x/y as top-left coordinates for drag/select math.
+    """
+    a = (align or "TOP_LEFT").strip().upper()
+    if a == "TOP_LEFT" or parent_w is None or parent_h is None:
+        return x_val, y_val
+
+    pw2 = parent_w // 2
+    ph2 = parent_h // 2
+    if a == "CENTER":
+        return x_val + pw2 - (w_val // 2), y_val + ph2 - (h_val // 2)
+    if a == "TOP_MID":
+        return x_val + pw2 - (w_val // 2), y_val
+    if a == "TOP_RIGHT":
+        return x_val + parent_w - w_val, y_val
+    if a == "LEFT_MID":
+        return x_val, y_val + ph2 - (h_val // 2)
+    if a == "RIGHT_MID":
+        return x_val + parent_w - w_val, y_val + ph2 - (h_val // 2)
+    if a == "BOTTOM_LEFT":
+        return x_val, y_val + parent_h - h_val
+    if a == "BOTTOM_MID":
+        return x_val + pw2 - (w_val // 2), y_val + parent_h - h_val
+    if a == "BOTTOM_RIGHT":
+        return x_val + parent_w - w_val, y_val + parent_h - h_val
+    return x_val, y_val
+
+
+def _parse_widget_from_block(
+    block: dict,
+    parent_id: str | None,
+    parent_w: int | None = None,
+    parent_h: int | None = None,
+) -> dict | None:
     """Parse a single widget block from LVGL YAML. block is single-key dict e.g. {"label": {...}}."""
     if not block or not isinstance(block, dict) or len(block) != 1:
         return None
@@ -93,13 +137,19 @@ def _parse_widget_from_block(block: dict, parent_id: str | None) -> dict | None:
     wid = body.get("id")
     if not wid and wtype != "container" and wtype != "obj":
         wid = f"gen_{root_key}_{id(block) & 0x7FFFFFFF}"
+    align_raw = body.get("align")
+    x_raw = int(body.get("x", 0)) if body.get("x") is not None else 0
+    y_raw = int(body.get("y", 0)) if body.get("y") is not None else 0
+    w_raw = int(body.get("width", 100)) if body.get("width") is not None else 100
+    h_raw = int(body.get("height", 50)) if body.get("height") is not None else 50
+    x_tl, y_tl = _lvgl_align_offset_to_topleft(str(align_raw or "TOP_LEFT"), x_raw, y_raw, w_raw, h_raw, parent_w, parent_h)
     widget: dict = {
         "type": wtype,
         "id": wid,
-        "x": int(body.get("x", 0)) if body.get("x") is not None else 0,
-        "y": int(body.get("y", 0)) if body.get("y") is not None else 0,
-        "w": int(body.get("width", 100)) if body.get("width") is not None else 100,
-        "h": int(body.get("height", 50)) if body.get("height") is not None else 50,
+        "x": x_tl,
+        "y": y_tl,
+        "w": w_raw,
+        "h": h_raw,
         "props": {},
         "style": {},
         "events": {},
@@ -112,15 +162,70 @@ def _parse_widget_from_block(block: dict, parent_id: str | None) -> dict | None:
             if yaml_key == "id":
                 widget["id"] = value
             elif yaml_key == "x":
-                widget["x"] = int(value) if value is not None else 0
+                x_raw = int(value) if value is not None else 0
+                x_tl, y_tl = _lvgl_align_offset_to_topleft(
+                    str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
+                    x_raw,
+                    y_raw,
+                    int(widget.get("w", 100)),
+                    int(widget.get("h", 50)),
+                    parent_w,
+                    parent_h,
+                )
+                widget["x"] = x_tl
+                widget["y"] = y_tl
             elif yaml_key == "y":
-                widget["y"] = int(value) if value is not None else 0
+                y_raw = int(value) if value is not None else 0
+                x_tl, y_tl = _lvgl_align_offset_to_topleft(
+                    str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
+                    x_raw,
+                    y_raw,
+                    int(widget.get("w", 100)),
+                    int(widget.get("h", 50)),
+                    parent_w,
+                    parent_h,
+                )
+                widget["x"] = x_tl
+                widget["y"] = y_tl
             elif yaml_key == "width":
                 widget["w"] = int(value) if value is not None else 100
+                x_tl, y_tl = _lvgl_align_offset_to_topleft(
+                    str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
+                    x_raw,
+                    y_raw,
+                    int(widget.get("w", 100)),
+                    int(widget.get("h", 50)),
+                    parent_w,
+                    parent_h,
+                )
+                widget["x"] = x_tl
+                widget["y"] = y_tl
             elif yaml_key == "height":
                 widget["h"] = int(value) if value is not None else 50
+                x_tl, y_tl = _lvgl_align_offset_to_topleft(
+                    str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
+                    x_raw,
+                    y_raw,
+                    int(widget.get("w", 100)),
+                    int(widget.get("h", 50)),
+                    parent_w,
+                    parent_h,
+                )
+                widget["x"] = x_tl
+                widget["y"] = y_tl
             elif yaml_key == "align":
                 widget.setdefault("props", {})["align"] = value
+                x_tl, y_tl = _lvgl_align_offset_to_topleft(
+                    str(value or "TOP_LEFT"),
+                    x_raw,
+                    y_raw,
+                    int(widget.get("w", 100)),
+                    int(widget.get("h", 50)),
+                    parent_w,
+                    parent_h,
+                )
+                widget["x"] = x_tl
+                widget["y"] = y_tl
             continue
         if yaml_key == "widgets":
             continue
@@ -171,7 +276,12 @@ def _parse_widget_from_block(block: dict, parent_id: str | None) -> dict | None:
         child_list = []
         for c in children:
             if isinstance(c, dict):
-                child_w = _parse_widget_from_block(c, parent_id=str(widget.get("id") or ""))
+                child_w = _parse_widget_from_block(
+                    c,
+                    parent_id=str(widget.get("id") or ""),
+                    parent_w=int(widget.get("w") or 0) or None,
+                    parent_h=int(widget.get("h") or 0) or None,
+                )
                 if child_w:
                     child_list.append(child_w)
         if child_list:
@@ -198,7 +308,12 @@ def _emit_then_block(then_dict: dict) -> str:
     return yaml.safe_dump(then_dict, default_flow_style=False, allow_unicode=True, width=120).strip()
 
 
-def parse_lvgl_section_to_pages(lvgl_section_str: str, warn: list | None = None) -> list[dict]:
+def parse_lvgl_section_to_pages(
+    lvgl_section_str: str,
+    warn: list | None = None,
+    root_parent_w: int | None = None,
+    root_parent_h: int | None = None,
+) -> list[dict]:
     """Parse lvgl section YAML string into list of pages with widgets (Designer format).
     lvgl_section_str can be the full 'lvgl:\\n  pages: ...' or just the body (content under lvgl:).
 
@@ -241,7 +356,12 @@ def parse_lvgl_section_to_pages(lvgl_section_str: str, warn: list | None = None)
         root_widgets: list[dict] = []
         for w in widgets_data:
             if isinstance(w, dict):
-                parsed = _parse_widget_from_block(w, parent_id=None)
+                parsed = _parse_widget_from_block(
+                    w,
+                    parent_id=None,
+                    parent_w=root_parent_w,
+                    parent_h=root_parent_h,
+                )
                 if parsed:
                     root_widgets.append(parsed)
         flat = _flatten_widgets(root_widgets)

@@ -6987,12 +6987,33 @@ class ImportFromYamlView(HomeAssistantView):
                 slug = device_id
             log.append(f"Device id: {device_id}")
 
+            screen: dict = {}
+            root_w: int | None = None
+            root_h: int | None = None
+            try:
+                rmeta = _extract_recipe_metadata_from_text(raw_yaml, recipe_id)
+                res = rmeta.get("resolution") if isinstance(rmeta, dict) else None
+                if isinstance(res, dict):
+                    rw = res.get("width")
+                    rh = res.get("height")
+                    if isinstance(rw, int) and isinstance(rh, int) and rw > 0 and rh > 0:
+                        root_w, root_h = rw, rh
+                        screen = {"width": rw, "height": rh}
+                        log.append(f"Display resolution (import): {rw}×{rh}")
+            except Exception as e:
+                log.append(f"Resolution hint skipped: {e}")
+
             log.append("Parsing LVGL to project pages…")
             lvgl_body = (sections.get("lvgl") or "").rstrip()
             if not lvgl_body:
                 lvgl_body = _yaml_import.extract_lvgl_section_from_full_yaml(raw_yaml)
             lvgl_warn: list[str] = []
-            pages = _yaml_import.parse_lvgl_section_to_pages(lvgl_body, warn=lvgl_warn)
+            pages = _yaml_import.parse_lvgl_section_to_pages(
+                lvgl_body,
+                warn=lvgl_warn,
+                root_parent_w=root_w,
+                root_parent_h=root_h,
+            )
             for w in lvgl_warn:
                 log.append(w)
             widget_count = sum(len(p.get("widgets") or []) for p in pages)
@@ -7020,18 +7041,6 @@ class ImportFromYamlView(HomeAssistantView):
             project["links"] = links
             project["action_bindings"] = []
             project["scripts"] = scripts
-            screen: dict = {}
-            try:
-                rmeta = _extract_recipe_metadata_from_text(raw_yaml, recipe_id)
-                res = rmeta.get("resolution") if isinstance(rmeta, dict) else None
-                if isinstance(res, dict):
-                    rw = res.get("width")
-                    rh = res.get("height")
-                    if isinstance(rw, int) and isinstance(rh, int) and rw > 0 and rh > 0:
-                        screen = {"width": rw, "height": rh}
-                        log.append(f"Display resolution (import): {rw}×{rh}")
-            except Exception as e:
-                log.append(f"Resolution hint skipped: {e}")
             project["device"] = {"hardware_recipe_id": recipe_id, "screen": screen}
             disp_bg = None
             try:
