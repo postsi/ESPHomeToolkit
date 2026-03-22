@@ -5057,6 +5057,11 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                                       {hasOverride && <span title="Custom YAML">✎ </span>}
                                       <span title={summary}>{summary}</span>
                                       <span className="muted" style={{ fontSize: 11 }}> — <code>{wid || "(no widget)"}</code> ← <code>{ent || "—"}{attr ? ` [${attr}]` : ""}</code></span>
+                                      {tgt?.import_orphan_widget ? (
+                                        <span className="muted" style={{ fontSize: 10, marginLeft: 6 }} title="Widget id not found on canvas after import; fix ids or LVGL tree, then re-import.">
+                                          (orphan)
+                                        </span>
+                                      ) : null}
                                     </li>
                                   );
                                 })}

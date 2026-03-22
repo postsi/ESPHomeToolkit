@@ -26,6 +26,49 @@ def load_yaml_lenient(text: str):
     return yaml.load(text, Loader=_LenientLoader)
 
 
+def _normalize_section_body(s: str) -> str:
+    """Trim outer newlines and trailing whitespace only.
+
+    Bodies from ``_yaml_str_to_section_map`` are indented (e.g. ``  - platform: ...``).
+    Using :meth:`str.strip` would remove that indent and break wrapping as ``section:\\n`` + body.
+    """
+    return (s or "").strip("\n\r").rstrip()
+
+
+def _blocks_from_parsed_section_value(value) -> list[dict]:
+    """Turn a parsed YAML value under a top-level section key into a list of block dicts."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [x for x in value if isinstance(x, dict)]
+    if isinstance(value, dict):
+        # Single sensor/switch/script/interval-style block
+        if any(k in value for k in ("platform", "interval", "id", "then", "entity_id")):
+            return [value]
+        return []
+    return []
+
+
+def _lookup_parsed_key(parsed_root: dict | None, sec_key: str):
+    if not isinstance(parsed_root, dict):
+        return None
+    if sec_key in parsed_root:
+        return parsed_root.get(sec_key)
+    sk = sec_key.lower()
+    for k, v in parsed_root.items():
+        if isinstance(k, str) and k.lower() == sk:
+            return v
+    return None
+
+
+def section_blocks(sec_key: str, sections: dict[str, str], parsed_root: dict | None = None) -> list[dict]:
+    """Blocks for a section: prefer string body from ``sections``; if empty, use parsed YAML root."""
+    body = _normalize_section_body(sections.get(sec_key) or "")
+    if body.strip():
+        return _parse_section_list(sec_key, body)
+    return _blocks_from_parsed_section_value(_lookup_parsed_key(parsed_root, sec_key))
+
+
 # Keys that are geometry (widget root), not props/style/events.
 _GEOM_KEYS = frozenset({"id", "x", "y", "width", "height", "align"})
 # ESPHome uses width/height; Designer uses w/h.
@@ -427,14 +470,21 @@ def _parse_section_list(section_key: str, body: str) -> list[dict]:
 def _extract_lvgl_update_from_then(then_list: list) -> list[dict]:
     """From a 'then:' list (e.g. on_value.then or on_turn_on), extract lvgl.*.update blocks as dicts with id and the update payload."""
     out: list[dict] = []
+    lvgl_keys = (
+        "lvgl.label.update",
+        "lvgl.arc.update",
+        "lvgl.slider.update",
+        "lvgl.bar.update",
+        "lvgl.widget.update",
+        "lvgl.switch.update",
+    )
     for item in then_list or []:
         if not isinstance(item, dict):
             continue
+        # Do not stop at the first key: a step may list non-lvgl actions before the update.
         for key, payload in item.items():
-            if key in ("lvgl.label.update", "lvgl.arc.update", "lvgl.slider.update", "lvgl.bar.update", "lvgl.widget.update", "lvgl.switch.update"):
-                if isinstance(payload, dict) and payload.get("id") is not None:
-                    out.append({"kind": key, "id": payload.get("id"), "payload": payload})
-                break
+            if key in lvgl_keys and isinstance(payload, dict) and payload.get("id") is not None:
+                out.append({"kind": key, "id": payload.get("id"), "payload": payload})
     return out
 
 
@@ -454,10 +504,21 @@ def _action_from_lvgl_update(update: dict) -> str:
     return "label_text"
 
 
-def reverse_bindings_and_links(sections: dict[str, str], widget_ids: set[str]) -> tuple[list[dict], list[dict]]:
+def reverse_bindings_and_links(
+    sections: dict[str, str],
+    widget_ids: set[str],
+    *,
+    parsed_root: dict | None = None,
+    strict_widget_ids: bool = True,
+) -> tuple[list[dict], list[dict]]:
     """Reverse sensor/switch/climate/interval from YAML sections into project.bindings and project.links.
-    widget_ids: set of widget ids from parsed pages (to avoid creating links to non-existent widgets).
-    Returns (bindings, links).
+
+    If ``parsed_root`` is set (full-document parse), section bodies that are missing from the
+    line-based ``sections`` map (e.g. some ``!include`` shapes) still contribute blocks.
+
+    When ``strict_widget_ids`` is False (recommended for import), links are kept even if the
+    LVGL ``id`` is not on the parsed canvas yet so the HA Bindings panel reflects the YAML;
+    compile skips links whose widget id is not in the project.
     """
     bindings: list[dict] = []
     binding_keys: set[tuple[str, str, str]] = set()
@@ -471,24 +532,26 @@ def reverse_bindings_and_links(sections: dict[str, str], widget_ids: set[str]) -
         bindings.append({"entity_id": entity_id, "kind": kind, "attribute": attribute or ""})
 
     def _add_ha_link(entity_id: str, kind: str, attribute: str, widget_id: str, action: str, yaml_override: str | None = None, format_str: str | None = None) -> None:
-        if widget_id not in widget_ids:
+        wid = (widget_id or "").strip()
+        if not wid:
             return
-        tgt: dict = {"widget_id": widget_id, "action": action}
+        if strict_widget_ids and wid not in widget_ids:
+            return
+        tgt: dict = {"widget_id": wid, "action": action}
         if yaml_override:
             tgt["yaml_override"] = yaml_override
         if format_str:
             tgt["format"] = format_str
+        if not strict_widget_ids and wid not in widget_ids:
+            tgt["import_orphan_widget"] = True
         links.append({
             "source": {"entity_id": entity_id, "kind": kind, "attribute": attribute or ""},
             "target": tgt,
         })
 
-    # --- HA sensor / text_sensor / binary_sensor -> widget links ---
-    for sec_key in ("sensor", "text_sensor", "binary_sensor"):
-        body = (sections.get(sec_key) or "").strip()
-        if not body:
-            continue
-        blocks = _parse_section_list(sec_key, body)
+    # --- HA sensor / text_sensor / binary_sensor / number -> widget links ---
+    for sec_key in ("sensor", "text_sensor", "binary_sensor", "number"):
+        blocks = section_blocks(sec_key, sections, parsed_root)
         for blk in blocks:
             platform = str(blk.get("platform") or "").strip().lower()
             if platform != "homeassistant":
@@ -526,9 +589,8 @@ def reverse_bindings_and_links(sections: dict[str, str], widget_ids: set[str]) -
                     _add_ha_link(entity_id, kind, attribute, wid, action, yaml_override=yaml_override)
 
     # --- Template switch -> widget (local_switch) ---
-    switch_body = (sections.get("switch") or "").strip()
-    if switch_body:
-        switch_blocks = _parse_section_list("switch", switch_body)
+    switch_blocks = section_blocks("switch", sections, parsed_root)
+    if switch_blocks:
         for blk in switch_blocks:
             platform = str(blk.get("platform") or "").strip().lower()
             if platform not in ("template", "output"):
@@ -546,111 +608,121 @@ def reverse_bindings_and_links(sections: dict[str, str], widget_ids: set[str]) -
                     continue
                 for upd in _extract_lvgl_update_from_then(then_list):
                     wid = str(upd.get("id") or "").strip()
-                    if wid not in widget_ids:
+                    if strict_widget_ids and wid not in widget_ids:
+                        continue
+                    if not wid:
                         continue
                     payload = upd.get("payload") or {}
                     try:
                         yaml_override = yaml.safe_dump([{upd.get("kind", "lvgl.widget.update"): payload}], default_flow_style=False, allow_unicode=True).strip()
                     except Exception:
                         yaml_override = ""
+                    tgt_ls: dict = {"widget_id": wid, "yaml_override": yaml_override}
+                    if not strict_widget_ids and wid not in widget_ids:
+                        tgt_ls["import_orphan_widget"] = True
                     links.append({
                         "source": {"type": "local_switch", "switch_id": switch_id, "state": state},
-                        "target": {"widget_id": wid, "yaml_override": yaml_override},
+                        "target": tgt_ls,
                     })
 
     # --- Climate heat_action / idle_action / off_mode -> widget (local_climate) ---
-    climate_body = (sections.get("climate") or "").strip()
-    if climate_body:
-        climate_blocks = _parse_section_list("climate", climate_body)
-        for blk in climate_blocks:
-            climate_id = str(blk.get("id") or "").strip()
-            if not climate_id:
+    climate_blocks = section_blocks("climate", sections, parsed_root)
+    for blk in climate_blocks:
+        climate_id = str(blk.get("id") or "").strip()
+        if not climate_id:
+            continue
+        for state, key in (("HEAT", "heat_action"), ("IDLE", "idle_action"), ("OFF", "off_mode")):
+            raw = blk.get(key)
+            if isinstance(raw, dict) and "then" in raw:
+                then_list = raw["then"]
+            elif isinstance(raw, list):
+                then_list = raw
+            else:
                 continue
-            for state, key in (("HEAT", "heat_action"), ("IDLE", "idle_action"), ("OFF", "off_mode")):
-                raw = blk.get(key)
-                if isinstance(raw, dict) and "then" in raw:
-                    then_list = raw["then"]
-                elif isinstance(raw, list):
-                    then_list = raw
-                else:
+            for upd in _extract_lvgl_update_from_then(then_list):
+                wid = str(upd.get("id") or "").strip()
+                if strict_widget_ids and wid not in widget_ids:
                     continue
-                for upd in _extract_lvgl_update_from_then(then_list):
-                    wid = str(upd.get("id") or "").strip()
-                    if wid not in widget_ids:
-                        continue
-                    payload = upd.get("payload") or {}
-                    try:
-                        yaml_override = yaml.safe_dump([{upd.get("kind", "lvgl.widget.update"): payload}], default_flow_style=False, allow_unicode=True).strip()
-                    except Exception:
-                        yaml_override = ""
-                    links.append({
-                        "source": {"type": "local_climate", "climate_id": climate_id, "state": state},
-                        "target": {"widget_id": wid, "yaml_override": yaml_override},
-                    })
+                if not wid:
+                    continue
+                payload = upd.get("payload") or {}
+                try:
+                    yaml_override = yaml.safe_dump([{upd.get("kind", "lvgl.widget.update"): payload}], default_flow_style=False, allow_unicode=True).strip()
+                except Exception:
+                    yaml_override = ""
+                tgt_cl: dict = {"widget_id": wid, "yaml_override": yaml_override}
+                if not strict_widget_ids and wid not in widget_ids:
+                    tgt_cl["import_orphan_widget"] = True
+                links.append({
+                    "source": {"type": "local_climate", "climate_id": climate_id, "state": state},
+                    "target": tgt_cl,
+                })
 
     # --- Interval -> widgets (interval links) ---
-    interval_body = (sections.get("interval") or "").strip()
-    if interval_body:
-        # interval section can be list of blocks: - interval: 1s \n then: ...
-        try:
-            wrapped = "interval:\n" + interval_body
-            data = load_yaml_lenient(wrapped)
-        except Exception:
-            data = {}
-        interval_blocks = data.get("interval") if isinstance(data, dict) else []
-        if isinstance(interval_blocks, dict):
-            interval_blocks = [interval_blocks]
-        if not isinstance(interval_blocks, list):
-            interval_blocks = []
-        for blk in interval_blocks:
-            if not isinstance(blk, dict):
+    interval_blocks = section_blocks("interval", sections, parsed_root)
+    lvgl_interval_keys = (
+        "lvgl.label.update",
+        "lvgl.arc.update",
+        "lvgl.slider.update",
+        "lvgl.bar.update",
+        "lvgl.widget.update",
+    )
+    for blk in interval_blocks:
+        if not isinstance(blk, dict):
+            continue
+        interval_sec = blk.get("interval")
+        if interval_sec is None:
+            continue
+        # interval can be "1s" or 1
+        if isinstance(interval_sec, (int, float)):
+            sec = int(interval_sec)
+        else:
+            sec_str = str(interval_sec).strip().rstrip("s")
+            try:
+                sec = int(float(sec_str))
+            except ValueError:
+                sec = 1
+        then_list = blk.get("then") or []
+        updates: list[dict] = []
+        for item in then_list or []:
+            if not isinstance(item, dict):
                 continue
-            interval_sec = blk.get("interval")
-            if interval_sec is None:
-                continue
-            # interval can be "1s" or 1
-            if isinstance(interval_sec, (int, float)):
-                sec = int(interval_sec)
-            else:
-                sec_str = str(interval_sec).strip().rstrip("s")
-                try:
-                    sec = int(float(sec_str))
-                except ValueError:
-                    sec = 1
-            then_list = blk.get("then") or []
-            updates: list[dict] = []
-            for item in then_list or []:
-                if not isinstance(item, dict):
+            for key, payload in item.items():
+                if key not in lvgl_interval_keys:
                     continue
-                for key, payload in item.items():
-                    if key in ("lvgl.label.update", "lvgl.arc.update", "lvgl.slider.update", "lvgl.bar.update", "lvgl.widget.update"):
-                        if isinstance(payload, dict) and payload.get("id") is not None:
-                            wid = str(payload.get("id") or "").strip()
-                            if wid in widget_ids:
-                                # Store full update line as yaml_override so lambda is preserved
-                                try:
-                                    yaml_override = yaml.safe_dump([{key: payload}], default_flow_style=False, allow_unicode=True).strip()
-                                except Exception:
-                                    yaml_override = ""
-                                updates.append({"widget_id": wid, "action": _action_from_lvgl_update({"kind": key, "payload": payload}), "yaml_override": yaml_override})
-                    break
-            if updates:
-                links.append({
-                    "source": {"type": "interval", "interval_seconds": sec, "updates": updates},
-                    "target": {},
-                })
+                if not isinstance(payload, dict) or payload.get("id") is None:
+                    continue
+                wid = str(payload.get("id") or "").strip()
+                if strict_widget_ids and wid not in widget_ids:
+                    continue
+                if not wid:
+                    continue
+                try:
+                    yaml_override = yaml.safe_dump([{key: payload}], default_flow_style=False, allow_unicode=True).strip()
+                except Exception:
+                    yaml_override = ""
+                uent: dict = {
+                    "widget_id": wid,
+                    "action": _action_from_lvgl_update({"kind": key, "payload": payload}),
+                    "yaml_override": yaml_override,
+                }
+                if not strict_widget_ids and wid not in widget_ids:
+                    uent["import_orphan_widget"] = True
+                updates.append(uent)
+        if updates:
+            links.append({
+                "source": {"type": "interval", "interval_seconds": sec, "updates": updates},
+                "target": {},
+            })
 
     return (bindings, links)
 
 
-def reverse_scripts(sections: dict[str, str]) -> list[dict]:
+def reverse_scripts(sections: dict[str, str], *, parsed_root: dict | None = None) -> list[dict]:
     """Parse script: section for known patterns (thermostat inc/dec) into project.scripts format.
     Returns list of { id, entity_id, step, direction } for matching scripts; others remain in sections."""
     scripts: list[dict] = []
-    body = (sections.get("script") or "").strip()
-    if not body:
-        return scripts
-    script_blocks = _parse_section_list("script", body)
+    script_blocks = section_blocks("script", sections, parsed_root)
     for blk in script_blocks:
         if not isinstance(blk, dict):
             continue

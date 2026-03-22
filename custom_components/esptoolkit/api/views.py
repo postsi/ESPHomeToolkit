@@ -691,6 +691,8 @@ def _compile_ha_bindings(project: dict) -> str:
     if not isinstance(links, list):
         links = []
 
+    valid_widget_ids = _project_widget_id_set(project)
+
     # Build a map: (kind, entity_id, attribute) -> list[link] (HA entity links only).
     # Links with source.type in ("local_switch", "local_climate", "interval") are handled elsewhere.
     link_map: dict[tuple[str, str, str], list[dict]] = {}
@@ -817,6 +819,9 @@ def _compile_ha_bindings(project: dict) -> str:
             else:
                 display_wid = wid
                 lock_wid_safe = wid_safe
+
+            if display_wid not in valid_widget_ids:
+                continue
 
             sid = _slugify_entity_id(entity_id)
             outs.append(f"{i0}- if:\n")
@@ -1111,6 +1116,7 @@ def _compile_ha_bindings(project: dict) -> str:
 def _get_local_switch_links(project: dict) -> list[tuple[str, str, dict]]:
     """Return list of (switch_id, state, target) for links with source.type == 'local_switch'."""
     links = project.get("links") or []
+    valid_wids = _project_widget_id_set(project)
     out: list[tuple[str, str, dict]] = []
     for ln in links:
         if not isinstance(ln, dict):
@@ -1124,6 +1130,9 @@ def _get_local_switch_links(project: dict) -> list[tuple[str, str, dict]]:
             state = "on"
         tgt = ln.get("target") or {}
         if not switch_id or not tgt:
+            continue
+        wid = str(tgt.get("widget_id") or "").strip()
+        if wid not in valid_wids:
             continue
         out.append((switch_id, state, tgt))
     return out
@@ -1185,6 +1194,7 @@ def _inject_local_switch_links_into_section(switch_body: str, project: dict) -> 
 def _get_local_climate_links(project: dict) -> list[tuple[str, str, dict]]:
     """Return list of (climate_id, state, target) for links with source.type == 'local_climate'."""
     links = project.get("links") or []
+    valid_wids = _project_widget_id_set(project)
     out: list[tuple[str, str, dict]] = []
     for ln in links:
         if not isinstance(ln, dict):
@@ -1198,6 +1208,9 @@ def _get_local_climate_links(project: dict) -> list[tuple[str, str, dict]]:
             continue
         tgt = ln.get("target") or {}
         if not climate_id or not tgt:
+            continue
+        wid = str(tgt.get("widget_id") or "").strip()
+        if wid not in valid_wids:
             continue
         out.append((climate_id, state, tgt))
     return out
@@ -1270,6 +1283,7 @@ def _compile_interval_links_yaml(project: dict) -> str:
     interval_links = _get_interval_links(project)
     if not interval_links:
         return ""
+    valid_wids = _project_widget_id_set(project)
     out: list[str] = []
     for ln in interval_links:
         src = ln.get("source") or {}
@@ -1277,11 +1291,19 @@ def _compile_interval_links_yaml(project: dict) -> str:
         updates = src.get("updates") or []
         if not updates:
             continue
-        out.append(f"  - interval: {sec}s")
-        out.append("    then:")
+        filtered_updates: list[dict] = []
         for u in updates:
             if not isinstance(u, dict):
                 continue
+            wid_u = str(u.get("widget_id") or "").strip()
+            if wid_u and wid_u not in valid_wids:
+                continue
+            filtered_updates.append(u)
+        if not filtered_updates:
+            continue
+        out.append(f"  - interval: {sec}s")
+        out.append("    then:")
+        for u in filtered_updates:
             yaml_override = (u.get("yaml_override") or "").strip()
             if yaml_override:
                 for line in yaml_override.splitlines():
@@ -1601,6 +1623,11 @@ def _all_widgets_flat(project: dict) -> list[dict]:
     collect(top_layer.get("widgets") or [], "")
 
     return out
+
+
+def _project_widget_id_set(project: dict) -> set[str]:
+    """All LVGL widget ids on pages and top_layer (for skipping import-orphan / stale links at compile)."""
+    return {str(w["id"]) for w in _all_widgets_flat(project) if w.get("id")}
 
 
 def _compile_wifi_prebuilt_intervals(project: dict) -> str:
@@ -6932,6 +6959,7 @@ class ImportFromYamlView(HomeAssistantView):
 
         body = await request.json()
         raw_yaml = str(body.get("yaml") or "").strip()
+        raw_yaml = raw_yaml.lstrip("\ufeff")
         device_name_override = str(body.get("device_name_override") or "").strip() or None
         log: list[str] = []
 
@@ -6942,6 +6970,12 @@ class ImportFromYamlView(HomeAssistantView):
             nonlocal log
             log.append("Parsing YAML sections…")
             sections = _yaml_str_to_section_map(raw_yaml)
+            parsed_root: dict | None = None
+            try:
+                pr = _yaml_import.load_yaml_lenient(raw_yaml)
+                parsed_root = pr if isinstance(pr, dict) else None
+            except Exception as e:
+                log.append(f"Full-document YAML parse skipped: {e}")
             esphome_body = (sections.get("esphome") or "").strip()
             device_name = device_name_override
             if not device_name and esphome_body:
@@ -7026,10 +7060,20 @@ class ImportFromYamlView(HomeAssistantView):
                         widget_ids.add(str(w["id"]))
 
             log.append("Reversing bindings and links…")
-            bindings, links = _yaml_import.reverse_bindings_and_links(sections, widget_ids)
+            bindings, links = _yaml_import.reverse_bindings_and_links(
+                sections,
+                widget_ids,
+                parsed_root=parsed_root,
+                strict_widget_ids=False,
+            )
             log.append(f"Found {len(bindings)} binding(s), {len(links)} link(s).")
+            if len(bindings) == 0 and len(links) == 0 and "homeassistant" in raw_yaml.lower():
+                log.append(
+                    "No homeassistant bindings detected — sensors may be under `packages:`/`!include` "
+                    "(merge into one file for import), or use `platform: homeassistant` with `entity_id`."
+                )
 
-            scripts = _yaml_import.reverse_scripts(sections)
+            scripts = _yaml_import.reverse_scripts(sections, parsed_root=parsed_root)
             if scripts:
                 log.append(f"Parsed {len(scripts)} script(s) (thermostat inc/dec).")
 

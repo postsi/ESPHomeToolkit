@@ -113,6 +113,33 @@ def test_reverse_bindings_and_links_empty_sections():
     assert links == []
 
 
+def test_reverse_bindings_on_value_list_form():
+    """on_value as a YAML list (not then/wrap) still produces links."""
+    sensor_body = (
+        "  - platform: homeassistant\n"
+        "    entity_id: sensor.room_temperature\n"
+        "    on_value:\n"
+        "      - lvgl.label.update:\n"
+        "          id: temp_label\n"
+        "          text: x\n"
+    )
+    bindings, links = yi.reverse_bindings_and_links({"sensor": sensor_body}, {"temp_label"})
+    assert len(bindings) == 1
+    assert len(links) == 1
+    assert links[0]["target"].get("widget_id") == "temp_label"
+
+
+def test_extract_lvgl_update_skips_non_lvgl_first_key():
+    """A then-step with a non-lvgl key before lvgl.label.update is still extracted."""
+    then_list = [
+        {"delay": "1ms"},
+        {"lvgl.label.update": {"id": "lbl1", "text": "hi"}},
+    ]
+    out = yi._extract_lvgl_update_from_then(then_list)
+    assert len(out) == 1
+    assert out[0]["id"] == "lbl1"
+
+
 def test_parse_section_list_sensor():
     """_parse_section_list parses sensor body to list of blocks."""
     blocks = yi._parse_section_list("sensor", SENSOR_BODY_MINIMAL)
@@ -141,7 +168,6 @@ def test_parse_section_list_sensor_with_on_value():
     assert "lvgl.label.update" in then[0]
 
 
-@pytest.mark.skip(reason="reverse_bindings_and_links section parsing fails when yaml_import is loaded via importlib (different yaml/context); covered by manual/HA tests")
 def test_reverse_bindings_and_links_ha_sensor():
     """sensor platform homeassistant produces binding; with on_value -> lvgl.label.update also produces link."""
     sections = {"sensor": SENSOR_BODY_MINIMAL}
@@ -168,7 +194,6 @@ def test_reverse_bindings_and_links_ha_sensor():
     assert links_full[0]["target"].get("action") == "label_text"
 
 
-@pytest.mark.skip(reason="section parsing in isolated load; covered by manual/HA tests")
 def test_reverse_bindings_and_links_ignores_unknown_widget():
     """Link to widget_id not in widget_ids is not added."""
     sensor_body = (
@@ -186,7 +211,44 @@ def test_reverse_bindings_and_links_ignores_unknown_widget():
     assert len(links) == 0
 
 
-@pytest.mark.skip(reason="section parsing in isolated load; covered by manual/HA tests")
+def test_reverse_bindings_strict_false_keeps_unknown_widget():
+    """With strict_widget_ids=False, links are kept and marked import_orphan_widget."""
+    sensor_body = (
+        "  - platform: homeassistant\n"
+        "    entity_id: sensor.x\n"
+        "    on_value:\n"
+        "      then:\n"
+        "        - lvgl.label.update:\n"
+        "            id: missing_widget\n"
+        "            text: x\n"
+    )
+    sections = {"sensor": sensor_body}
+    bindings, links = yi.reverse_bindings_and_links(sections, set(), strict_widget_ids=False)
+    assert len(bindings) == 1
+    assert len(links) == 1
+    assert links[0]["target"].get("widget_id") == "missing_widget"
+    assert links[0]["target"].get("import_orphan_widget") is True
+
+
+def test_reverse_bindings_parsed_root_when_sections_missing_sensor():
+    """If line-split sections omit sensor:, parsed document still supplies blocks."""
+    parsed = {
+        "esphome": {"name": "t"},
+        "sensor": [
+            {
+                "platform": "homeassistant",
+                "entity_id": "sensor.room_temperature",
+                "on_value": {
+                    "then": [{"lvgl.label.update": {"id": "temp_label", "text": "x"}}],
+                },
+            }
+        ],
+    }
+    bindings, links = yi.reverse_bindings_and_links({}, {"temp_label"}, parsed_root=parsed)
+    assert len(bindings) == 1
+    assert len(links) == 1
+
+
 def test_reverse_bindings_and_links_local_switch():
     """Template switch with on_turn_on/on_turn_off lvgl update produces local_switch links."""
     switch_body = (
@@ -224,7 +286,6 @@ def test_reverse_scripts_empty():
     assert yi.reverse_scripts({"script": ""}) == []
 
 
-@pytest.mark.skip(reason="script section parsing in isolated load; covered by manual/HA tests")
 def test_reverse_scripts_thermostat_inc_dec():
     """Script with homeassistant.action climate.set_temperature and lambda +/- step is parsed."""
     script_body = (
