@@ -160,11 +160,35 @@ def _lvgl_align_offset_to_topleft(
     return x_val, y_val
 
 
+def _as_pixel_dim(value, default: int) -> int:
+    """Best-effort integer width/height for LVGL geometry (skip %, templates, SIZE_CONTENT)."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value > 0 else default
+    if isinstance(value, float):
+        return int(value) if value > 0 else default
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if not s or s.endswith("%") or "content" in s or "lambda" in s or "return" in s:
+            return default
+        try:
+            v = int(float(s.rstrip("px").strip()))
+            return v if v > 0 else default
+        except ValueError:
+            return default
+    return default
+
+
 def _parse_widget_from_block(
     block: dict,
     parent_id: str | None,
     parent_w: int | None = None,
     parent_h: int | None = None,
+    root_screen_w: int | None = None,
+    root_screen_h: int | None = None,
 ) -> dict | None:
     """Parse a single widget block from LVGL YAML. block is single-key dict e.g. {"label": {...}}."""
     if not block or not isinstance(block, dict) or len(block) != 1:
@@ -183,9 +207,12 @@ def _parse_widget_from_block(
     align_raw = body.get("align")
     x_raw = int(body.get("x", 0)) if body.get("x") is not None else 0
     y_raw = int(body.get("y", 0)) if body.get("y") is not None else 0
-    w_raw = int(body.get("width", 100)) if body.get("width") is not None else 100
-    h_raw = int(body.get("height", 50)) if body.get("height") is not None else 50
-    x_tl, y_tl = _lvgl_align_offset_to_topleft(str(align_raw or "TOP_LEFT"), x_raw, y_raw, w_raw, h_raw, parent_w, parent_h)
+    w_raw = _as_pixel_dim(body.get("width"), 100)
+    h_raw = _as_pixel_dim(body.get("height"), 50)
+    # Align conversion needs a non-null parent box; fall back to screen so CENTER/TOP_MID etc. work.
+    eff_pw = parent_w if (parent_w is not None and parent_w > 0) else (root_screen_w if root_screen_w and root_screen_w > 0 else None)
+    eff_ph = parent_h if (parent_h is not None and parent_h > 0) else (root_screen_h if root_screen_h and root_screen_h > 0 else None)
+    x_tl, y_tl = _lvgl_align_offset_to_topleft(str(align_raw or "TOP_LEFT"), x_raw, y_raw, w_raw, h_raw, eff_pw, eff_ph)
     widget: dict = {
         "type": wtype,
         "id": wid,
@@ -212,8 +239,8 @@ def _parse_widget_from_block(
                     y_raw,
                     int(widget.get("w", 100)),
                     int(widget.get("h", 50)),
-                    parent_w,
-                    parent_h,
+                    eff_pw,
+                    eff_ph,
                 )
                 widget["x"] = x_tl
                 widget["y"] = y_tl
@@ -225,34 +252,34 @@ def _parse_widget_from_block(
                     y_raw,
                     int(widget.get("w", 100)),
                     int(widget.get("h", 50)),
-                    parent_w,
-                    parent_h,
+                    eff_pw,
+                    eff_ph,
                 )
                 widget["x"] = x_tl
                 widget["y"] = y_tl
             elif yaml_key == "width":
-                widget["w"] = int(value) if value is not None else 100
+                widget["w"] = _as_pixel_dim(value, int(widget.get("w", 100)))
                 x_tl, y_tl = _lvgl_align_offset_to_topleft(
                     str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
                     x_raw,
                     y_raw,
                     int(widget.get("w", 100)),
                     int(widget.get("h", 50)),
-                    parent_w,
-                    parent_h,
+                    eff_pw,
+                    eff_ph,
                 )
                 widget["x"] = x_tl
                 widget["y"] = y_tl
             elif yaml_key == "height":
-                widget["h"] = int(value) if value is not None else 50
+                widget["h"] = _as_pixel_dim(value, int(widget.get("h", 50)))
                 x_tl, y_tl = _lvgl_align_offset_to_topleft(
                     str((body.get("align") if body.get("align") is not None else widget.get("props", {}).get("align", "TOP_LEFT")) or "TOP_LEFT"),
                     x_raw,
                     y_raw,
                     int(widget.get("w", 100)),
                     int(widget.get("h", 50)),
-                    parent_w,
-                    parent_h,
+                    eff_pw,
+                    eff_ph,
                 )
                 widget["x"] = x_tl
                 widget["y"] = y_tl
@@ -264,8 +291,8 @@ def _parse_widget_from_block(
                     y_raw,
                     int(widget.get("w", 100)),
                     int(widget.get("h", 50)),
-                    parent_w,
-                    parent_h,
+                    eff_pw,
+                    eff_ph,
                 )
                 widget["x"] = x_tl
                 widget["y"] = y_tl
@@ -316,19 +343,28 @@ def _parse_widget_from_block(
 
     children = body.get("widgets") or []
     if children:
+        rw = int(widget.get("w") or 0)
+        rh = int(widget.get("h") or 0)
+        cpw = rw if rw > 0 else (root_screen_w or 480)
+        cph = rh if rh > 0 else (root_screen_h or 272)
         child_list = []
         for c in children:
             if isinstance(c, dict):
                 child_w = _parse_widget_from_block(
                     c,
                     parent_id=str(widget.get("id") or ""),
-                    parent_w=int(widget.get("w") or 0) or None,
-                    parent_h=int(widget.get("h") or 0) or None,
+                    parent_w=cpw,
+                    parent_h=cph,
+                    root_screen_w=root_screen_w,
+                    root_screen_h=root_screen_h,
                 )
                 if child_w:
                     child_list.append(child_w)
         if child_list:
             widget["widgets"] = child_list
+    # Canvas/drag model uses top-left x/y only; keeping LVGL align in props makes absPos() apply align twice.
+    widget.setdefault("props", {})
+    widget["props"]["align"] = "TOP_LEFT"
     return widget
 
 
@@ -404,6 +440,8 @@ def parse_lvgl_section_to_pages(
                     parent_id=None,
                     parent_w=root_parent_w,
                     parent_h=root_parent_h,
+                    root_screen_w=root_parent_w,
+                    root_screen_h=root_parent_h,
                 )
                 if parsed:
                     root_widgets.append(parsed)
@@ -467,6 +505,25 @@ def _parse_section_list(section_key: str, body: str) -> list[dict]:
     return [x for x in items if isinstance(x, dict)]
 
 
+def _flatten_automation_steps(steps: list) -> list[dict]:
+    """Expand ESPHome automation steps, recursing into ``if:`` / ``then:`` so nested lvgl updates are visible."""
+    out: list[dict] = []
+    for item in steps or []:
+        if not isinstance(item, dict):
+            continue
+        if "if" in item:
+            inner = item.get("if")
+            if isinstance(inner, dict):
+                inner_then = inner.get("then")
+                if isinstance(inner_then, dict):
+                    inner_then = [inner_then]
+                if isinstance(inner_then, list):
+                    out.extend(_flatten_automation_steps(inner_then))
+            continue
+        out.append(item)
+    return out
+
+
 def _extract_lvgl_update_from_then(then_list: list) -> list[dict]:
     """From a 'then:' list (e.g. on_value.then or on_turn_on), extract lvgl.*.update blocks as dicts with id and the update payload."""
     out: list[dict] = []
@@ -478,7 +535,7 @@ def _extract_lvgl_update_from_then(then_list: list) -> list[dict]:
         "lvgl.widget.update",
         "lvgl.switch.update",
     )
-    for item in then_list or []:
+    for item in _flatten_automation_steps(then_list if isinstance(then_list, list) else []):
         if not isinstance(item, dict):
             continue
         # Do not stop at the first key: a step may list non-lvgl actions before the update.
@@ -684,31 +741,28 @@ def reverse_bindings_and_links(
                 sec = 1
         then_list = blk.get("then") or []
         updates: list[dict] = []
-        for item in then_list or []:
-            if not isinstance(item, dict):
+        for upd in _extract_lvgl_update_from_then(then_list if isinstance(then_list, list) else []):
+            key = str(upd.get("kind") or "")
+            if key not in lvgl_interval_keys:
                 continue
-            for key, payload in item.items():
-                if key not in lvgl_interval_keys:
-                    continue
-                if not isinstance(payload, dict) or payload.get("id") is None:
-                    continue
-                wid = str(payload.get("id") or "").strip()
-                if strict_widget_ids and wid not in widget_ids:
-                    continue
-                if not wid:
-                    continue
-                try:
-                    yaml_override = yaml.safe_dump([{key: payload}], default_flow_style=False, allow_unicode=True).strip()
-                except Exception:
-                    yaml_override = ""
-                uent: dict = {
-                    "widget_id": wid,
-                    "action": _action_from_lvgl_update({"kind": key, "payload": payload}),
-                    "yaml_override": yaml_override,
-                }
-                if not strict_widget_ids and wid not in widget_ids:
-                    uent["import_orphan_widget"] = True
-                updates.append(uent)
+            payload = upd.get("payload") or {}
+            wid = str(upd.get("id") or "").strip()
+            if strict_widget_ids and wid not in widget_ids:
+                continue
+            if not wid:
+                continue
+            try:
+                yaml_override = yaml.safe_dump([{key: payload}], default_flow_style=False, allow_unicode=True).strip()
+            except Exception:
+                yaml_override = ""
+            uent: dict = {
+                "widget_id": wid,
+                "action": _action_from_lvgl_update({"kind": key, "payload": payload}),
+                "yaml_override": yaml_override,
+            }
+            if not strict_widget_ids and wid not in widget_ids:
+                uent["import_orphan_widget"] = True
+            updates.append(uent)
         if updates:
             links.append({
                 "source": {"type": "interval", "interval_seconds": sec, "updates": updates},

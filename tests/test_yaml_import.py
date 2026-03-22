@@ -379,6 +379,7 @@ pages:
     assert w.get("id") == "root_box"
     assert w.get("x") == 412
     assert w.get("y") == 250
+    assert w.get("props", {}).get("align") == "TOP_LEFT"
 
 
 def test_parse_lvgl_child_align_center_converts_with_parent_size():
@@ -412,3 +413,28 @@ pages:
     assert by_id["child"]["x"] == 50
     assert by_id["child"]["y"] == 25
     assert by_id["child"].get("parent_id") == "parent"
+    assert by_id["child"].get("props", {}).get("align") == "TOP_LEFT"
+
+
+def test_reverse_bindings_sensor_on_value_nested_if_then_lvgl():
+    """homeassistant sensor with lvgl update inside if/then still produces a link."""
+    sensor_body = (
+        "  - platform: homeassistant\n"
+        "    entity_id: sensor.outside_temperature\n"
+        "    on_value:\n"
+        "      then:\n"
+        "        - if:\n"
+        "            condition: \"true\"\n"
+        "            then:\n"
+        "              - lvgl.label.update:\n"
+        "                  id: temp_lbl\n"
+        "                  text: x\n"
+    )
+    bindings, links = yi.reverse_bindings_and_links(
+        {"sensor": sensor_body},
+        {"temp_lbl"},
+        strict_widget_ids=False,
+    )
+    assert len(bindings) == 1
+    assert len(links) == 1
+    assert links[0]["target"].get("widget_id") == "temp_lbl"

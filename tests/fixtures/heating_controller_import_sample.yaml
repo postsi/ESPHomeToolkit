@@ -1,0 +1,54 @@
+# Representative patterns from heating-style ESPHome + LVGL (for import lifecycle tests).
+# Not a full device; covers: homeassistant sensors, nested if/then → lvgl, obj + centered child.
+esphome:
+  name: heating-sample
+
+sensor:
+  - platform: homeassistant
+    id: ha_hw_temp
+    entity_id: sensor.hot_water_temperature
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: "return true;"
+            then:
+              - lvgl.label.update:
+                  id: lbl_hw_temp
+                  text: !lambda |-
+                    return str_sprintf("%.1f °C", x);
+  - platform: homeassistant
+    id: ha_room
+    entity_id: sensor.living_room_temperature
+    on_value:
+      - lvgl.label.update:
+          id: lbl_room
+          text: !lambda |-
+            return str_sprintf("%.1f", x);
+
+lvgl:
+  pages:
+    - id: main_page
+      widgets:
+        - obj:
+            id: card_hw
+            x: 40
+            y: 60
+            width: 360
+            height: 200
+            widgets:
+              - label:
+                  id: lbl_hw_temp
+                  align: CENTER
+                  x: 0
+                  y: 0
+                  width: 200
+                  height: 36
+                  text: "--"
+              - label:
+                  id: lbl_room
+                  x: 20
+                  y: 80
+                  width: 160
+                  height: 32
+                  text: "--"
