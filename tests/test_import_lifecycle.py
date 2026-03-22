@@ -2,6 +2,11 @@
 End-to-end import lifecycle checks (LVGL parse + bindings reverse) without Home Assistant.
 Run: pytest tests/test_import_lifecycle.py -v
 
+Frontend parity: imported ``links`` are listed in Binding Builder via
+``frontend/src/bindings/widgetLinks.ts`` (``displayLinkRowsForWidget``), including
+interval blocks where the widget id lives under ``source.updates[]``. Vitest:
+``frontend/src/bindings/widgetLinks.test.ts``.
+
 **Real heating-controller.yaml** (optional, gitignored): pull from HA with GrimwoodAI MCP
 ``ha_read_file`` → path ``esphome/heating-controller.yaml`` (relative to ``/config``), save as
 ``tests/fixtures/heating-controller.yaml``. Tests use that file if present.

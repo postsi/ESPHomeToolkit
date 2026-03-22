@@ -18,6 +18,7 @@ import {
   formatActionBindingSummary,
   displayActionRequiresNumericSource,
 } from "./bindings/bindingConfig";
+import { displayLinkRowsForWidget } from "./bindings/widgetLinks";
 import { entityMatchesBindingSearch } from "./bindings/entitySearch";
 import { getMatchingActionBindings, INPUT_WIDGET_TYPES, OPTION_SELECT_WIDGET_TYPES, CLICK_TOGGLE_WIDGET_TYPES } from "./bindings/matchingActions";
 import {
@@ -439,7 +440,11 @@ export default function App() {
   const [actionService, setActionService] = useState<string>("");
   const [actionEntity, setActionEntity] = useState<string>("");
   const [actionEntityDropdownOpen, setActionEntityDropdownOpen] = useState(false);
-  const [editingLinkOverride, setEditingLinkOverride] = useState<{ widgetId: string; entityId: string; attribute: string; action: string } | null>(null);
+  const [editingLinkOverride, setEditingLinkOverride] = useState<{
+    linkIndex: number;
+    forWidgetId: string;
+    intervalUpdateIndex?: number;
+  } | null>(null);
   const [editingOverrideYaml, setEditingOverrideYaml] = useState<string>("");
   /** Fetched entity details for Binding Builder attribute list (so dropdown has full attributes e.g. temperature, current_temperature). */
   const [bindingEntityDetails, setBindingEntityDetails] = useState<{ entity_id: string; attributes?: Record<string, unknown> } | null>(null);
@@ -5223,9 +5228,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   const selWidget = widgetsFlat.find((w: any) => w?.id === widgetId) ?? widgets.find((w: any) => w?.id === widgetId);
                   const widgetType = selWidget?.type || "container";
                   const spinboxChildId = (widgetType === "container" && project) ? getSpinboxChildId(project, widgetId) : null;
-                  const linksForWidget = ((project as any)?.links || []).filter(
-                    (ln: any) => String(ln?.target?.widget_id || "").trim() === widgetId
-                  );
+                  const allProjectLinks = ((project as any)?.links || []) as any[];
+                  const linkRowsForWidget = displayLinkRowsForWidget(allProjectLinks, widgetId);
                   const actionsForWidget = ((project as any)?.action_bindings || []).filter(
                     (ab: any) => {
                       const abWid = String(ab?.widget_id || "").trim();
@@ -5277,24 +5281,84 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                         ) : (
                           <div className="muted" style={{ fontSize: 11, marginBottom: 8 }}>When the user does an action (e.g. tap, release), call a Home Assistant service.</div>
                         )}
-                        {builderMode === "display" ? (linksForWidget.length === 0 ? (
+                        {builderMode === "display" ? (linkRowsForWidget.length === 0 ? (
                           <div className="muted" style={{ fontSize: 12 }}>No display bindings. Use the form below to add one.</div>
                         ) : (
                           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6 }}>
-                            {linksForWidget.map((ln: any, idx: number) => {
-                              const src = ln?.source || {};
+                            {linkRowsForWidget.map((row, idx: number) => {
+                              const ln = row.link as any;
+                              const globalIndex = row.globalIndex;
+                              const intervalUpdateIndex = row.intervalUpdateIndex;
                               const tgt = ln?.target || {};
-                              const ent = String(src?.entity_id || "").trim();
-                              const attr = String(src?.attribute || "").trim();
-                              const action = String(tgt?.action || "").trim();
-                              const hasOverride = !!tgt?.yaml_override;
-                              const isEditing = editingLinkOverride?.widgetId === widgetId && editingLinkOverride?.entityId === ent && editingLinkOverride?.attribute === attr && editingLinkOverride?.action === action;
+                              const src = ln?.source || {};
+                              const upd =
+                                intervalUpdateIndex != null && Array.isArray(src?.updates)
+                                  ? src.updates[intervalUpdateIndex]
+                                  : null;
+                              const yamlFromTarget = String(tgt?.yaml_override || "").trim();
+                              const yamlFromUpdate = upd && typeof upd === "object" ? String((upd as any).yaml_override || "").trim() : "";
+                              const hasOverride = !!(yamlFromTarget || yamlFromUpdate);
+                              const actionRaw = String((upd as any)?.action || tgt?.action || "").trim();
+                              const actionHuman = actionRaw ? (DISPLAY_ACTION_LABELS[actionRaw as keyof typeof DISPLAY_ACTION_LABELS] || actionRaw) : "";
+                              const summary = formatDisplayBindingSummary(ln, entities);
+                              const srcRef = formatLinkSourceRef(ln);
+                              const isEditing =
+                                editingLinkOverride?.forWidgetId === widgetId
+                                && editingLinkOverride.linkIndex === globalIndex
+                                && (editingLinkOverride.intervalUpdateIndex ?? -1) === (intervalUpdateIndex ?? -1);
+                              const rowKey = `dl-${globalIndex}-${intervalUpdateIndex ?? "t"}`;
                               return (
-                                <li key={idx}>
+                                <li key={rowKey}>
                                   {hasOverride && <span title="Custom YAML">✎ </span>}
-                                  <code>{ent}{attr ? ` [${attr}]` : ""}</code>{action ? ` → ${action}` : ""}
-                                  <button type="button" className="secondary" style={{ marginLeft: 6, fontSize: 10 }} onClick={() => { setEditingLinkOverride({ widgetId, entityId: ent, attribute: attr, action }); setEditingOverrideYaml(tgt?.yaml_override || ""); }}>{isEditing ? "Cancel" : "Edit YAML"}</button>
-                                  <button type="button" className="danger" style={{ marginLeft: 4, fontSize: 10 }} onClick={() => { if (!project) return; const p2 = clone(project); const links = (p2 as any).links || []; const idx = links.findIndex((l: any) => l?.target?.widget_id === widgetId && l?.source?.entity_id === ent && String(l?.source?.attribute || "") === attr && l?.target?.action === action); if (idx >= 0) { links.splice(idx, 1); (p2 as any).links = links; setProject(p2, true); setProjectDirty(true); setEditingLinkOverride(null); } }} title="Delete this binding">Delete</button>
+                                  <span title={summary}>{summary}</span>
+                                  <span className="muted" style={{ fontSize: 11 }}>
+                                    {" "}
+                                    — <code>{srcRef}</code>
+                                    {actionHuman ? ` → ${actionHuman}` : ""}
+                                    {intervalUpdateIndex != null ? (
+                                      <span title="Part of an interval: block; delete removes the whole interval for all widgets."> (interval)</span>
+                                    ) : null}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="secondary"
+                                    style={{ marginLeft: 6, fontSize: 10 }}
+                                    onClick={() => {
+                                      if (isEditing) {
+                                        setEditingLinkOverride(null);
+                                        setEditingOverrideYaml("");
+                                        return;
+                                      }
+                                      const yaml =
+                                        intervalUpdateIndex != null && upd && typeof upd === "object"
+                                          ? String((upd as any).yaml_override || "")
+                                          : String(tgt?.yaml_override || "");
+                                      setEditingLinkOverride({ linkIndex: globalIndex, forWidgetId: widgetId, intervalUpdateIndex });
+                                      setEditingOverrideYaml(yaml);
+                                    }}
+                                  >
+                                    {isEditing ? "Cancel" : "Edit YAML"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="danger"
+                                    style={{ marginLeft: 4, fontSize: 10 }}
+                                    onClick={() => {
+                                      if (!project) return;
+                                      const p2 = clone(project);
+                                      const links2 = (p2 as any).links || [];
+                                      if (globalIndex >= 0 && globalIndex < links2.length) {
+                                        links2.splice(globalIndex, 1);
+                                        (p2 as any).links = links2;
+                                        setProject(p2, true);
+                                        setProjectDirty(true);
+                                        setEditingLinkOverride(null);
+                                      }
+                                    }}
+                                    title="Delete this display link (entire interval block if marked interval)"
+                                  >
+                                    Delete
+                                  </button>
                                 </li>
                               );
                             })}
@@ -5387,18 +5451,32 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                             </div>
                           );
                         })()}
-                        {editingLinkOverride?.widgetId === widgetId && (
+                        {editingLinkOverride?.forWidgetId === widgetId && (
                           <div style={{ marginTop: 8, padding: 8, background: "rgba(255,255,255,.04)", borderRadius: 4 }}>
                             <div className="muted" style={{ fontSize: 10, marginBottom: 4 }}>Custom YAML for this display binding (used by compiler instead of generated).</div>
                             <YamlEditor value={editingOverrideYaml} onChange={setEditingOverrideYaml} minHeight={100} maxHeight={200} placeholder="e.g. - lvgl.label.update:&#10;    id: my_id&#10;    text: !lambda return x;" />
                             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                               <button type="button" onClick={() => {
-                                if (!project) return;
+                                if (!project || !editingLinkOverride) return;
                                 const p2 = clone(project);
                                 const links = (p2 as any).links || [];
-                                const ln = links.find((l: any) => l?.target?.widget_id === editingLinkOverride.widgetId && l?.source?.entity_id === editingLinkOverride.entityId && String(l?.source?.attribute || "") === editingLinkOverride.attribute && l?.target?.action === editingLinkOverride.action);
-                                if (ln?.target) { ln.target = { ...ln.target, yaml_override: editingOverrideYaml.trim() || undefined }; setProject(p2, true); setProjectDirty(true); }
-                                setEditingLinkOverride(null); setEditingOverrideYaml("");
+                                const ln = links[editingLinkOverride.linkIndex] as any;
+                                if (!ln) {
+                                  setEditingLinkOverride(null);
+                                  setEditingOverrideYaml("");
+                                  return;
+                                }
+                                const trimmed = editingOverrideYaml.trim() || undefined;
+                                const iu = editingLinkOverride.intervalUpdateIndex;
+                                if (iu != null && ln?.source?.type === "interval" && Array.isArray(ln.source.updates) && ln.source.updates[iu]) {
+                                  ln.source.updates[iu] = { ...ln.source.updates[iu], yaml_override: trimmed };
+                                } else if (ln.target && typeof ln.target === "object") {
+                                  ln.target = { ...ln.target, yaml_override: trimmed };
+                                }
+                                setProject(p2, true);
+                                setProjectDirty(true);
+                                setEditingLinkOverride(null);
+                                setEditingOverrideYaml("");
                               }}>Save</button>
                               <button type="button" className="secondary" onClick={() => { setEditingLinkOverride(null); setEditingOverrideYaml(""); }}>Cancel</button>
                             </div>
@@ -5594,8 +5672,18 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                                     {entities.filter((e) => !e?.entity_id ? false : !actionEntity.trim() ? true : (String(e.entity_id).toLowerCase().includes(actionEntity.trim().toLowerCase()) || String(e?.friendly_name || "").toLowerCase().includes(actionEntity.trim().toLowerCase()))).length === 0 && <div className="muted" style={{ padding: 8, fontSize: 12 }}>No matching entities.</div>}
                                   </div>
                                 )}
-                                {linksForWidget.length > 0 && (
-                                  <button type="button" className="secondary" style={{ marginTop: 4, fontSize: 11 }} onClick={() => setActionEntity(linksForWidget[0]?.source?.entity_id || "")}>Use same as display binding</button>
+                                {linkRowsForWidget.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="secondary"
+                                    style={{ marginTop: 4, fontSize: 11 }}
+                                    onClick={() => {
+                                      const firstHa = linkRowsForWidget.map((r) => r.link as any).find((l) => String(l?.source?.entity_id || "").trim());
+                                      setActionEntity(String(firstHa?.source?.entity_id || ""));
+                                    }}
+                                  >
+                                    Use same as display binding
+                                  </button>
                                 )}
                               </div>
                               <div>
