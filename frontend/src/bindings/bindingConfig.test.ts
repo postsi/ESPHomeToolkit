@@ -8,6 +8,7 @@ import {
   getServicesForDomain,
   domainFromEntityId,
   formatDisplayBindingSummary,
+  formatLinkSourceRef,
   formatActionBindingSummary,
   displayActionRequiresNumericSource,
   NUMERIC_ONLY_DISPLAY_ACTIONS,
@@ -121,6 +122,48 @@ describe("bindingConfig", () => {
     });
     it("handles no entity", () => {
       expect(formatDisplayBindingSummary({ source: {} }, entities)).toBe("Shows (no entity)");
+    });
+    it("summarizes local_switch without HA entity_id", () => {
+      const ln = {
+        source: { type: "local_switch", switch_id: "heat_relay", state: "on" },
+        target: { action: "widget_checked" },
+      };
+      const s = formatDisplayBindingSummary(ln, entities);
+      expect(s).toContain("heat_relay");
+      expect(s).toContain("Device switch");
+    });
+    it("summarizes local_climate", () => {
+      const ln = {
+        source: { type: "local_climate", climate_id: "main_thermostat", state: "HEAT" },
+        target: { yaml_override: "foo: bar" },
+      };
+      const s = formatDisplayBindingSummary(ln, entities);
+      expect(s).toContain("main_thermostat");
+      expect(s).toContain("Device climate");
+      expect(s).toContain("custom YAML");
+    });
+    it("summarizes interval link", () => {
+      const ln = {
+        source: { type: "interval", interval_seconds: 30, updates: [{ widget_id: "a" }, { widget_id: "b" }] },
+        target: {},
+      };
+      expect(formatDisplayBindingSummary(ln, entities)).toContain("30s");
+      expect(formatDisplayBindingSummary(ln, entities)).toContain("2 widget");
+    });
+  });
+
+  describe("formatLinkSourceRef", () => {
+    it("returns entity_id and optional attribute", () => {
+      expect(formatLinkSourceRef({ source: { entity_id: "sensor.a", attribute: "temp" } })).toBe("sensor.a [temp]");
+      expect(formatLinkSourceRef({ source: { entity_id: "light.k" } })).toBe("light.k");
+    });
+    it("returns device-local refs", () => {
+      expect(formatLinkSourceRef({ source: { type: "local_switch", switch_id: "sw1" } })).toBe("device:switch:sw1");
+      expect(formatLinkSourceRef({ source: { type: "local_climate", climate_id: "cl1" } })).toBe("device:climate:cl1");
+      expect(formatLinkSourceRef({ source: { type: "interval", interval_seconds: 5 } })).toBe("interval:5s");
+    });
+    it("returns em dash when unknown", () => {
+      expect(formatLinkSourceRef({ source: {} })).toBe("—");
     });
   });
 

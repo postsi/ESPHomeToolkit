@@ -132,6 +132,9 @@ def test_lifecycle_sections_parse_and_bindings_and_geometry():
         strict_widget_ids=False,
     )
     assert len(bindings) >= 1
+    for b in bindings:
+        assert "." in str(b.get("entity_id") or ""), b
+        assert b.get("kind"), b
     assert any(ln.get("target", {}).get("widget_id") == "temp_lbl" for ln in links)
 
 
@@ -168,6 +171,9 @@ def test_heating_controller_fixture_import_sample():
         strict_widget_ids=False,
     )
     assert len(bindings) >= 2
+    for b in bindings:
+        assert "." in str(b.get("entity_id") or ""), b
+        assert "kind" in b, b
     wids = {ln.get("target", {}).get("widget_id") for ln in links}
     assert "lbl_hw_temp" in wids
     assert "lbl_room" in wids
@@ -225,3 +231,6 @@ def test_heating_controller_yaml_resolved_path():
         "heating-controller.yaml parsed but no homeassistant bindings/links — "
         "check sensors under packages/includes or on_value shape"
     )
+    for b in bindings:
+        assert "." in str(b.get("entity_id") or ""), b
+        assert "kind" in b, b

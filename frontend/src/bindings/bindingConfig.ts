@@ -166,18 +166,55 @@ type EntityLike = { entity_id?: string; friendly_name?: string };
 
 /** Human summary for a display binding (link): "Shows Living room temp (sensor.living_room_temp)" */
 export function formatDisplayBindingSummary(
-  ln: { source?: { entity_id?: string; attribute?: string }; target?: { action?: string } },
+  ln: { source?: Record<string, unknown>; target?: { action?: string; yaml_override?: string } },
   entities: EntityLike[]
 ): string {
-  const ent = String(ln?.source?.entity_id || "").trim();
-  const attr = String(ln?.source?.attribute || "").trim();
+  const src = (ln?.source || {}) as Record<string, unknown>;
+  const ent = String(src.entity_id || "").trim();
+  const srcType = String(src.type || "").trim();
   const action = String(ln?.target?.action || "").trim();
-  const label = ent ? (entities.find((e) => e?.entity_id === ent)?.friendly_name || ent) : "";
   const actionLabel = action ? (DISPLAY_ACTION_LABELS[action as DisplayAction] || action) : "";
+
+  // ESPHome device-local sources (no HA entity_id on the link)
+  if (srcType === "local_switch") {
+    const sid = String(src.switch_id || "").trim();
+    const st = String(src.state || "").trim();
+    const tail = actionLabel || (ln?.target?.yaml_override ? "custom YAML" : "widget update");
+    return `Device switch "${sid || "?"}" (${st || "?"}) → ${tail}`;
+  }
+  if (srcType === "local_climate") {
+    const cid = String(src.climate_id || "").trim();
+    const st = String(src.state || "").trim();
+    const tail = ln?.target?.yaml_override ? "custom YAML" : "widget update";
+    return `Device climate "${cid || "?"}" (${st || "?"}) → ${tail}`;
+  }
+  if (srcType === "interval") {
+    const sec = src.interval_seconds != null ? String(src.interval_seconds) : "?";
+    const updates = Array.isArray(src.updates) ? src.updates.length : 0;
+    return `Interval every ${sec}s → ${updates} widget update(s)`;
+  }
+
+  const attr = String(src.attribute || "").trim();
+  const label = ent ? (entities.find((e) => e?.entity_id === ent)?.friendly_name || ent) : "";
   if (!ent) return "Shows (no entity)";
   const part = label || ent;
   const attrPart = attr ? ` · ${attr}` : "";
   return `Shows ${part} (${ent})${attrPart}${actionLabel ? ` → ${actionLabel}` : ""}`;
+}
+
+/** Short right-hand label for link row (entity id or device-local source). */
+export function formatLinkSourceRef(ln: { source?: Record<string, unknown> }): string {
+  const src = (ln?.source || {}) as Record<string, unknown>;
+  const ent = String(src.entity_id || "").trim();
+  if (ent) {
+    const attr = String(src.attribute || "").trim();
+    return attr ? `${ent} [${attr}]` : ent;
+  }
+  const t = String(src.type || "").trim();
+  if (t === "local_switch") return `device:switch:${String(src.switch_id || "").trim() || "?"}`;
+  if (t === "local_climate") return `device:climate:${String(src.climate_id || "").trim() || "?"}`;
+  if (t === "interval") return `interval:${src.interval_seconds != null ? String(src.interval_seconds) : "?"}s`;
+  return "—";
 }
 
 /** Human summary for an action binding: "On click → Toggle (light.shed)" */

@@ -14,6 +14,7 @@ import {
   DISPLAY_ACTION_LABELS,
   EVENT_LABELS,
   formatDisplayBindingSummary,
+  formatLinkSourceRef,
   formatActionBindingSummary,
   displayActionRequiresNumericSource,
 } from "./bindings/bindingConfig";
@@ -5004,7 +5005,66 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   const actionBindings = (project as any)?.action_bindings || [];
                   return (
                     <>
-                <div className="muted" style={{ marginTop: 8 }} title="Entities = HA sensors from Add recommended; Links = display bindings; Actions = action bindings from Binding Builder">Entities: {haBindingCounts.entities} • Links: {haBindingCounts.links} • Actions: {haBindingCounts.actions}</div>
+                <div
+                  className="muted"
+                  style={{ marginTop: 8 }}
+                  title="Entities = project.bindings[] (YAML import homeassistant sensors, or Add recommended). Links = display sources (HA entity, device switch/climate, or interval). Actions = Binding Builder."
+                >
+                  Entities: {haBindingCounts.entities} • Links: {haBindingCounts.links} • Actions: {haBindingCounts.actions}
+                </div>
+                {(() => {
+                  const haBindingsExpanded = bindingsListExpanded["ha-entity-bindings"] ?? false;
+                  return (
+                    <div style={{ marginTop: 10, border: "1px solid var(--divider-color, rgba(0,0,0,0.12))", borderRadius: 6, overflow: "hidden" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBindingsListExpanded((prev) => ({ ...prev, ["ha-entity-bindings"]: !prev["ha-entity-bindings"] }))}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          textAlign: "left",
+                          background: "rgba(255,255,255,.04)",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>HA entity bindings (compile → homeassistant)</span>
+                        <span className="muted" style={{ fontSize: 11 }}>{bindings.length} row{bindings.length !== 1 ? "s" : ""}</span>
+                        <span style={{ transform: haBindingsExpanded ? "rotate(180deg)" : "none" }}>▼</span>
+                      </button>
+                      {haBindingsExpanded && (
+                        <div style={{ padding: "8px 10px 10px", fontSize: 12, maxHeight: 220, overflowY: "auto" }}>
+                          {bindings.length === 0 ? (
+                            <div className="muted">None yet. YAML import with <code>sensor:</code> / <code>text_sensor:</code> <code>platform: homeassistant</code> fills this; or use Add recommended above.</div>
+                          ) : (
+                            <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.65, listStyle: "disc" }}>
+                              {bindings.map((b: any, i: number) => {
+                                const eid = String(b?.entity_id || "").trim();
+                                const kind = String(b?.kind || "").trim();
+                                const attr = String(b?.attribute || "").trim();
+                                return (
+                                  <li key={`hb-${i}`}>
+                                    <code title={eid}>{eid || "(missing entity_id)"}</code>
+                                    <span className="muted" style={{ fontSize: 11 }}>
+                                      {" "}
+                                      · {kind || "?"}
+                                      {attr ? ` [${attr}]` : ""}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {(() => {
                   const widgetType = (wid: string) => widgets.find((w: any) => w?.id === wid)?.type || "container";
                   const byTypeLinks: Record<string, { index: number; ln: any }[]> = {};
@@ -5048,15 +5108,15 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                             {expanded && (
                               <ul style={{ margin: 0, padding: "6px 10px 10px 22px", fontSize: 12, lineHeight: 1.6, listStyle: "disc" }}>
                                 {group.map(({ index, ln }) => {
-                                  const src = ln?.source || {}; const tgt = ln?.target || {}; const wid = String(tgt?.widget_id || "").trim();
-                                  const ent = String(src?.entity_id || "").trim(); const attr = String(src?.attribute || "").trim(); const action = String(tgt?.action || "").trim();
+                                  const tgt = ln?.target || {}; const wid = String(tgt?.widget_id || "").trim();
                                   const isSelected = selectedWidgetIds.includes(wid); const hasOverride = !!tgt?.yaml_override;
                                   const summary = formatDisplayBindingSummary(ln, entities);
+                                  const srcRef = formatLinkSourceRef(ln);
                                   return (
                                     <li key={`l-${index}`} style={isSelected ? { fontWeight: 600 } : {}}>
                                       {hasOverride && <span title="Custom YAML">✎ </span>}
                                       <span title={summary}>{summary}</span>
-                                      <span className="muted" style={{ fontSize: 11 }}> — <code>{wid || "(no widget)"}</code> ← <code>{ent || "—"}{attr ? ` [${attr}]` : ""}</code></span>
+                                      <span className="muted" style={{ fontSize: 11 }}> — <code>{wid || "(no widget)"}</code> ← <code>{srcRef}</code></span>
                                       {tgt?.import_orphan_widget ? (
                                         <span className="muted" style={{ fontSize: 10, marginLeft: 6 }} title="Widget id not found on canvas after import; fix ids or LVGL tree, then re-import.">
                                           (orphan)
