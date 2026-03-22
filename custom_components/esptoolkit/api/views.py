@@ -7067,6 +7067,8 @@ class ImportFromYamlView(HomeAssistantView):
                 strict_widget_ids=False,
             )
             log.append(f"Found {len(bindings)} binding(s), {len(links)} link(s).")
+            action_bindings = _yaml_import.reverse_action_bindings_from_pages(pages)
+            log.append(f"Found {len(action_bindings)} action binding(s) from widget events.")
             if len(bindings) == 0 and len(links) == 0 and "homeassistant" in raw_yaml.lower():
                 log.append(
                     "No homeassistant bindings detected — sensors may be under `packages:`/`!include` "
@@ -7083,7 +7085,7 @@ class ImportFromYamlView(HomeAssistantView):
             project["pages"] = pages
             project["bindings"] = bindings
             project["links"] = links
-            project["action_bindings"] = []
+            project["action_bindings"] = action_bindings
             project["scripts"] = scripts
             project["device"] = {"hardware_recipe_id": recipe_id, "screen": screen}
             disp_bg = None

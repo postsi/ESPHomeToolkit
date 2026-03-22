@@ -561,6 +561,67 @@ def _action_from_lvgl_update(update: dict) -> str:
     return "label_text"
 
 
+_CLIMATE_VALUE_LAMBDA_RE = re.compile(
+    r"id\s*\(\s*([a-zA-Z0-9_]+)\s*\)\s*\.\s*(target_temperature|current_temperature)",
+    re.IGNORECASE,
+)
+
+
+def _display_hint_for_lvgl_value_payload(payload: dict, *, kind: str) -> str | None:
+    """Short hint for Binding UI when arc/slider/bar value is driven from id(climate_x).target_temperature etc."""
+    if "arc" not in (kind or "") and "slider" not in (kind or "") and "bar" not in (kind or ""):
+        return None
+    val = payload.get("value")
+    s = val if isinstance(val, str) else ("" if val is None else str(val))
+    if "target_temperature" not in s and "current_temperature" not in s:
+        return None
+    m = _CLIMATE_VALUE_LAMBDA_RE.search(s)
+    if not m:
+        return None
+    cid, field = m.group(1), m.group(2).lower()
+    label = "setpoint" if field == "target_temperature" else "current temperature"
+    return f"ESPHome climate `{cid}` · {label} (not an HA entity link)"
+
+
+def reverse_action_bindings_from_pages(pages: list[dict]) -> list[dict]:
+    """Populate project.action_bindings from parsed widget events (native ESPHome, e.g. climate.control on_release).
+
+    The compiler prefers action_bindings yaml_override over raw widget.events for the same key, so bindings
+    show up in the Binding Builder like manually added actions.
+    """
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    for page in pages or []:
+        if not isinstance(page, dict):
+            continue
+        # parse_lvgl_section_to_pages stores a flat widget list (parent_id), not nested widgets[].
+        for w in page.get("widgets") or []:
+            if not isinstance(w, dict):
+                continue
+            wid = str(w.get("id") or "").strip()
+            events = w.get("events") or {}
+            if wid and isinstance(events, dict):
+                for ev_name, ev_yaml in events.items():
+                    if not isinstance(ev_yaml, str) or not ev_yaml.strip():
+                        continue
+                    body = ev_yaml.strip()
+                    if "climate.control" not in body:
+                        continue
+                    key = (wid, str(ev_name))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append(
+                        {
+                            "widget_id": wid,
+                            "event": str(ev_name),
+                            "yaml_override": body,
+                        }
+                    )
+    return out
+
+
 def reverse_bindings_and_links(
     sections: dict[str, str],
     widget_ids: set[str],
@@ -696,24 +757,31 @@ def reverse_bindings_and_links(
                 then_list = raw
             else:
                 continue
-            for upd in _extract_lvgl_update_from_then(then_list):
-                wid = str(upd.get("id") or "").strip()
-                if strict_widget_ids and wid not in widget_ids:
-                    continue
-                if not wid:
-                    continue
-                payload = upd.get("payload") or {}
-                try:
-                    yaml_override = yaml.safe_dump([{upd.get("kind", "lvgl.widget.update"): payload}], default_flow_style=False, allow_unicode=True).strip()
-                except Exception:
-                    yaml_override = ""
-                tgt_cl: dict = {"widget_id": wid, "yaml_override": yaml_override}
-                if not strict_widget_ids and wid not in widget_ids:
-                    tgt_cl["import_orphan_widget"] = True
-                links.append({
-                    "source": {"type": "local_climate", "climate_id": climate_id, "state": state},
-                    "target": tgt_cl,
-                })
+                for upd in _extract_lvgl_update_from_then(then_list):
+                    wid = str(upd.get("id") or "").strip()
+                    if strict_widget_ids and wid not in widget_ids:
+                        continue
+                    if not wid:
+                        continue
+                    kind = str(upd.get("kind") or "").strip()
+                    payload = upd.get("payload") or {}
+                    # Thermostat heat/idle/off often only recolors the arc (indicator) — not a "value" binding.
+                    if kind == "lvgl.arc.update" and "value" not in payload:
+                        continue
+                    if kind in ("lvgl.slider.update", "lvgl.bar.update") and "value" not in payload:
+                        continue
+                    try:
+                        yaml_override = yaml.safe_dump([{upd.get("kind", "lvgl.widget.update"): payload}], default_flow_style=False, allow_unicode=True).strip()
+                    except Exception:
+                        yaml_override = ""
+                    action = _action_from_lvgl_update(upd)
+                    tgt_cl: dict = {"widget_id": wid, "action": action, "yaml_override": yaml_override}
+                    if not strict_widget_ids and wid not in widget_ids:
+                        tgt_cl["import_orphan_widget"] = True
+                    links.append({
+                        "source": {"type": "local_climate", "climate_id": climate_id, "state": state},
+                        "target": tgt_cl,
+                    })
 
     # --- Interval -> widgets (interval links) ---
     interval_blocks = section_blocks("interval", sections, parsed_root)
@@ -760,6 +828,9 @@ def reverse_bindings_and_links(
                 "action": _action_from_lvgl_update({"kind": key, "payload": payload}),
                 "yaml_override": yaml_override,
             }
+            hint = _display_hint_for_lvgl_value_payload(payload, kind=key)
+            if hint:
+                uent["display_hint"] = hint
             if not strict_widget_ids and wid not in widget_ids:
                 uent["import_orphan_widget"] = True
             updates.append(uent)

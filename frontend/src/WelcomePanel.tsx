@@ -1,7 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import type { DeviceSummary } from "./api";
 
 const MAX_RECENT = 4;
+
+function friendlyToId(s: string): string {
+  return (
+    s
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "device"
+  );
+}
 
 export interface WelcomePanelProps {
   /** Full list of devices. */
@@ -20,6 +30,12 @@ export interface WelcomePanelProps {
   onImportYaml?: () => void;
   /** Optional: recipe labels by id for display. */
   recipeLabels?: Record<string, string>;
+  /** Duplicate device + UI (same contract as Manage devices). */
+  onCopyDevice: (sourceDeviceId: string, newName: string, newSlug: string) => void | Promise<void>;
+  /** Delete device and its UI. */
+  onDeleteDevice: (deviceId: string) => void | Promise<void>;
+  /** Disable copy/delete actions while a request is in flight. */
+  busy?: boolean;
 }
 
 export default function WelcomePanel({
@@ -31,7 +47,19 @@ export default function WelcomePanel({
   onManageDevices,
   onImportYaml,
   recipeLabels = {},
+  onCopyDevice,
+  onDeleteDevice,
+  busy = false,
 }: WelcomePanelProps) {
+  const [recentContextMenu, setRecentContextMenu] = useState<{
+    x: number;
+    y: number;
+    device: DeviceSummary;
+  } | null>(null);
+  const [copySource, setCopySource] = useState<DeviceSummary | null>(null);
+  const [copyName, setCopyName] = useState("");
+  const [copySlug, setCopySlug] = useState("");
+
   const recentDevices = recentDeviceIds
     .slice(0, MAX_RECENT)
     .map((id) => devices.find((d) => d.device_id === id))
@@ -48,6 +76,27 @@ export default function WelcomePanel({
             .slice(0, MAX_RECENT)
         : [];
   const isFallbackList = recentDevices.length === 0 && devices.length > 0;
+
+  const openCopyDialog = (d: DeviceSummary) => {
+    setRecentContextMenu(null);
+    setCopySource(d);
+    setCopyName((d.name || d.device_id) + " (copy)");
+    setCopySlug(friendlyToId((d.name || d.device_id) + "_copy"));
+  };
+
+  const saveCopy = () => {
+    if (!copySource || !copyName.trim() || !copySlug.trim()) return;
+    void onCopyDevice(copySource.device_id, copyName.trim(), copySlug.trim());
+    setCopySource(null);
+  };
+
+  const handleDeleteFromMenu = (d: DeviceSummary) => {
+    setRecentContextMenu(null);
+    const label = d.name || d.device_id;
+    if (window.confirm(`Delete device "${label}" and its UI? This cannot be undone.`)) {
+      void onDeleteDevice(d.device_id);
+    }
+  };
 
   return (
     <div
@@ -71,8 +120,8 @@ export default function WelcomePanel({
           <>
             <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
               {isFallbackList
-                ? "Click a device to open its UI. This list will show your most recently opened devices once you've opened some."
-                : "Click a device to open its UI."}
+                ? "Click a device to open its UI; right-click to copy or delete. This list will show your most recently opened devices once you've opened some."
+                : "Click a device to open its UI. Right-click for copy or delete."}
             </p>
             <ul className="list compact" style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {displayDevices.map((d) => (
@@ -94,6 +143,11 @@ export default function WelcomePanel({
                       alignItems: "flex-start",
                     }}
                     onClick={() => onLoadDevice(d.device_id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setRecentContextMenu({ x: e.clientX, y: e.clientY, device: d });
+                    }}
                   >
                     <span style={{ fontWeight: 600 }}>{d.name || d.device_id}</span>
                     {d.hardware_recipe_id && (
@@ -154,6 +208,131 @@ export default function WelcomePanel({
         <p className="muted" style={{ fontSize: 14 }}>
           No devices yet. Add a device to get started.
         </p>
+      )}
+
+      {recentContextMenu && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999 }}
+          onClick={() => setRecentContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setRecentContextMenu(null);
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: recentContextMenu.x,
+              top: recentContextMenu.y,
+              background: "#2a2a2a",
+              border: "1px solid #444",
+              borderRadius: 6,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              minWidth: 160,
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "#888", borderBottom: "1px solid #444" }}>
+              {recentContextMenu.device.name || recentContextMenu.device.device_id}
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "10px 12px",
+                textAlign: "left",
+                background: "transparent",
+                border: "none",
+                color: "#e5e5e5",
+                cursor: busy ? "not-allowed" : "pointer",
+                fontSize: 13,
+              }}
+              onMouseOver={(e) => {
+                if (!busy) e.currentTarget.style.background = "#3a3a3a";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+              onClick={() => openCopyDialog(recentContextMenu.device)}
+            >
+              Copy device…
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "10px 12px",
+                textAlign: "left",
+                background: "transparent",
+                border: "none",
+                borderTop: "1px solid #444",
+                color: "#ef4444",
+                cursor: busy ? "not-allowed" : "pointer",
+                fontSize: 13,
+              }}
+              onMouseOver={(e) => {
+                if (!busy) e.currentTarget.style.background = "#3a3a3a";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+              onClick={() => handleDeleteFromMenu(recentContextMenu.device)}
+            >
+              Delete device…
+            </button>
+          </div>
+        </div>
+      )}
+
+      {copySource && (
+        <div className="modalOverlay" onClick={() => !busy && setCopySource(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modalHeader">
+              <div className="title">Copy device</div>
+              <button type="button" className="ghost" disabled={busy} onClick={() => setCopySource(null)}>
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: "0 16px 16px" }}>
+              <div className="muted" style={{ marginBottom: 12, fontSize: 12 }}>
+                Copy &quot;{copySource.name || copySource.device_id}&quot; and its UI to a new device.
+              </div>
+              <label className="fieldLabel" style={{ display: "block", marginBottom: 4 }}>
+                New device name
+              </label>
+              <input
+                value={copyName}
+                onChange={(e) => setCopyName(e.target.value)}
+                placeholder="Device name"
+                style={{ width: "100%", marginBottom: 10 }}
+                disabled={busy}
+              />
+              <label className="fieldLabel" style={{ display: "block", marginBottom: 4 }}>
+                Slug (for export)
+              </label>
+              <input
+                value={copySlug}
+                onChange={(e) => setCopySlug(e.target.value)}
+                placeholder="slug"
+                style={{ width: "100%", marginBottom: 12 }}
+                disabled={busy}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="primary" disabled={busy || !copyName.trim() || !copySlug.trim()} onClick={saveCopy}>
+                  {busy ? "Working…" : "Create copy"}
+                </button>
+                <button type="button" className="secondary" disabled={busy} onClick={() => setCopySource(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

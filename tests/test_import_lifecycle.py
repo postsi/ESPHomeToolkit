@@ -239,3 +239,27 @@ def test_heating_controller_yaml_resolved_path():
     for b in bindings:
         assert "." in str(b.get("entity_id") or ""), b
         assert "kind" in b, b
+
+    # Thermostat heat/idle arc recolor (no `value:`) must not become bogus "climate → arc" display links.
+    assert not any(
+        ln.get("source", {}).get("type") == "local_climate"
+        and ln.get("target", {}).get("widget_id") == "arc_all"
+        for ln in links
+    ), "indicator-only arc updates should be skipped for local_climate links"
+
+    interval_links = [ln for ln in links if ln.get("source", {}).get("type") == "interval"]
+    assert interval_links, "expected interval UI refresh block"
+    arc_all_u = None
+    for ln in interval_links:
+        for u in ln.get("source", {}).get("updates") or []:
+            if isinstance(u, dict) and u.get("widget_id") == "arc_all":
+                arc_all_u = u
+                break
+    assert arc_all_u is not None
+    assert arc_all_u.get("display_hint"), "arc setpoint hint for Binding UI"
+
+    action_bindings = yi.reverse_action_bindings_from_pages(pages)
+    assert any(
+        b.get("widget_id") == "arc_all" and "climate.control" in (b.get("yaml_override") or "")
+        for b in action_bindings
+    ), "arc on_release climate.control should become an action_binding"

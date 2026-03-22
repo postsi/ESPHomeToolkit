@@ -185,13 +185,26 @@ export function formatDisplayBindingSummary(
   if (srcType === "local_climate") {
     const cid = String(src.climate_id || "").trim();
     const st = String(src.state || "").trim();
-    const tail = ln?.target?.yaml_override ? "custom YAML" : "widget update";
+    const yo = ln?.target?.yaml_override;
+    let tail: string;
+    if (actionLabel && yo) {
+      tail = `${actionLabel} (ESPHome YAML)`;
+    } else if (yo) {
+      tail = "custom YAML";
+    } else {
+      tail = actionLabel || "widget update";
+    }
     return `Device climate "${cid || "?"}" (${st || "?"}) → ${tail}`;
   }
   if (srcType === "interval") {
     const sec = src.interval_seconds != null ? String(src.interval_seconds) : "?";
-    const updates = Array.isArray(src.updates) ? src.updates.length : 0;
-    return `Interval every ${sec}s → ${updates} widget update(s)`;
+    const updList = Array.isArray(src.updates) ? (src.updates as Record<string, unknown>[]) : [];
+    const hints = [...new Set(updList.map((u) => String(u?.display_hint || "").trim()).filter(Boolean))];
+    const hintTail =
+      hints.length > 0
+        ? ` — ${hints.slice(0, 2).join("; ")}${hints.length > 2 ? "…" : ""}`
+        : "";
+    return `Interval every ${sec}s → ${updList.length} widget update(s)${hintTail}`;
   }
 
   const attr = String(src.attribute || "").trim();
@@ -219,7 +232,11 @@ export function formatLinkSourceRef(ln: { source?: Record<string, unknown> }): s
 
 /** Human summary for an action binding: "On click → Toggle (light.shed)" */
 export function formatActionBindingSummary(
-  ab: { event?: string; call?: { domain?: string; service?: string; entity_id?: string } },
+  ab: {
+    event?: string;
+    yaml_override?: string;
+    call?: { domain?: string; service?: string; entity_id?: string };
+  },
   entities: EntityLike[]
 ): string {
   const ev = String(ab?.event || "").trim();
@@ -228,6 +245,16 @@ export function formatActionBindingSummary(
   const service = String(call?.service || "").trim();
   const entityId = String(call?.entity_id || "").trim();
   const eventLabel = ev ? (EVENT_LABELS[ev] || ev) : "?";
+  const yo = String(ab?.yaml_override || "").trim();
+  if (yo && !call?.domain && !call?.service) {
+    if (yo.includes("climate.control")) {
+      return `${eventLabel} → ESPHome climate.control (device thermostat)`;
+    }
+    if (yo.includes("homeassistant.action")) {
+      return `${eventLabel} → ESPHome homeassistant.action`;
+    }
+    return `${eventLabel} → ESPHome native YAML`;
+  }
   const opts = getServicesForDomain(domain);
   const serviceLabel = opts.find((o) => o.service === service)?.label || service;
   const entityLabel = entityId ? (entities.find((e) => e?.entity_id === entityId)?.friendly_name || entityId) : "";

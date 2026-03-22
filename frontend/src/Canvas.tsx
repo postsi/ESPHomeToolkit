@@ -338,7 +338,9 @@ const stageRef = useRef<any>(null);
           shadowOffset: { x: shadowOfsX, y: shadowOfsY },
           shadowOpacity: shadowOpa,
         })}
-        draggable={!w.parent_id && (!simulationMode || !simDraggable)}
+        draggable={
+          (!simulationMode || !isSliderOrArcOrBar) || (simulationMode && isSliderOrArcOrBar && !w.parent_id)
+        }
         dragBoundFunc={simulationMode
           ? (simDraggable ? (pos) => ({ x: (transformAngle !== 0 || transformZoom !== 1 ? ax + w.w / 2 : ax), y: (transformAngle !== 0 || transformZoom !== 1 ? ay + w.h / 2 : ay) }) : undefined)
           : (pos) => {

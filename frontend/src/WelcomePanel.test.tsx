@@ -4,6 +4,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, it, expect, afterEach, vi } from "vitest";
+import type { DeviceSummary } from "./api";
 import WelcomePanel from "./WelcomePanel";
 
 function render(ui: React.ReactElement): { container: HTMLElement; unmount: () => void } {
@@ -30,12 +31,14 @@ describe("WelcomePanel", () => {
   });
 
   const defaultProps = {
-    devices: [] as { device_id: string; name?: string; slug?: string; hardware_recipe_id?: string | null }[],
+    devices: [] as DeviceSummary[],
     recentDeviceIds: [] as string[],
     onLoadDevice: vi.fn(),
     onOpenDevicePicker: vi.fn(),
     onAddDevice: vi.fn(),
     onManageDevices: vi.fn(),
+    onCopyDevice: vi.fn(),
+    onDeleteDevice: vi.fn(),
   };
 
   it("renders intro, Open device, Add device and Manage devices", () => {
@@ -66,12 +69,12 @@ describe("WelcomePanel", () => {
     );
     expect(container.textContent).toContain("Recent devices");
     expect(container.textContent).toContain("Living Room Panel");
-    expect(container.textContent).toContain("Click a device to open its UI");
+    expect(container.textContent).toContain("Right-click for copy or delete");
     unmount();
   });
 
   it("shows Recent devices section with device list when recentDeviceIds empty but devices exist (fallback)", () => {
-    const devices = [{ device_id: "d1", name: "Test Device" }];
+    const devices: DeviceSummary[] = [{ device_id: "d1", name: "Test Device", slug: "test_device" }];
     const { container, unmount } = render(
       <WelcomePanel
         {...defaultProps}
@@ -99,9 +102,32 @@ describe("WelcomePanel", () => {
   it("does not throw when recipeLabels is undefined", () => {
     expect(() => {
       const { unmount } = render(
-        <WelcomePanel {...defaultProps} devices={[{ device_id: "d1", name: "Test" }]} recipeLabels={undefined} />
+        <WelcomePanel {...defaultProps} devices={[{ device_id: "d1", name: "Test", slug: "test" }]} recipeLabels={undefined} />
       );
       unmount();
     }).not.toThrow();
+  });
+
+  it("opens context menu on right-click and calls onDeleteDevice when delete is confirmed", () => {
+    const onDeleteDevice = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const devices = [{ device_id: "d1", name: "Panel One", slug: "panel_one" }];
+    const { container, unmount } = render(
+      <WelcomePanel {...defaultProps} devices={devices} recentDeviceIds={["d1"]} onDeleteDevice={onDeleteDevice} />
+    );
+    const rowBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("Panel One"));
+    expect(rowBtn).toBeTruthy();
+    act(() => {
+      rowBtn!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+    });
+    const deleteBtn = [...container.querySelectorAll("button")].find((b) => b.textContent === "Delete device…");
+    expect(deleteBtn).toBeTruthy();
+    act(() => {
+      deleteBtn!.click();
+    });
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(onDeleteDevice).toHaveBeenCalledWith("d1");
+    confirmSpy.mockRestore();
+    unmount();
   });
 });

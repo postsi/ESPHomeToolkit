@@ -142,6 +142,15 @@ describe("bindingConfig", () => {
       expect(s).toContain("Device climate");
       expect(s).toContain("custom YAML");
     });
+    it("local_climate includes display action when target.action is set", () => {
+      const ln = {
+        source: { type: "local_climate", climate_id: "c1", state: "HEAT" },
+        target: { action: "arc_value", yaml_override: "then:\n  - x" },
+      };
+      const s = formatDisplayBindingSummary(ln, entities);
+      expect(s).toContain("Set arc value");
+      expect(s).toContain("ESPHome YAML");
+    });
     it("summarizes interval link", () => {
       const ln = {
         source: { type: "interval", interval_seconds: 30, updates: [{ widget_id: "a" }, { widget_id: "b" }] },
@@ -149,6 +158,17 @@ describe("bindingConfig", () => {
       };
       expect(formatDisplayBindingSummary(ln, entities)).toContain("30s");
       expect(formatDisplayBindingSummary(ln, entities)).toContain("2 widget");
+    });
+    it("interval link includes display_hint snippets from updates", () => {
+      const ln = {
+        source: {
+          type: "interval",
+          interval_seconds: 1,
+          updates: [{ widget_id: "arc_all", display_hint: "ESPHome climate `climate_all` · setpoint (not an HA entity link)" }],
+        },
+        target: {},
+      };
+      expect(formatDisplayBindingSummary(ln, entities)).toContain("ESPHome climate");
     });
   });
 
@@ -171,6 +191,14 @@ describe("bindingConfig", () => {
     const entities = [
       { entity_id: "light.shed", friendly_name: "Shed" },
     ];
+    it("summarizes ESPHome yaml_override climate.control", () => {
+      const ab = {
+        event: "on_release",
+        yaml_override: "then:\n  - climate.control:\n      id: climate_all\n",
+      };
+      expect(formatActionBindingSummary(ab, entities)).toContain("climate.control");
+      expect(formatActionBindingSummary(ab, entities)).toContain("ESPHome");
+    });
     it("returns event label and service label with entity_id", () => {
       const ab = { event: "on_click", call: { domain: "light", service: "light.toggle", entity_id: "light.shed" } };
       const s = formatActionBindingSummary(ab, entities);

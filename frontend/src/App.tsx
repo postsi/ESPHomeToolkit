@@ -631,14 +631,20 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
         setImportYamlOpen(false);
         setImportYamlText("");
         setImportYamlNameOverride("");
-        setToast({ type: "success", msg: `Imported device: ${(result as any).device_id ?? "ok"}` });
-        if (entryId) {
+        const deviceId = (result as any).device_id as string | undefined;
+        if (entryId && deviceId) {
           const listRes = await listDevices(entryId);
           if (listRes.ok) setDevices(listRes.devices);
-          const deviceId = (result as any).device_id;
-          if (deviceId) {
-            setSelectedDevice(deviceId);
-            await loadDevice(deviceId);
+          try {
+            localStorage.removeItem(draftKeyForDevice(deviceId));
+          } catch {}
+          setSelectedDevice(deviceId);
+          await loadDevice(deviceId, { saveAfterLoad: true });
+        } else {
+          setToast({ type: "ok", msg: `Imported device: ${deviceId ?? "ok"}` });
+          if (entryId) {
+            const listRes = await listDevices(entryId);
+            if (listRes.ok) setDevices(listRes.devices);
           }
         }
       } else {
@@ -1595,6 +1601,13 @@ if (baseId.startsWith("glance_card")) {
       if (!res.ok) return setToast({ type: "error", msg: res.error });
       setToast({ type: "ok", msg: "Device deleted" });
       if (selectedDevice === id) { setSelectedDevice(""); setProject(null); }
+      setRecentDeviceIds((prev) => {
+        const next = prev.filter((x) => x !== id);
+        try {
+          localStorage.setItem(RECENT_DEVICES_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       await refresh();
     } finally { setBusy(false); }
   }
@@ -1627,7 +1640,7 @@ if (baseId.startsWith("glance_card")) {
     } finally { setBusy(false); }
   }
 
-  async function loadDevice(id: string) {
+  async function loadDevice(id: string, opts?: { saveAfterLoad?: boolean }) {
     if (!entryId) {
       setToast({ type: "error", msg: INTEGRATION_NOT_CONFIGURED_MSG });
       return;
@@ -1670,7 +1683,21 @@ if (baseId.startsWith("glance_card")) {
         } catch {}
         return next;
       });
-      setToast({ type: "ok", msg: `Loaded device` });
+      if (opts?.saveAfterLoad) {
+        const putRes = await putProject(entryId, id, nextProject);
+        if (!putRes.ok) {
+          setToast({ type: "error", msg: `Loaded project but save failed: ${putRes.error}` });
+          setProjectDirty(true);
+        } else {
+          setProjectDirty(false);
+          try {
+            localStorage.removeItem(draftKeyForDevice(id));
+          } catch {}
+          setToast({ type: "ok", msg: "Imported device — project saved" });
+        }
+      } else {
+        setToast({ type: "ok", msg: `Loaded device` });
+      }
     } finally { setBusy(false); }
   }
 
@@ -4545,11 +4572,14 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               devices={devices}
               recentDeviceIds={recentDeviceIds}
               recipeLabels={recipeLabels}
+              busy={busy}
               onLoadDevice={loadDevice}
               onOpenDevicePicker={() => setOpenDevicePickerOpen(true)}
               onAddDevice={openNewDeviceWizard}
               onManageDevices={() => setManageDevicesOpen(true)}
               onImportYaml={() => { setImportYamlOpen(true); setImportYamlText(""); setImportYamlNameOverride(""); setImportYamlErr(""); setImportLogLines([]); }}
+              onCopyDevice={copyDevice}
+              onDeleteDevice={removeDevice}
             />
           ) : (
             <>
