@@ -32,6 +32,9 @@ _src_api/
 _src_designer/
 *.log
 
+# Pulled from HA via MCP (may contain SSIDs / device-specific text); keep local only
+tests/fixtures/heating-controller.yaml
+
 # Secrets (do not commit)
 .env
 .env.*

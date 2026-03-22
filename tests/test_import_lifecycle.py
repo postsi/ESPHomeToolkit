@@ -1,10 +1,20 @@
 """
 End-to-end import lifecycle checks (LVGL parse + bindings reverse) without Home Assistant.
 Run: pytest tests/test_import_lifecycle.py -v
+
+**Real heating-controller.yaml** (optional, gitignored): pull from HA with GrimwoodAI MCP
+``ha_read_file`` → path ``esphome/heating-controller.yaml`` (relative to ``/config``), save as
+``tests/fixtures/heating-controller.yaml``. Tests use that file if present.
+
+Alternatively set ``HEATING_CONTROLLER_YAML`` or ``ESPHOME_CONFIG_DIR`` (see
+``test_heating_controller_yaml_resolved_path``).
 """
 import importlib.util
+import os
 import re
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 YAML_IMPORT_PATH = ROOT / "custom_components" / "esptoolkit" / "api" / "yaml_import.py"
@@ -161,3 +171,57 @@ def test_heating_controller_fixture_import_sample():
     wids = {ln.get("target", {}).get("widget_id") for ln in links}
     assert "lbl_hw_temp" in wids
     assert "lbl_room" in wids
+
+
+def _resolve_heating_controller_path() -> Path | None:
+    """Prefer local fixture (from MCP pull), then env vars."""
+    local = ROOT / "tests" / "fixtures" / "heating-controller.yaml"
+    if local.is_file():
+        return local
+    path_str = (os.environ.get("HEATING_CONTROLLER_YAML") or "").strip()
+    if path_str and Path(path_str).is_file():
+        return Path(path_str)
+    cfg = (os.environ.get("ESPHOME_CONFIG_DIR") or "").strip()
+    if cfg:
+        candidate = Path(cfg) / "heating-controller.yaml"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def test_heating_controller_yaml_resolved_path():
+    """Import pipeline on real heating-controller.yaml: fixture file and/or HA path via MCP/env."""
+    path = _resolve_heating_controller_path()
+    if path is None:
+        pytest.skip(
+            "No heating-controller.yaml: save MCP ha_read_file esphome/heating-controller.yaml to "
+            "tests/fixtures/heating-controller.yaml, or set HEATING_CONTROLLER_YAML / ESPHOME_CONFIG_DIR."
+        )
+
+    yaml_str = path.read_text(encoding="utf-8")
+    pr = yi.load_yaml_lenient(yaml_str)
+    assert isinstance(pr, dict)
+
+    sections = _section_map_from_full_yaml(yaml_str)
+    pages = yi.parse_lvgl_section_to_pages(
+        sections.get("lvgl") or "",
+        root_parent_w=1024,
+        root_parent_h=600,
+    )
+    flat: list[dict] = []
+    for pg in pages:
+        flat.extend(pg.get("widgets") or [])
+    widget_ids = {str(w["id"]) for w in flat if w.get("id")}
+    assert len(widget_ids) > 0, "expected at least one widget id from LVGL parse"
+
+    bindings, links = yi.reverse_bindings_and_links(
+        sections,
+        widget_ids,
+        parsed_root=pr,
+        strict_widget_ids=False,
+    )
+    # Real project should expose HA bindings; if zero, import still completed but log why in CI.
+    assert len(bindings) > 0 or len(links) > 0, (
+        "heating-controller.yaml parsed but no homeassistant bindings/links — "
+        "check sensors under packages/includes or on_value shape"
+    )
