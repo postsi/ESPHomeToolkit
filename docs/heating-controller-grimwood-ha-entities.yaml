@@ -1,0 +1,451 @@
+# =============================================================================
+# Heating-controller UI → Home Assistant Grimwood climates (merge guide)
+# =============================================================================
+# This is NOT a full device YAML. Your Guition package still needs: esphome,
+# esp32, display, touchscreen, fonts, wifi, api, logger, and the full `lvgl:`
+# tree from `heating-controller.yaml`.
+#
+# What the stock heating-controller is trying to do (so this matches intent):
+#   • Show current room / aggregate temperature on labels.
+#   • Show target (setpoint) on arcs and a “Target” readout.
+#   • Drag arc or use +/- to change setpoint on the right climate entity.
+#   • OFF / HEAT and Home / Away / Boost presets on the “All zones” card.
+#
+# Stock YAML does that with ON-DEVICE `climate:` thermostats + `climate.control`.
+# This fragment does the SAME JOB using ONLY Grimwood HA `climate.*` entities via
+# `homeassistant` `sensor:` (read) and `homeassistant.action` (write).
+#
+# Entity map (edit substitutions if your rooms differ). These ids were listed
+# from the Grimwood HA instance (climate domain):
+#   All zones card     → climate.grimwood_all_thermostats
+#   Zone 1 … 6 cards   → six room climates (example assignment below).
+#
+# Merge steps:
+#   1. Add the `substitutions:` block to your package (or merge keys into yours).
+#   2. Add the `sensor:` homeassistant entries (or merge into existing sensor:).
+#   3. REMOVE the entire on-device `climate:` / `thermostat` section — you no
+#      longer have `id: climate_all` or `climate_zone_1` … on the ESP.
+#   4. REMOVE old `script:` that call `id(climate_*).make_call()` or
+#      `climate.control:` with those ids — replace with the `script:` block
+#      below (same script ids so LVGL `script.execute:` keeps working).
+#   5. REPLACE your `interval:` UI refresh block with the one below (same widget
+#      ids: lbl_all_current, lbl_all_target, arc_all, lbl_z1_temp … arc_z6).
+#   6. In `lvgl:` only, replace each arc `on_release:` that used
+#      `climate.control:` / `id: climate_…` with the matching snippet below
+#      (same arc ids, same min/max/value scaling as your file).
+#
+# Presets: your HA entities must support the preset names (Home / Away / boost).
+# If not, change `preset:` strings or use `climate.set_preset_mode` with values
+# your integration exposes (Developer tools → Services).
+#
+# Arc “all” scaling: stock file uses arc min 30 max 56 and setpoint °C = x/2.
+# Zone arcs use min 15 max 28 and setpoint = x. Snippets below match that.
+# =============================================================================
+
+substitutions:
+  eid_all: climate.grimwood_all_thermostats
+  # Zone cards 1–6 → pick six Grimwood room climates (rename if you prefer):
+  eid_z1: climate.living_rm
+  eid_z2: climate.dwnstair_hall
+  eid_z3: climate.spare_rm
+  eid_z4: climate.upstairs_hall
+  eid_z5: climate.office
+  eid_z6: climate.master_rm
+
+# -----------------------------------------------------------------------------
+# Read HA state/attributes into ESPHome ids (same pattern as stock homeassistant sensors)
+# -----------------------------------------------------------------------------
+sensor:
+  # --- “All zones” aggregate card (setpoint + current from the aggregate climate) ---
+  - platform: homeassistant
+    id: ha_all_current
+    entity_id: ${eid_all}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_all_setpoint
+    entity_id: ${eid_all}
+    attribute: temperature
+
+  # --- Per-zone: current temp + setpoint from each room climate ---
+  - platform: homeassistant
+    id: ha_z1_current
+    entity_id: ${eid_z1}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z1_setpoint
+    entity_id: ${eid_z1}
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_z2_current
+    entity_id: ${eid_z2}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z2_setpoint
+    entity_id: ${eid_z2}
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_z3_current
+    entity_id: ${eid_z3}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z3_setpoint
+    entity_id: ${eid_z3}
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_z4_current
+    entity_id: ${eid_z4}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z4_setpoint
+    entity_id: ${eid_z4}
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_z5_current
+    entity_id: ${eid_z5}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z5_setpoint
+    entity_id: ${eid_z5}
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_z6_current
+    entity_id: ${eid_z6}
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_z6_setpoint
+    entity_id: ${eid_z6}
+    attribute: temperature
+
+# -----------------------------------------------------------------------------
+# Scripts: keep the SAME ids (script_all_inc, …) so LVGL buttons do not change.
+# -----------------------------------------------------------------------------
+script:
+  - id: script_all_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_all}
+            temperature: !lambda |-
+              float t = id(ha_all_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_all_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_all}
+            temperature: !lambda |-
+              float t = id(ha_all_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_all_mode_off
+    then:
+      - homeassistant.action:
+          action: climate.set_hvac_mode
+          data:
+            entity_id: ${eid_all}
+            hvac_mode: "off"
+      - lvgl.widget.update:
+          id: btn_all_off
+          bg_color: 0x666666
+      - lvgl.widget.update:
+          id: btn_all_heat
+          bg_color: 0x333333
+  - id: script_all_mode_heat
+    then:
+      - homeassistant.action:
+          action: climate.set_hvac_mode
+          data:
+            entity_id: ${eid_all}
+            hvac_mode: "heat"
+      - lvgl.widget.update:
+          id: btn_all_off
+          bg_color: 0x333333
+      - lvgl.widget.update:
+          id: btn_all_heat
+          bg_color: 0xff5722
+  - id: script_all_preset_home
+    then:
+      - homeassistant.action:
+          action: climate.set_preset_mode
+          data:
+            entity_id: ${eid_all}
+            preset_mode: "home"
+      - lvgl.widget.update:
+          id: btn_all_home
+          bg_color: 0x1565c0
+      - lvgl.widget.update:
+          id: btn_all_away
+          bg_color: 0x333333
+      - lvgl.widget.update:
+          id: btn_all_boost
+          bg_color: 0x333333
+  - id: script_all_preset_away
+    then:
+      - homeassistant.action:
+          action: climate.set_preset_mode
+          data:
+            entity_id: ${eid_all}
+            preset_mode: "away"
+      - lvgl.widget.update:
+          id: btn_all_home
+          bg_color: 0x333333
+      - lvgl.widget.update:
+          id: btn_all_away
+          bg_color: 0x1565c0
+      - lvgl.widget.update:
+          id: btn_all_boost
+          bg_color: 0x333333
+  - id: script_all_preset_boost
+    then:
+      - homeassistant.action:
+          action: climate.set_preset_mode
+          data:
+            entity_id: ${eid_all}
+            preset_mode: "boost"
+      - lvgl.widget.update:
+          id: btn_all_home
+          bg_color: 0x333333
+      - lvgl.widget.update:
+          id: btn_all_away
+          bg_color: 0x333333
+      - lvgl.widget.update:
+          id: btn_all_boost
+          bg_color: 0xff5722
+
+  - id: script_z1_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z1}
+            temperature: !lambda |-
+              float t = id(ha_z1_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z1_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z1}
+            temperature: !lambda |-
+              float t = id(ha_z1_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_z2_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z2}
+            temperature: !lambda |-
+              float t = id(ha_z2_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z2_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z2}
+            temperature: !lambda |-
+              float t = id(ha_z2_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_z3_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z3}
+            temperature: !lambda |-
+              float t = id(ha_z3_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z3_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z3}
+            temperature: !lambda |-
+              float t = id(ha_z3_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_z4_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z4}
+            temperature: !lambda |-
+              float t = id(ha_z4_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z4_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z4}
+            temperature: !lambda |-
+              float t = id(ha_z4_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_z5_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z5}
+            temperature: !lambda |-
+              float t = id(ha_z5_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z5_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z5}
+            temperature: !lambda |-
+              float t = id(ha_z5_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+  - id: script_z6_inc
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z6}
+            temperature: !lambda |-
+              float t = id(ha_z6_setpoint).state + 0.5f;
+              if (t > 28.0f) t = 28.0f;
+              return t;
+  - id: script_z6_dec
+    then:
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${eid_z6}
+            temperature: !lambda |-
+              float t = id(ha_z6_setpoint).state - 0.5f;
+              if (t < 15.0f) t = 15.0f;
+              return t;
+
+# -----------------------------------------------------------------------------
+# Interval: replace the stock block — same widget ids, HA-backed sensors
+# -----------------------------------------------------------------------------
+interval:
+  - interval: 1s
+    then:
+      - lvgl.label.update:
+          id: lbl_all_current
+          text: !lambda |-
+            if (id(ha_all_current).has_state()) {
+              char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_all_current).state); return std::string(buf);
+            }
+            return std::string("--°");
+      - lvgl.label.update:
+          id: lbl_all_target
+          text: !lambda |-
+            if (id(ha_all_setpoint).has_state()) {
+              char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_all_setpoint).state); return std::string(buf);
+            }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_all
+          value: !lambda |-
+            if (!id(ha_all_setpoint).has_state()) return 40;
+            return (int)(id(ha_all_setpoint).state * 2.0f);
+      - lvgl.label.update:
+          id: lbl_z1_temp
+          text: !lambda |-
+            if (id(ha_z1_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z1_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z1
+          value: !lambda |-
+            if (!id(ha_z1_setpoint).has_state()) return 20;
+            return (int)id(ha_z1_setpoint).state;
+      - lvgl.label.update:
+          id: lbl_z2_temp
+          text: !lambda |-
+            if (id(ha_z2_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z2_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z2
+          value: !lambda |-
+            if (!id(ha_z2_setpoint).has_state()) return 20;
+            return (int)id(ha_z2_setpoint).state;
+      - lvgl.label.update:
+          id: lbl_z3_temp
+          text: !lambda |-
+            if (id(ha_z3_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z3_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z3
+          value: !lambda |-
+            if (!id(ha_z3_setpoint).has_state()) return 20;
+            return (int)id(ha_z3_setpoint).state;
+      - lvgl.label.update:
+          id: lbl_z4_temp
+          text: !lambda |-
+            if (id(ha_z4_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z4_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z4
+          value: !lambda |-
+            if (!id(ha_z4_setpoint).has_state()) return 20;
+            return (int)id(ha_z4_setpoint).state;
+      - lvgl.label.update:
+          id: lbl_z5_temp
+          text: !lambda |-
+            if (id(ha_z5_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z5_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z5
+          value: !lambda |-
+            if (!id(ha_z5_setpoint).has_state()) return 20;
+            return (int)id(ha_z5_setpoint).state;
+      - lvgl.label.update:
+          id: lbl_z6_temp
+          text: !lambda |-
+            if (id(ha_z6_current).has_state()) { char buf[16]; snprintf(buf, sizeof(buf), "%.1f°", id(ha_z6_current).state); return std::string(buf); }
+            return std::string("--°");
+      - lvgl.arc.update:
+          id: arc_z6
+          value: !lambda |-
+            if (!id(ha_z6_setpoint).has_state()) return 20;
+            return (int)id(ha_z6_setpoint).state;
+
+# -----------------------------------------------------------------------------
+# LVGL: replace ONLY each arc’s on_release (same ids as stock file)
+# Paste into your lvgl: widgets — remove the old climate.control blocks.
+#
+# arc_all (min 30 max 56, setpoint °C = arc value / 2):
+#   on_release:
+#     - homeassistant.action:
+#         action: climate.set_temperature
+#         data:
+#           entity_id: ${eid_all}
+#           temperature: !lambda return x / 2.0;
+#
+# arc_z1 … arc_z6 (min 15 max 28, setpoint °C = x):
+#   on_release:
+#     - homeassistant.action:
+#         action: climate.set_temperature
+#         data:
+#           entity_id: ${eid_z1}   # use z2…z6 for other arcs
+#           temperature: !lambda return x;
+#
+# -----------------------------------------------------------------------------
+# Optional: stock `climate:` heat_action recoloured arcs from DEVICE climate state.
+# With HA-only climates you do NOT get that for free. Options:
+#   • Add homeassistant sensors for an attribute that reflects heating (if any)
+#     and extend interval with lvgl.arc.update indicator colour, or
+#   • Skip arc recolour until you want to add that logic.
+# =============================================================================

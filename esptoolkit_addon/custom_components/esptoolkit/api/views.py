@@ -54,7 +54,17 @@ def _load_integration_version() -> str:
         return "0.0.0"
 
 
-_integration_version_cached = _load_integration_version()
+_integration_version_cached = "0.0.0"
+_integration_version_loaded = False
+
+
+async def _async_integration_version(hass: HomeAssistant) -> str:
+    """Load manifest version in executor to avoid blocking the event loop."""
+    global _integration_version_cached, _integration_version_loaded
+    if not _integration_version_loaded:
+        _integration_version_cached = await hass.async_add_executor_job(_load_integration_version)
+        _integration_version_loaded = True
+    return _integration_version_cached
 
 
 def list_builtin_recipes() -> list[dict]:
@@ -4734,7 +4744,9 @@ class HealthView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request):
-        return self.json({"ok": True, "version": _integration_version()})
+        hass: HomeAssistant = request.app["hass"]
+        version = await _async_integration_version(hass)
+        return self.json({"ok": True, "version": version})
 
 
 class VersionView(HomeAssistantView):
@@ -4746,6 +4758,7 @@ class VersionView(HomeAssistantView):
 
     async def get(self, request):
         hass: HomeAssistant = request.app["hass"]
+        integration_version = await _async_integration_version(hass)
         entry_id = request.query.get("entry_id") or _active_entry_id(hass)
         addon_version = None
         conn = _get_addon_connection(hass, entry_id) if entry_id else None
@@ -4767,7 +4780,7 @@ class VersionView(HomeAssistantView):
             except Exception:
                 pass
         return self.json({
-            "integration": _integration_version(),
+            "integration": integration_version,
             "addon": addon_version,
         })
 
@@ -5005,7 +5018,7 @@ class SchemaDetailView(HomeAssistantView):
         if not schemas_path.exists():
             return self.json({"ok": False, "error": "schema_not_found"}, status_code=404)
         data = await hass.async_add_executor_job(_read_json_path, schemas_path)
-        data = _merge_common_extras(data, widget_type)
+        data = await hass.async_add_executor_job(_merge_common_extras, data, widget_type)
         return self.json({"ok": True, "schema": data})
 
 
@@ -5423,7 +5436,8 @@ class RecipesView(HomeAssistantView):
 
     async def get(self, request):
         hass = request.app["hass"]
-        return self.json({"ok": True, "recipes": list_all_recipes(hass)})
+        recipes = await hass.async_add_executor_job(list_all_recipes, hass)
+        return self.json({"ok": True, "recipes": recipes})
 
 
 class RecipeUserUpdateView(HomeAssistantView):
