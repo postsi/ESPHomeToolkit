@@ -161,6 +161,13 @@ async function apiPost<T = any>(path: string, body: object): Promise<T> {
 
 const API_BASE = "/api/esptoolkit";
 
+/** URL to fetch an uploaded asset file (TTF/OTF for @font-face, etc.). */
+export function assetFileUrl(filename: string): string {
+  const u = new URL(`${API_BASE}/assets/file`, window.location.origin);
+  u.searchParams.set("name", filename);
+  return u.pathname + u.search;
+}
+
 export async function listAssets(): Promise<{ name: string; size: number }[]> {
   const data = await apiGet<{ name: string; size: number }[] | unknown>(`${API_BASE}/assets`);
   return Array.isArray(data) ? data : [];

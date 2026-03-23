@@ -589,6 +589,7 @@ def _compile_lvgl_pages(project: dict) -> str:
     widgets = page.get("widgets") or []
 
     def common(w: dict) -> str:
+        # Integer pixel geometry in YAML (truncation toward zero). Designer uses layoutInt (round) for flex-derived positions; editor/snapping keeps values integral.
         x = int(w.get("x", 0))
         y = int(w.get("y", 0))
         width = int(w.get("w", 100))
@@ -6417,6 +6418,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Assets
     hass.http.register_view(AssetsListView)
     hass.http.register_view(AssetsUploadView)
+    hass.http.register_view(AssetsFileView)
 
     # Home Assistant entity helpers
     hass.http.register_view(EntitiesView)
@@ -6468,6 +6470,54 @@ class AssetsUploadView(HomeAssistantView):
         outp = _assets_dir(hass) / name
         outp.write_bytes(raw)
         return self.json({"ok": True, "name": name, "size": len(raw)})
+
+
+class AssetsFileView(HomeAssistantView):
+    """Serve a file from the EspToolkit assets directory (fonts/images for designer @font-face, etc.)."""
+
+    url = f"/api/{DOMAIN}/assets/file"
+    name = f"api:{DOMAIN}:assets_file"
+    requires_auth = False
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        name = str(request.query.get("name") or "").strip()
+        if not name or "/" in name or "\\" in name or name.startswith("."):
+            return self.json({"error": "invalid name"}, status_code=400)
+        base = _assets_dir(hass).resolve()
+        path = (base / name).resolve()
+        try:
+            path.relative_to(base)
+        except ValueError:
+            return self.json({"error": "invalid path"}, status_code=400)
+        if not path.is_file():
+            return self.json({"error": "not found"}, status_code=404)
+
+        ext = path.suffix.lower()
+        if ext == ".ttf":
+            ctype = "font/ttf"
+        elif ext == ".otf":
+            ctype = "font/otf"
+        elif ext in (".png",):
+            ctype = "image/png"
+        elif ext in (".jpg", ".jpeg"):
+            ctype = "image/jpeg"
+        elif ext in (".webp",):
+            ctype = "image/webp"
+        elif ext in (".bmp",):
+            ctype = "image/bmp"
+        else:
+            ctype = "application/octet-stream"
+
+        def read_bytes() -> bytes:
+            return path.read_bytes()
+
+        data = await hass.async_add_executor_job(read_bytes)
+        return web.Response(
+            body=data,
+            content_type=ctype,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
 
 class EsphomePortsView(HomeAssistantView):

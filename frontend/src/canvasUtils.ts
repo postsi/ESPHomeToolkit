@@ -19,6 +19,14 @@ export function snap(n: number, grid: number): number {
   return Math.round(n / grid) * grid;
 }
 
+/**
+ * Integer geometry for preview/layout parity with ESPHome (compiler emits int x/y/w/h).
+ * Use for flex-derived positions and anywhere fractional math could drift from the device.
+ */
+export function layoutInt(n: number): number {
+  return Math.round(n);
+}
+
 /** Normalize color to CSS fill (templates use numeric 0xrrggbb). */
 export function toFillColor(val: unknown, fallback: string): string {
   if (typeof val === "number" && val >= 0 && val <= 0xffffff) {
@@ -110,7 +118,7 @@ export function computeLayoutPositions(widgets: WidgetLike[]): Map<string, { x: 
     const isRow = layout === "flex_row";
     kids.sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
     kids.forEach((k) => {
-      pos.set(k.id, { x: cx, y: cy });
+      pos.set(k.id, { x: layoutInt(cx), y: layoutInt(cy) });
       if (isRow) cx += (k.w || 0) + gap;
       else cy += (k.h || 0) + gap;
     });

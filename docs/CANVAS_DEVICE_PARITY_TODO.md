@@ -34,15 +34,15 @@ Ordered roughly by impact vs effort. Check items off as you complete them.
 
 ### Foundation
 
-1. **Guarantee 1:1 logical pixels in the designer** — At default zoom, Konva stage width/height must equal project screen size with no accidental CSS scaling; document zoom behavior so “pixel” always means project pixels.
-2. **Single alignment spec** — For each widget type, list LVGL properties emitted in YAML (padding, align, text_align, long_mode, etc.) and the Canvas equivalent; fix any missing or default mismatches when props are omitted.
-3. **Rounding policy** — Agree on integer rules for x/y/w/h and border/radius (floor vs round) and apply consistently in preview helpers (e.g. `canvasUtils`) and compiler output.
+1. ~~**Guarantee 1:1 logical pixels in the designer** — At default zoom, Konva stage width/height must equal project screen size with no accidental CSS scaling; document zoom behavior so “pixel” always means project pixels.~~ Done: `flexShrink: 0`, fixed wrapper size, copy under canvas + About.
+2. ~~**Single alignment spec** — For each widget type, list LVGL properties emitted in YAML (padding, align, text_align, long_mode, etc.) and the Canvas equivalent; fix any missing or default mismatches when props are omitted.~~ Done: `frontend/src/lvglCanvasParity.ts` (doc + `effectiveLongMode` / shared defaults); button/textarea/label use same long-mode path.
+3. ~~**Rounding policy** — Agree on integer rules for x/y/w/h and border/radius (floor vs round) and apply consistently in preview helpers (e.g. `canvasUtils`) and compiler output.~~ Done: `layoutInt` in `canvasUtils` (flex positions, corner radius cap); compiler comment in `views.py` `common()`.
 
 ### Typography
 
-4. **Load project fonts in the browser** — When `font` uses `asset:Something.ttf:N`, register that TTF via `@font-face` (or equivalent) in the designer and draw preview text with it at size `N` instead of system fonts.
-5. **Fallback labeling** — If the asset is missing or not a TTF, show a clear preview-only indicator so users know text metrics are approximate.
-6. **Line break / long mode** — Match ESPHome/LVGL text long mode and line wrapping behavior where Konva supports it; document remaining gaps (e.g. ellipsis, scroll) as known preview limits.
+4. ~~**Load project fonts in the browser** — When `font` uses `asset:Something.ttf:N`, register that TTF via `@font-face` (or equivalent) in the designer and draw preview text with it at size `N` instead of system fonts.~~ Done: `GET /api/esptoolkit/assets/file`, `usePreviewFontResolver`, Montserrat from Google Fonts for `montserrat_*`.
+5. ~~**Fallback labeling** — If the asset is missing or not a TTF, show a clear preview-only indicator so users know text metrics are approximate.~~ Done: `fontPreviewBanner` when `resolvePreviewFont` returns `approximate`.
+6. ~~**Line break / long mode** — Match ESPHome/LVGL text long mode and line wrapping behavior where Konva supports it; document remaining gaps (e.g. ellipsis, scroll) as known preview limits.~~ Done: `konvaLongModeTextProps` + canvas copy (SCROLL → static ellipsis); `text_letter_space` on Konva Text.
 
 ### Layout
 

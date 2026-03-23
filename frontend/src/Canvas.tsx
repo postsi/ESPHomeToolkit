@@ -14,7 +14,9 @@ import {
   widgetsInSelectionRect,
   parentInfo as parentInfoUtil,
   absPos as absPosUtil,
+  layoutInt,
 } from "./canvasUtils";
+import { effectiveLongMode, konvaLongModeTextProps } from "./lvglCanvasParity";
 
 type Widget = {
   id: string;
@@ -55,6 +57,8 @@ type Props = {
   onOpenWhitePicker?: (widgetId: string, currentMireds: number) => void;
   /** When in simulation mode, opening a textarea widget opens this callback to edit text and fire on_value. */
   onOpenTextarea?: (widgetId: string, currentText: string) => void;
+  /** Map LVGL font ids to browser font-family + size (see usePreviewFontResolver). */
+  resolvePreviewFont?: (fontId: unknown) => { fontFamily: string; fontSize: number; approximate: boolean };
 };
 
 export default function Canvas({
@@ -77,8 +81,17 @@ export default function Canvas({
   onOpenTextarea,
   onDropCreate,
   onChangeMany,
+  resolvePreviewFont: resolvePreviewFontProp,
 }: Props) {
   const widgets = useMemo(() => safeWidgets(rawWidgets) as Widget[], [rawWidgets]);
+  const previewFont = useCallback(
+    (fontId: unknown) => {
+      if (resolvePreviewFontProp) return resolvePreviewFontProp(fontId);
+      const size = Math.max(8, Math.min(48, fontSizeFromFontId(fontId) ?? 16));
+      return { fontFamily: "Montserrat, system-ui, sans-serif", fontSize: size, approximate: false };
+    },
+    [resolvePreviewFontProp]
+  );
     const layoutPos = useMemo(() => computeLayoutPositions(widgets), [widgets]);
 const stageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
@@ -166,8 +179,7 @@ const stageRef = useRef<any>(null);
   const renderWidget = (w: Widget, isSel: boolean, opts?: { localPosition?: boolean }) => {
     const { ax, ay } = opts?.localPosition ? { ax: w.x, ay: w.y } : absPos(w);
     const override = simulationMode ? { ...liveOverrides[w.id], ...simOverrides?.[w.id] } : liveOverrides[w.id];
-    // Simple, intentionally lightweight previews (not pixel-perfect LVGL).
-    // The goal is to make layouts usable while we keep the runtime YAML generator authoritative.
+    // Preview targets LVGL parity via lvglCanvasParity + shared font resolver (Montserrat / uploaded TTF).
     const p = w.props || {};
     const s = w.style || {};
     const title = (override?.text !== undefined ? override.text : (p.text ?? p.label ?? p.name ?? w.type)) as string;
@@ -195,7 +207,7 @@ const stageRef = useRef<any>(null);
     const opacityRaw = s.opa ?? p.opacity ?? 100;
     const opacity = typeof opacityRaw === "number" ? opacityRaw / 100 : 1;
     const radiusRaw = Math.min(12, Math.max(0, Number(s.radius ?? s.corner_radius ?? p.radius ?? p.corner_radius ?? 8)));
-    const radius = Math.min(radiusRaw, Math.floor(w.w / 2), Math.floor(w.h / 2));
+    const radius = Math.min(layoutInt(radiusRaw), Math.floor(w.w / 2), Math.floor(w.h / 2));
     const shadowW = Number(s.shadow_width ?? 0);
     const shadowOfsX = Number(s.shadow_ofs_x ?? 0);
     const shadowOfsY = Number(s.shadow_ofs_y ?? 0);
@@ -207,7 +219,10 @@ const stageRef = useRef<any>(null);
     // Standalone arc/arc_labeled: transparent base so only the arc track and labels are visible.
     const isArcOrArcLabeled = w.type === "arc" || w.type === "arc_labeled";
     const fontId = s.text_font ?? p.text_font;
-    const fontSize = Math.max(8, Math.min(48, fontSizeFromFontId(fontId) ?? 16)); // Canvas preview: mimic font id size
+    const pfMain = previewFont(fontId);
+    const fontSize = pfMain.fontSize;
+    const textFontFamily = pfMain.fontFamily;
+    const letterSpace = Number(s.text_letter_space ?? 0);
 
     const hasShadow = shadowW > 0 || shadowOfsX !== 0 || shadowOfsY !== 0;
     const outlineW = Math.max(0, Number(s.outline_width ?? 0));
@@ -458,9 +473,8 @@ const stageRef = useRef<any>(null);
     }
     if (type.includes("label") && type !== "arc_labeled") {
       const layout = textLayoutFromWidget(ax, ay, w.w, w.h, p, s);
-      const longMode = String(p.long_mode ?? s.long_mode ?? "CLIP").toUpperCase();
-      const wrap = longMode === "WRAP";
-      const ellipsisLabel = longMode !== "WRAP" && longMode !== "CLIP";
+      const lm = effectiveLongMode(w.type, p, s);
+      const km = konvaLongModeTextProps(lm);
       let labelText = String(title);
       if (p.recolor || s.recolor) {
         labelText = labelText.replace(/#[\dA-Fa-f]{6}\s*/g, "").trim() || labelText;
@@ -477,9 +491,11 @@ const stageRef = useRef<any>(null);
             align={layout.align}
             verticalAlign={layout.verticalAlign}
             fontSize={fontSize}
+            fontFamily={textFontFamily}
+            letterSpacing={letterSpace}
             fill={textColor}
-            wrap={wrap ? "word" : undefined}
-            ellipsis={ellipsisLabel}
+            wrap={km.wrap}
+            ellipsis={km.ellipsis}
             listening={false}
           />
         </Group>
@@ -489,6 +505,8 @@ const stageRef = useRef<any>(null);
     if (type.includes("button")) {
       const checked = override?.checked ?? (p as any).checked ?? false;
       const layout = textLayoutFromWidget(ax, ay, w.w, w.h, p, s);
+      const lmBtn = effectiveLongMode("button", p, s);
+      const kmBtn = konvaLongModeTextProps(lmBtn);
       return (
         <Group key={w.id}>
           {base}
@@ -512,7 +530,11 @@ const stageRef = useRef<any>(null);
             align={layout.align}
             verticalAlign={layout.verticalAlign}
             fontSize={fontSize}
+            fontFamily={textFontFamily}
+            letterSpacing={letterSpace}
             fill={textColor}
+            wrap={kmBtn.wrap}
+            ellipsis={kmBtn.ellipsis}
             listening={false}
           />
         </Group>
@@ -949,8 +971,11 @@ const stageRef = useRef<any>(null);
                     const baseFontSize = fontSizeFromFontId(labelFontId) ?? 12;
                     const scaleRef = 100;
                     const scaleFactor = Math.min(w.w, w.h) / scaleRef;
-                    return Math.max(8, Math.min(24, Math.round(baseFontSize * scaleFactor)));
+                    return Math.max(8, Math.min(24, layoutInt(baseFontSize * scaleFactor)));
                   })();
+            const labelPf = previewFont(labelFontId);
+            const labelFontFamily = labelPf.fontFamily;
+            const labelLetterSpace = Number(s.text_letter_space ?? 0);
             const labelColor = toFillColor(s.label_text_color ?? p.label_text_color ?? s.text_color, "#e5e7eb");
             const tickColor = toFillColor(s.tick_color ?? p.tick_color ?? s.label_text_color ?? p.label_text_color ?? s.text_color, "#e5e7eb");
             const minInt = Math.ceil(min);
@@ -1002,6 +1027,8 @@ const stageRef = useRef<any>(null);
                       height={labelFontSize + 2}
                       text={text}
                       fontSize={labelFontSize}
+                      fontFamily={labelFontFamily}
+                      letterSpacing={labelLetterSpace}
                       fill={labelColor}
                       align="center"
                       verticalAlign="middle"
@@ -1049,7 +1076,7 @@ const stageRef = useRef<any>(null);
           {checked && (
             <Text text="✓" x={ax + 6} y={ay + (w.h - size) / 2 - 2} width={size} height={size} align="center" fontSize={size - 4} fill="#10b981" listening={false} />
           )}
-          <Text text={labelText} x={layout.x} y={layout.y} width={layout.width} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fill={textColor} listening={false} />
+          <Text text={labelText} x={layout.x} y={layout.y} width={layout.width} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} listening={false} />
         </Group>
       );
     }
@@ -1077,7 +1104,7 @@ const stageRef = useRef<any>(null);
         <Group key={w.id}>
           {base}
           <Rect x={ax + 6} y={ay + 6} width={w.w - 12} height={w.h - 12} fill={ddBg} stroke="#334155" strokeWidth={1} cornerRadius={6} listening={false} />
-          <Text text={displayText} x={layout.x} y={layout.y} width={textW} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fill={selText} ellipsis listening={false} />
+          <Text text={displayText} x={layout.x} y={layout.y} width={textW} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={selText} ellipsis listening={false} />
           <Text text="▼" x={ax + w.w - 24} y={ay + (w.h - 12) / 2} width={16} align="center" fontSize={10} fill={selText} listening={false} />
         </Group>
       );
@@ -1107,6 +1134,8 @@ const stageRef = useRef<any>(null);
     if (type === "textarea") {
       const taBg = toFillColor(s.bg_color ?? p.bg_color, "#1e293b");
       const layout = textLayoutFromWidget(ax + 6, ay + 6, w.w - 12, w.h - 12, p, s);
+      const lmTa = effectiveLongMode("textarea", p, s);
+      const kmTa = konvaLongModeTextProps(lmTa);
       const cursorPart = w.cursor || {};
       const cursorColor = toFillColor(cursorPart.color, textColor);
       const cursorW = Math.max(1, Math.min(8, Number(cursorPart.width ?? 2)));
@@ -1116,7 +1145,7 @@ const stageRef = useRef<any>(null);
         <Group key={w.id}>
           {base}
           <Rect x={ax + 6} y={ay + 6} width={w.w - 12} height={w.h - 12} fill={taBg} stroke="#334155" strokeWidth={1} cornerRadius={4} listening={false} />
-          <Text text={displayText} x={layout.x} y={layout.y} width={layout.width} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fill={textColor} ellipsis listening={false} />
+          <Text text={displayText} x={layout.x} y={layout.y} width={layout.width} height={layout.height} align={layout.align} verticalAlign={layout.verticalAlign} fontSize={fontSize} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} wrap={kmTa.wrap} ellipsis={kmTa.ellipsis} listening={false} />
           <Rect x={cx} y={ay + 8} width={cursorW} height={w.h - 16} fill={cursorColor} listening={false} />
         </Group>
       );
@@ -1145,7 +1174,7 @@ const stageRef = useRef<any>(null);
             return (
               <Group key={i} listening={false}>
                 {isSel && selBg !== rollBg && <Rect x={ax + 8} y={ay + 8 + i * rowH} width={w.w - 16} height={rowH - 2} fill={selBg} cornerRadius={2} listening={false} />}
-                <Text text={String(opt).slice(0, 20)} x={ax + 12} y={ay + 8 + i * rowH} width={w.w - 24} fontSize={Math.min(12, rowH - 4)} fill={isSel ? selText : itemText} ellipsis listening={false} />
+                <Text text={String(opt).slice(0, 20)} x={ax + 12} y={ay + 8 + i * rowH} width={w.w - 24} fontSize={Math.min(12, rowH - 4)} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={isSel ? selText : itemText} ellipsis listening={false} />
               </Group>
             );
           })}
@@ -1192,7 +1221,7 @@ const stageRef = useRef<any>(null);
         <Group key={w.id}>
           {base}
           <Rect x={ax + 6} y={ay + 6} width={w.w - 12} height={w.h - 12} fill="#0b1220" stroke="#374151" strokeWidth={1} cornerRadius={6} listening={false} />
-          <Text text={displayVal} x={valueLayout.x} y={valueLayout.y} width={valueLayout.width} height={valueLayout.height} align={valueLayout.align} verticalAlign={valueLayout.verticalAlign} fontSize={fontSize} fill={textColor} listening={false} />
+          <Text text={displayVal} x={valueLayout.x} y={valueLayout.y} width={valueLayout.width} height={valueLayout.height} align={valueLayout.align} verticalAlign={valueLayout.verticalAlign} fontSize={fontSize} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} listening={false} />
           <Rect x={cx} y={ay + 8} width={cursorW} height={w.h - 16} fill={cursorColor} listening={false} />
           {simulationMode && onSimulateUpdate && onSimulateAction && (
             <>
@@ -1275,7 +1304,7 @@ const stageRef = useRef<any>(null);
             <Rect key={i} x={ax + 6 + i * (tabW + 4)} y={tabBarY} width={tabW} height={tabH} fill={String((w as any).tab_style?.bg_color ?? "#374151")} cornerRadius={4} listening={false} />
           ))}
           <Rect x={ax + 6} y={contentY} width={w.w - 12} height={contentH} fill={String(s.bg_color ?? "#0b1220")} cornerRadius={0} listening={false} />
-          {tabs[0] && <Text text={String(tabs[0]).slice(0, 12)} x={ax + 12} y={tabBarY + 4} width={tabW - 8} fontSize={11} fill={textColor} ellipsis listening={false} />}
+          {tabs[0] && <Text text={String(tabs[0]).slice(0, 12)} x={ax + 12} y={tabBarY + 4} width={tabW - 8} fontSize={11} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} ellipsis listening={false} />}
         </Group>
       );
     }
@@ -1292,7 +1321,7 @@ const stageRef = useRef<any>(null);
           {Array.from({ length: n }, (_, i) => (
             <Rect key={i} x={ax + 8 + (i % cols) * (tw + 8)} y={ay + 8 + Math.floor(i / cols) * (th + 8)} width={tw} height={th} fill="#374151" cornerRadius={4} listening={false} />
           ))}
-          <Text text="Tile" x={ax} y={ay + (w.h - 12) / 2} width={w.w} align="center" fontSize={11} fill="#9ca3af" listening={false} />
+          <Text text="Tile" x={ax} y={ay + (w.h - 12) / 2} width={w.w} align="center" fontSize={11} fontFamily={textFontFamily} letterSpacing={letterSpace} fill="#9ca3af" listening={false} />
         </Group>
       );
     }
@@ -1347,7 +1376,7 @@ const stageRef = useRef<any>(null);
                   onClick={simClick ? (e) => simClick(i)(e) : undefined}
                   onTap={simClick ? (e) => simClick(i)(e) : undefined}
                 />
-                <Text text={String(labels[i] ?? "").slice(0, 4)} x={bx} y={by + (bh - 10) / 2} width={bw} align="center" fontSize={Math.min(10, bh - 4)} fill={textColor} listening={false} />
+                <Text text={String(labels[i] ?? "").slice(0, 4)} x={bx} y={by + (bh - 10) / 2} width={bw} align="center" fontSize={Math.min(10, bh - 4)} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} listening={false} />
               </Group>
             );
           })}
@@ -1404,8 +1433,8 @@ const stageRef = useRef<any>(null);
           {base}
           <Rect x={ax + 6} y={ay + 6} width={w.w - 12} height={28} fill="#374151" cornerRadius={4} listening={false} />
           <Rect x={ax + 6} y={ay + 34} width={w.w - 12} height={w.h - 40} fill={String(s.bg_color ?? "#0b1220")} cornerRadius={4} listening={false} />
-          <Text text="Title" x={ax + 12} y={ay + 10} fontSize={12} fill={textColor} listening={false} />
-          <Text text="Message…" x={ax + 12} y={ay + 42} width={w.w - 24} fontSize={11} fill="#9ca3af" listening={false} />
+          <Text text="Title" x={ax + 12} y={ay + 10} fontSize={12} fontFamily={textFontFamily} letterSpacing={letterSpace} fill={textColor} listening={false} />
+          <Text text="Message…" x={ax + 12} y={ay + 42} width={w.w - 24} fontSize={11} fontFamily={textFontFamily} letterSpacing={letterSpace} fill="#9ca3af" wrap="word" listening={false} />
         </Group>
       );
     }
@@ -1414,7 +1443,7 @@ const stageRef = useRef<any>(null);
     return (
       <Group key={w.id}>
         {base}
-        <Text text={w.type} x={ax + 6} y={ay + 6} fontSize={14} fill="#e5e7eb" listening={false} />
+        <Text text={w.type} x={ax + 6} y={ay + 6} fontSize={14} fontFamily={textFontFamily} letterSpacing={letterSpace} fill="#e5e7eb" listening={false} />
       </Group>
     );
   };

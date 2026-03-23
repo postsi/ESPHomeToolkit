@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import packageJson from "../package.json";
 import Canvas from "./Canvas";
+import { usePreviewFontResolver } from "./usePreviewFontResolver";
 import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listCards, getCard, saveCard, deleteCard, previewWidgetYaml} from "./lib/api";
 import { collectWidgetIds, updateSectionsWidgetRef } from "./projectSections";
 import { CONTROL_TEMPLATES, type ControlTemplate } from "./controls";
@@ -1710,6 +1711,8 @@ if (baseId.startsWith("glance_card")) {
     },
     [pages, safePageIndex]
   );
+
+  const { resolvePreviewFont, fontPreviewBanner } = usePreviewFontResolver(widgets, assets);
 
   // Persist a local draft so navigating away from the HA sidebar doesn't lose work.
   useEffect(() => {
@@ -4189,6 +4192,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             </div>
             <div style={{ padding: 16 }}>
               <p style={{ marginBottom: 12 }}><strong>EspToolkit Designer</strong> — A Lovelace-style UI designer for ESP32 LVGL touch screens. Compiles designs into ESPHome YAML and deploys through Home Assistant.</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>The canvas matches project pixel geometry at 1:1. Fonts: Montserrat in the browser aligns with common ESPHome defaults; uploaded TTF/OTF assets load when present. Final text metrics on the device can still differ slightly.</p>
               <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>YAML editing in this app uses CodeMirror 6.</p>
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12 }}>
                 <div style={{ fontSize: 12, marginBottom: 8 }}><strong>CodeMirror 6</strong></div>
@@ -4217,6 +4221,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   gridSize={(project as any)?.ui?.gridSize || 10}
                   showGrid={false}
                   dispBgColor={(project as any)?.disp_bg_color}
+                  resolvePreviewFont={resolvePreviewFont}
                   liveOverrides={liveOverrides}
                   simulationMode={true}
                   simOverrides={simOverrides}
@@ -4668,6 +4673,14 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   Simulate
                 </button>
               </div>
+              {fontPreviewBanner && (
+                <div className="muted" style={{ fontSize: 11, marginBottom: 8, maxWidth: screenSize.width + 48, lineHeight: 1.4 }}>
+                  {fontPreviewBanner}
+                </div>
+              )}
+              <div className="muted" style={{ fontSize: 11, marginBottom: 8, maxWidth: screenSize.width + 48, lineHeight: 1.4 }}>
+                Canvas is 1 logical project pixel per screen pixel (no zoom). Long mode: WRAP/CLIP/DOT are approximated; SCROLL / SCROLL_CIRCULAR show as static ellipsis here, not animated. Typography may still differ from firmware (hinting, bitmap fonts).
+              </div>
               <div className="canvasAxis" style={{ alignSelf: "flex-start" }}>
                 <div style={{
                   display: "grid",
@@ -4684,7 +4697,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       return ticks.map((y) => <span key={y}>{y}</span>);
                     })()}
                   </div>
-                  <div style={{ minWidth: 0, outline: "2px solid rgba(16, 185, 129, 0.4)", borderRadius: 12 }}>
+                  <div style={{ minWidth: 0, flexShrink: 0, width: screenSize.width, height: screenSize.height, outline: "2px solid rgba(16, 185, 129, 0.4)", borderRadius: 12, overflow: "hidden" }}>
                     <Canvas
                   widgets={widgets}
                   selectedIds={selectedWidgetIds}
@@ -4693,6 +4706,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   gridSize={(project as any)?.ui?.gridSize || 10}
                   showGrid={((project as any)?.ui?.showGrid ?? true) as any}
                   dispBgColor={(project as any)?.disp_bg_color}
+                  resolvePreviewFont={resolvePreviewFont}
                   liveOverrides={liveOverrides}
                   onSelect={(id, additive) => selectWidget(id, additive)}
                   onSelectNone={() => setSelectedWidgetIds([])}
