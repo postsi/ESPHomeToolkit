@@ -136,6 +136,21 @@ export async function deploy(entryId: string, deviceId: string): Promise<ApiOk<{
   return res.json();
 }
 
+/** Queue host/SDL YAML for the Mac agent connected to HA (integration option mac_sim_token). */
+export async function enqueueMacSim(
+  entryId: string,
+  body: {
+    device_id: string;
+    project?: ProjectModel;
+    hardware_recipe_id?: string;
+    screen?: { width: number; height: number };
+  }
+): Promise<{ ok: boolean; warnings?: unknown[]; error?: string; detail?: string }> {
+  const u = new URL(`${API_BASE}/mac_sim/enqueue`, window.location.origin);
+  u.searchParams.set("entry_id", entryId);
+  return apiPost(u.pathname + u.search, body);
+}
+
 
 async function apiGet<T = any>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "include" });

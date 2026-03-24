@@ -1,0 +1,3 @@
+# Pin loosely; install-macos.sh upgrades pip before install.
+esphome>=2024.12.0
+websockets>=12.0

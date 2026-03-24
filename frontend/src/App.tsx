@@ -26,6 +26,7 @@ import {
   deleteDevice,
   deploy,
   deployExport,
+  enqueueMacSim,
   listEsphomePorts,
   exportDeviceYamlPreview,
   exportDeviceYamlWithExpectedHash,
@@ -532,6 +533,7 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
 
   // Simulator: live interactive preview
   const [simulationOpen, setSimulationOpen] = useState<boolean>(false);
+  const [macSimBusy, setMacSimBusy] = useState<boolean>(false);
   const [simOverrides, setSimOverrides] = useState<Record<string, { value?: number; checked?: boolean; selected_index?: number; text?: string }>>({});
   const [colorPickerModal, setColorPickerModal] = useState<{ widgetId: string; initialHex: string; fromSimulator?: boolean } | null>(null);
   const [colorPickerHue, setColorPickerHue] = useState(0);
@@ -1879,6 +1881,38 @@ if (baseId.startsWith("glance_card")) {
     if (m) return { width: parseInt(m[1], 10), height: parseInt(m[2], 10), source: "recipe_id" as const };
     return { width: 800, height: 480, source: "default" as const };
   }, [project, selectedDeviceObj?.hardware_recipe_id]);
+
+  const handleMacSim = useCallback(async () => {
+    if (!entryId || !selectedDevice || !project) {
+      setToast({ type: "error", msg: "Mac sim: select a device and load a project." });
+      return;
+    }
+    setMacSimBusy(true);
+    try {
+      await enqueueMacSim(entryId, {
+        device_id: selectedDevice,
+        project,
+        hardware_recipe_id: selectedDeviceObj?.hardware_recipe_id ?? (project as any)?.device?.hardware_recipe_id,
+        screen: { width: screenSize.width, height: screenSize.height },
+      });
+      setToast({
+        type: "ok",
+        msg: "Mac sim: host/SDL YAML sent to your connected Mac agent (ESPHome window should open there).",
+      });
+    } catch (e: any) {
+      setToast({ type: "error", msg: `Mac sim: ${e?.message || e}` });
+    } finally {
+      setMacSimBusy(false);
+    }
+  }, [
+    entryId,
+    selectedDevice,
+    project,
+    selectedDeviceObj?.hardware_recipe_id,
+    screenSize.width,
+    screenSize.height,
+  ]);
+
   function _findWidget(id: string) {
     return widgets.find((w: any) => w && w.id === id);
   }
@@ -4664,14 +4698,25 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   <span>{screenSize.width} × {screenSize.height} px</span>
                   <span className="muted" style={{ marginLeft: 8, fontSize: 12, fontWeight: 400 }}>({screenSize.source})</span>
                 </span>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => { setSimOverrides({}); setSimulationOpen(true); }}
-                  title="Open live interactive simulator"
-                >
-                  Simulate
-                </button>
+                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => { setSimOverrides({}); setSimulationOpen(true); }}
+                    title="Open live interactive simulator"
+                  >
+                    Simulate
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!entryId || !selectedDevice || !project || macSimBusy}
+                    onClick={() => void handleMacSim()}
+                    title="Compile for host/SDL and send to Mac agent (EspToolkit integration options: Mac sim token; run ha_agent_client.py on the Mac)"
+                  >
+                    {macSimBusy ? "Mac sim…" : "Mac sim"}
+                  </button>
+                </span>
               </div>
               {fontPreviewBanner && (
                 <div className="muted" style={{ fontSize: 11, marginBottom: 8, maxWidth: screenSize.width + 48, lineHeight: 1.4 }}>

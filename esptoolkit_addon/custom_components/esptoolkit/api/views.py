@@ -6368,6 +6368,211 @@ class DeployBuildView(HomeAssistantView):
         })
 
 
+class MacSimAgentWebSocketView(HomeAssistantView):
+    """Mac connects here (outbound WSS/WS); authenticates with integration option mac_sim_token."""
+
+    url = f"/api/{DOMAIN}/mac_sim/agent/ws"
+    name = f"api:{DOMAIN}:mac_sim_agent_ws"
+    requires_auth = False
+
+    async def get(self, request):
+        from ..const import CONF_MAC_SIM_TOKEN
+        from ..mac_sim import ensure_mac_sim_hub, mac_sim_token_matches
+
+        hass: HomeAssistant = request.app["hass"]
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+
+        entry_id = _active_entry_id(hass)
+        if not entry_id:
+            await ws.close(code=4401, message=b"no active entry")
+            return ws
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry:
+            await ws.close(code=4401, message=b"no entry")
+            return ws
+        expected = ((entry.options or {}).get(CONF_MAC_SIM_TOKEN) or "").strip()
+        if len(expected) < 16:
+            await ws.close(code=4403, message=b"mac_sim_token not configured in integration options")
+            return ws
+
+        hub = ensure_mac_sim_hub(hass)
+        log = logging.getLogger(__name__ + ".mac_sim_agent")
+
+        authenticated = False
+        out_q: asyncio.Queue[str] | None = None
+        session: dict | None = None
+        out_task: asyncio.Task | None = None
+
+        async def outgoing_worker():
+            assert out_q is not None
+            try:
+                while True:
+                    yaml_doc = await out_q.get()
+                    try:
+                        await ws.send_str(json.dumps({"type": "run", "yaml": yaml_doc}))
+                    except Exception as exc:
+                        log.debug("mac_sim send to agent failed: %s", exc)
+                        break
+            except asyncio.CancelledError:
+                raise
+
+        try:
+            async for msg in ws:
+                if msg.type != web.WSMsgType.TEXT:
+                    if msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
+                        break
+                    continue
+                try:
+                    data = json.loads(msg.data)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+                if not authenticated:
+                    if data.get("type") != "auth":
+                        await ws.send_str(json.dumps({"type": "error", "message": "send auth first"}))
+                        continue
+                    offered = str(data.get("token") or "")
+                    if not mac_sim_token_matches(expected, offered):
+                        await ws.send_str(json.dumps({"type": "error", "message": "auth failed"}))
+                        await ws.close(code=4403, message=b"auth failed")
+                        break
+                    authenticated = True
+                    out_q = asyncio.Queue(maxsize=8)
+                    session = {"ws": ws, "out_q": out_q, "entry_id": entry_id}
+                    async with hub["lock"]:
+                        old = hub.get("session")
+                        if old and old.get("ws") is not None and old["ws"] is not ws:
+                            try:
+                                await old["ws"].close()
+                            except Exception:
+                                pass
+                        hub["session"] = session
+                    await ws.send_str(json.dumps({"type": "ready"}))
+                    out_task = asyncio.create_task(outgoing_worker())
+                    continue
+                if data.get("type") == "ping":
+                    await ws.send_str(json.dumps({"type": "pong"}))
+        finally:
+            if out_task is not None:
+                out_task.cancel()
+                try:
+                    await out_task
+                except asyncio.CancelledError:
+                    pass
+            async with hub["lock"]:
+                if hub.get("session") is session:
+                    hub["session"] = None
+        return ws
+
+
+class MacSimEnqueueView(HomeAssistantView):
+    """Designer: compile device YAML, transform for host/SDL, push to connected Mac agent."""
+
+    url = f"/api/{DOMAIN}/mac_sim/enqueue"
+    name = f"api:{DOMAIN}:mac_sim_enqueue"
+    requires_auth = False
+
+    async def post(self, request):
+        import copy
+
+        from ..const import CONF_MAC_SIM_TOKEN
+        from ..mac_sim import ensure_mac_sim_hub, transform_esphome_yaml_for_host_sdl
+
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        expected_tok = ((entry.options or {}).get(CONF_MAC_SIM_TOKEN) or "").strip()
+        if len(expected_tok) < 16:
+            return self.json(
+                {
+                    "ok": False,
+                    "error": "mac_sim_token_not_configured",
+                    "detail": "Configure a 16+ character token in EspToolkit integration options (Mac sim).",
+                },
+                status_code=503,
+            )
+
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        device_id = (body.get("device_id") or "").strip()
+        if not device_id:
+            return self.json({"ok": False, "error": "missing_device_id"}, status_code=400)
+
+        storage = _get_storage(hass, entry_id)
+        if storage is None:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
+        device = storage.get_device(device_id)
+        if not device:
+            return self.json({"ok": False, "error": "device_not_found"}, status_code=404)
+
+        project_override = body.get("project") if isinstance(body.get("project"), dict) else None
+        recipe_override = None
+        if isinstance(body.get("hardware_recipe_id"), str) and body.get("hardware_recipe_id").strip():
+            recipe_override = body.get("hardware_recipe_id").strip()
+
+        screen = body.get("screen") if isinstance(body.get("screen"), dict) else {}
+        try:
+            w = int(screen.get("width") or (device.project or {}).get("device", {}).get("screen", {}).get("width") or 480)
+        except (TypeError, ValueError):
+            w = 480
+        try:
+            h = int(screen.get("height") or (device.project or {}).get("device", {}).get("screen", {}).get("height") or 320)
+        except (TypeError, ValueError):
+            h = 320
+
+        dev_for_compile = device
+        if project_override is not None or recipe_override is not None:
+            dev_for_compile = copy.deepcopy(device)
+            if project_override is not None:
+                dev_for_compile.project = project_override
+            if recipe_override is not None:
+                dev_for_compile.hardware_recipe_id = recipe_override
+
+        try:
+            yaml_text, compile_warnings = await hass.async_add_executor_job(
+                _sync_compile_device_yaml, hass, dev_for_compile, None, None
+            )
+        except Exception as e:
+            return self.json({"ok": False, "error": "compile_failed", "detail": str(e)}, status_code=500)
+
+        try:
+            sim_yaml, transform_warnings = transform_esphome_yaml_for_host_sdl(yaml_text, w, h)
+        except Exception as e:
+            return self.json({"ok": False, "error": "transform_failed", "detail": str(e)}, status_code=500)
+
+        hub = ensure_mac_sim_hub(hass)
+        sess = hub.get("session")
+        if not sess or sess.get("ws") is None or sess["ws"].closed:
+            return self.json(
+                {
+                    "ok": False,
+                    "error": "agent_offline",
+                    "detail": "Start the Mac agent (ha_agent_client.py) with this HA URL and token.",
+                },
+                status_code=503,
+            )
+        try:
+            sess["out_q"].put_nowait(sim_yaml)
+        except asyncio.QueueFull:
+            return self.json({"ok": False, "error": "queue_full"}, status_code=503)
+
+        return self.json(
+            {
+                "ok": True,
+                "warnings": (compile_warnings or []) + transform_warnings,
+            }
+        )
+
+
 def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Register all HTTP API views for the integration."""
     # ContextView is registered in panel so /api/context is always available
@@ -6427,6 +6632,8 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(CallServiceView)
     hass.http.register_view(StateWebSocketView)
     hass.http.register_view(DeviceNativeLogsWebSocketView)
+    hass.http.register_view(MacSimAgentWebSocketView)
+    hass.http.register_view(MacSimEnqueueView)
     hass.http.register_view(EntityCapabilitiesView)
 
     # Plugins

@@ -2,10 +2,41 @@
 
 from __future__ import annotations
 
+import voluptuous as vol
+
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 
-from .const import CONF_BASE_URL, CONF_TOKEN, DOMAIN
+from .const import CONF_BASE_URL, CONF_MAC_SIM_TOKEN, CONF_TOKEN, DOMAIN
+
+
+class ESPToolkitOptionsFlow(config_entries.OptionsFlow):
+    """Optional Mac SDL simulator agent token (outbound WebSocket from Mac to HA)."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
+        if user_input is not None:
+            token = (user_input.get(CONF_MAC_SIM_TOKEN) or "").strip()
+            return self.async_create_entry(title="", data={CONF_MAC_SIM_TOKEN: token})
+
+        cur = (self.config_entry.options or {}).get(CONF_MAC_SIM_TOKEN) or ""
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_MAC_SIM_TOKEN,
+                    description={"suggested_value": cur},
+                    default=cur,
+                ): str,
+            }
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+            description_placeholders={},
+        )
 
 
 class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -29,3 +60,10 @@ class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             title="EspToolkit",
             data={CONF_BASE_URL: base_url, CONF_TOKEN: token},
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> ESPToolkitOptionsFlow:
+        return ESPToolkitOptionsFlow(config_entry)

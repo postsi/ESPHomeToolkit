@@ -24,6 +24,8 @@ SERVICE_SET_LIGHT_COLOR_TEMP = "set_light_color_temp"
 CONF_WIFI_SSID = "wifi_ssid"
 CONF_WIFI_PASSWORD_SECRET = "wifi_password"
 CONF_DEFAULT_LOG_LEVEL = "default_log_level"
+# Long random secret: Mac agent sends this after connecting to HA WebSocket (integration options).
+CONF_MAC_SIM_TOKEN = "mac_sim_token"
 
 STORAGE_VERSION = 1
 

@@ -40,3 +40,6 @@ tests/fixtures/heating-controller.yaml
 .env.*
 !.env.example
 .github-token
+# Mac SDL agent token if stored inside the repo (prefer ~/.esptoolkit_mac_sim_token instead)
+tools/mac_esphome_sim_agent/.mac_sim_token
+tools/mac_esphome_sim_agent/mac_sim_token.txt

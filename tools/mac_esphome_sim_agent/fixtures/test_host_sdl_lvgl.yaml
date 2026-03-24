@@ -1,0 +1,27 @@
+# Minimal host + SDL + LVGL + SDL touchscreen for local agent smoke tests.
+# Run: source .venv/bin/activate && esphome run fixtures/test_host_sdl_lvgl.yaml
+
+esphome:
+  name: esptoolkit_sim_test
+
+host:
+
+logger:
+  level: INFO
+
+display:
+  - platform: sdl
+    update_interval: never
+    auto_clear_enabled: false
+    dimensions:
+      width: 480
+      height: 320
+
+touchscreen:
+  - platform: sdl
+
+lvgl:
+  widgets:
+    - label:
+        align: CENTER
+        text: "EspToolkit mac sim agent — SDL + LVGL + touch (mouse)"
