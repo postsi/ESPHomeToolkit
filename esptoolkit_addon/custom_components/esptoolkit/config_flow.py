@@ -13,10 +13,11 @@ from .const import CONF_BASE_URL, CONF_MAC_SIM_TOKEN, CONF_TOKEN, DOMAIN
 
 
 class ESPToolkitOptionsFlow(config_entries.OptionsFlow):
-    """Optional Mac SDL simulator agent token (outbound WebSocket from Mac to HA)."""
+    """Optional Mac SDL simulator agent token (outbound WebSocket from Mac to HA).
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    Do not pass config_entry into __init__; HA provides ``self.config_entry`` on OptionsFlow.
+    See https://developers.home-assistant.io/blog/2024/11/12/options-flow
+    """
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
@@ -69,4 +70,4 @@ class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> ESPToolkitOptionsFlow:
-        return ESPToolkitOptionsFlow(config_entry)
+        return ESPToolkitOptionsFlow()
