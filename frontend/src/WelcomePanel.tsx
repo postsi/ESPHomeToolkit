@@ -113,6 +113,10 @@ export default function WelcomePanel({
       <p className="muted" style={{ fontSize: 15, margin: 0, lineHeight: 1.5 }}>
         Design LVGL touch screen UIs for your ESPHome devices. Select or add a device, then design its screen and bind it to Home Assistant.
       </p>
+      <p className="muted" style={{ fontSize: 12, margin: 0, lineHeight: 1.45 }}>
+        <strong>Simulate</strong> and <strong>Mac sim</strong> appear above the canvas after you open a device. For Mac sim, set the token under{" "}
+        <strong>Settings → Devices &amp; services → EspToolkit → Configure</strong> (integration, not the add-on).
+      </p>
 
       <div className="section" style={{ marginTop: 0 }}>
         <div className="sectionTitle">Recent devices</div>

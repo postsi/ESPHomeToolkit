@@ -10,5 +10,16 @@
       "invalid_config": "Invalid configuration (base_url and token required).",
       "already_configured": "Integration is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Mac SDL simulator (optional)",
+        "description": "Shared secret for the Mac agent that connects outbound to Home Assistant (not the add-on API token). Generate a long random string (e.g. openssl rand -hex 32), paste it here, and use the same value in ha_agent_client.py --token-file on your Mac. Then use Mac sim in the Designer (next to Simulate) while a device project is open.",
+        "data": {
+          "mac_sim_token": "Mac sim agent token"
+        }
+      }
+    }
   }
 }

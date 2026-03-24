@@ -7,6 +7,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
+from homeassistant.helpers import selector
 
 from .const import CONF_BASE_URL, CONF_MAC_SIM_TOKEN, CONF_TOKEN, DOMAIN
 
@@ -20,23 +21,25 @@ class ESPToolkitOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
             token = (user_input.get(CONF_MAC_SIM_TOKEN) or "").strip()
-            return self.async_create_entry(title="", data={CONF_MAC_SIM_TOKEN: token})
+            merged = dict(self.config_entry.options)
+            merged[CONF_MAC_SIM_TOKEN] = token
+            return self.async_create_entry(title="", data=merged)
 
         cur = (self.config_entry.options or {}).get(CONF_MAC_SIM_TOKEN) or ""
         schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_MAC_SIM_TOKEN,
-                    description={"suggested_value": cur},
                     default=cur,
-                ): str,
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD,
+                        autocomplete="off",
+                    )
+                ),
             }
         )
-        return self.async_show_form(
-            step_id="init",
-            data_schema=schema,
-            description_placeholders={},
-        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class ESPToolkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
