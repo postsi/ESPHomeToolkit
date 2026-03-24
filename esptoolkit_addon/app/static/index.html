@@ -296,6 +296,7 @@
         const box = document.getElementById('log-box');
         if (!box) return;
         const line = (typeof ev.data === 'string' ? ev.data : String(ev.data)).replace(/\r?\n$/, '');
+        if (line === '') return;
         if (line === ESPHOME_OUTPUT_CLEAR) {
           box.textContent = '';
           return;

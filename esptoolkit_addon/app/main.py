@@ -289,6 +289,10 @@ async def _websocket_logs_impl(websocket: WebSocket):
         if token != expected:
             await websocket.close(code=4401, reason="Invalid token")
             return
+        # Client clears the log on WS open and stops polling while connected; replay tail so
+        # idle/recent output is visible until new lines arrive.
+        for line in runner.get_log_tail(500):
+            await websocket.send_text(line)
         queue = runner.subscribe_logs()
         try:
             while True:
