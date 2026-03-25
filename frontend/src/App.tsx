@@ -156,7 +156,7 @@ function friendlyWidgetIdFromBinding(entity_id: string, attribute: string, usedI
   return id;
 }
 
-/** If the given container is a "Spinbox with +/-" (has a single spinbox child), return that spinbox's id; else null. */
+/** Legacy: container that grouped a native spinbox with +/- buttons; return the spinbox child id if present. */
 function getSpinboxChildId(project: any, containerId: string): string | null {
   const page = project?.pages?.[0];
   const list = page?.widgets;

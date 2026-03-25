@@ -1,2 +1,2 @@
 # ESPToolkit add-on for Home Assistant (ESPHome API + Designer)
-__version__ = "1.1.8"
+__version__ = "1.1.9"

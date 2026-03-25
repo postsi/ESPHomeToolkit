@@ -1,7 +1,7 @@
 {
   "type": "spinbox2",
-  "title": "Spinbox2",
-  "description": "Stepper: centre label shows value; − / + buttons change by a fixed step (label + buttons, not LVGL spinbox).",
+  "title": "Spinbox +/-",
+  "description": "Stepper: centre value; − / + use a fixed step from properties (label + buttons). Add from Widgets pane.",
   "esphome": {
     "root_key": "container",
     "props": {},

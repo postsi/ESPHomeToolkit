@@ -811,7 +811,7 @@ def _compile_ha_bindings(project: dict) -> str:
 
     widget_props_by_id = _widget_props_by_id()
 
-    # Container id -> spinbox child id (for "Spinbox with +/-" prebuilt: link targets container, we update the spinbox child)
+    # Container id -> spinbox child id (legacy grouped spinbox+buttons: link targets container, we update the spinbox child)
     def _container_spinbox_child_map() -> dict[str, str]:
         out: dict[str, str] = {}
         for page in project.get("pages") or []:
@@ -2052,7 +2052,7 @@ def _compile_ui_lock_globals(project: dict) -> str:
     # Per-link locks are keyed by (entity_id, widget_id) so that UI-originated
     # service calls can suppress only the specific widget updates that would
     # otherwise “rubber-band”.
-    # Container -> spinbox child (display link to "Spinbox with +/-" targets container; lock is for the spinbox)
+    # Container -> spinbox child (legacy grouped layout: display link may target container; lock is for the spinbox)
     def _container_spinbox_child_map() -> dict[str, str]:
         out: dict[str, str] = {}
         for page in project.get("pages") or []:
@@ -2774,6 +2774,8 @@ PALETTE_WIDGET_TYPES = frozenset({
 # Widget types we compile and edit but do not show in Std LVGL palette (e.g. designer-only widgets).
 EXTRA_WIDGET_TYPES = frozenset({"arc_labeled", "color_picker", "white_picker", "spinbox2"})
 COMPILABLE_WIDGET_TYPES = PALETTE_WIDGET_TYPES | EXTRA_WIDGET_TYPES
+# Shown only via designer "Widgets" prebuilts, not Std LVGL schema list (/schemas/widgets).
+WIDGETS_PANE_ONLY_SCHEMA_TYPES = frozenset({"spinbox2"})
 
 
 def _common_extras_dir() -> Path:
@@ -5326,8 +5328,11 @@ class SchemasView(HomeAssistantView):
         items = []
         for p in sorted(schemas_path.glob("*.json")):
             wtype = p.stem
-            # Std LVGL palette + designer-only extras (arc_labeled, color_picker, white_picker, spinbox2, …)
+            # Std LVGL palette + designer-only extras (arc_labeled, color_picker, white_picker, …).
+            # spinbox2 is prebuilt-only (Widgets pane), not listed here.
             if wtype not in COMPILABLE_WIDGET_TYPES:
+                continue
+            if wtype in WIDGETS_PANE_ONLY_SCHEMA_TYPES:
                 continue
             try:
                 data = await hass.async_add_executor_job(_read_json_path, p)

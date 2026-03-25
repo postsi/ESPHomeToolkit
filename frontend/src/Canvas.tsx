@@ -1317,7 +1317,7 @@ const stageRef = useRef<any>(null);
     }
 
     if (type === "spinbox") {
-      // Native spinbox: value box only (no +/-). Prebuilt "Spinbox with +/-" adds real - and + buttons as siblings.
+      // Native spinbox: value box only (no +/-). Use Widgets pane "Spinbox +/-" (spinbox2) for stepped −/+.
       const rangeFrom = Number(p.range_from ?? 0);
       const rangeTo = Number(p.range_to ?? 100);
       const decimalPlaces = Math.max(0, Math.min(6, Number(p.decimal_places ?? 0)));

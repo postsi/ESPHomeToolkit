@@ -187,16 +187,19 @@ def build_prebuilt_widgets() -> list[dict]:
     grp[0]["parent_id"] = None
     out.extend(grp)
 
-    # 9. Spinbox with +/-
+    # 9. Spinbox +/- (spinbox2 prebuilt equivalent)
     x, y = at()
-    total_w, total_h, btn_w = 200, 48, 44
-    spin_w = total_w - btn_w * 2
-    raw = [
-        {"id": "pb_spin_sb", "type": "spinbox", "parent_id": "pb_spin_root", "x": btn_w, "y": 0, "w": spin_w, "h": total_h, "props": {"value": 15, "range_from": 5, "range_to": 30, "decimal_places": 1}, "style": {"radius": 6}},
-        {"id": "pb_spin_m", "type": "button", "parent_id": "pb_spin_root", "x": 0, "y": 0, "w": btn_w, "h": total_h, "props": {"text": "-"}, "style": {"radius": 6}},
-        {"id": "pb_spin_p", "type": "button", "parent_id": "pb_spin_root", "x": btn_w + spin_w, "y": 0, "w": btn_w, "h": total_h, "props": {"text": "+"}, "style": {"radius": 6}},
-    ]
-    out.extend(_wrap_in_group(x, y, [{"id": "pb_spin_root", "type": "container", "x": 0, "y": 0, "w": total_w, "h": total_h, "props": {}, "style": {}}] + raw))
+    out.append({
+        "id": "pb_spin2",
+        "type": "spinbox2",
+        "x": x, "y": y, "w": 200, "h": 48,
+        "props": {
+            "value": 15, "min_value": 5, "max_value": 30, "step": 1, "decimal_places": 1,
+            "minus_text": "-", "plus_text": "+",
+        },
+        "style": {"radius": 6},
+        "events": {},
+    })
 
     # 10. Progress bar + label
     x, y = at()

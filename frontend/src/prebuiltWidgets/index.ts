@@ -248,61 +248,39 @@ export const PREBUILT_WIDGETS: PrebuiltWidget[] = [
   },
   {
     id: "prebuilt_spinbox_buttons",
-    title: "Spinbox with +/-",
-    description: "Native spinbox with - and + buttons that call lvgl.spinbox.decrement/increment. Bind spinbox on_change to HA entity.",
+    title: "Spinbox +/-",
+    description:
+      "Stepper (− / +) with a centre value and fixed step (Spinbox2). Bind display as Set value and on_change to HA.",
     build: ({ x, y }) => {
-      const rootId = uid("spinbox_grp");
-      const spinId = uid("spinbox");
-      const minusId = uid("btn_minus");
-      const plusId = uid("btn_plus");
-      const totalW = 200;
-      const totalH = 48;
-      const btnW = 44;
-      const spinW = totalW - btnW * 2;
-      const spinboxWidget = {
-        id: spinId,
-        type: "spinbox",
-        parent_id: rootId,
-        x: btnW,
-        y: 0,
-        w: spinW,
-        h: totalH,
-        props: {
-          value: 15,
-          range_from: 5,
-          range_to: 30,
-          decimal_places: 1,
-        },
-        style: { radius: 6 },
-      };
-      const decrementYaml = `then:\n  - lvgl.spinbox.decrement: ${spinId}`;
-      const incrementYaml = `then:\n  - lvgl.spinbox.increment: ${spinId}`;
-      const minusBtn = {
-        id: minusId,
-        type: "button",
-        parent_id: rootId,
-        x: 0,
-        y: 0,
-        w: btnW,
-        h: totalH,
-        props: { text: "-" },
-        style: { radius: 6 },
-        custom_events: { on_click: decrementYaml },
-      };
-      const plusBtn = {
-        id: plusId,
-        type: "button",
-        parent_id: rootId,
-        x: btnW + spinW,
-        y: 0,
-        w: btnW,
-        h: totalH,
-        props: { text: "+" },
-        style: { radius: 6 },
-        custom_events: { on_click: incrementYaml },
-      };
+      const idsb = uid("spinbox2");
       return {
-        widgets: wrapInGroup(x, y, [spinboxWidget, minusBtn, plusBtn]),
+        widgets: [
+          {
+            id: idsb,
+            type: "spinbox2",
+            x,
+            y,
+            w: 200,
+            h: 48,
+            props: {
+              value: 15,
+              min_value: 5,
+              max_value: 30,
+              step: 1,
+              decimal_places: 1,
+              minus_text: "-",
+              plus_text: "+",
+            },
+            style: {
+              bg_color: 0x1e293b,
+              border_width: 1,
+              border_color: 0x475569,
+              radius: 6,
+              text_color: 0xe2e8f0,
+            },
+            events: {},
+          },
+        ],
       };
     },
   },

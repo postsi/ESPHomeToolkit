@@ -89,13 +89,13 @@ describe("uiSimulation", () => {
       expect(root.y).toBe(60);
     });
 
-    it("prebuilt_spinbox_buttons adds container + spinbox + buttons", () => {
+    it("prebuilt_spinbox_buttons adds one spinbox2", () => {
       const p = defaultProject();
       const next = simulateDropPrebuilt(p, "prebuilt_spinbox_buttons", 10, 20);
       const types = next.pages[0].widgets.map((w: any) => w.type);
-      expect(types).toContain("container");
-      expect(types).toContain("spinbox");
-      expect(types.filter((t: string) => t === "button").length).toBe(2);
+      expect(types).toEqual(["spinbox2"]);
+      expect(next.pages[0].widgets[0].x).toBe(10);
+      expect(next.pages[0].widgets[0].y).toBe(20);
     });
 
     it("does not mutate the original project", () => {

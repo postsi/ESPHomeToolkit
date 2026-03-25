@@ -67,7 +67,7 @@ def test_built_project_prebuilt_widget_types():
     assert "led" in types
     assert "button" in types
     assert "slider" in types
-    assert "spinbox" in types
+    assert "spinbox2" in types
     assert "container" in types
     assert "label" in types
 
