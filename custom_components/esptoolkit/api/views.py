@@ -2134,6 +2134,22 @@ SECTION_STATE_AUTO = "auto"
 SECTION_STATE_EDITED = "edited"
 COMPILER_OWNED_SECTIONS = frozenset({"lvgl"})
 
+_LVGL_PAGES_MARKER = "#__LVGL_PAGES__"
+
+
+def _replace_lvgl_pages_marker(section_body: str, compiler_lvgl: str) -> str:
+    """Replace the entire line containing #__LVGL_PAGES__ with compiler output.
+
+    Substring-only replace keeps the marker line's leading spaces, so the first injected line
+    becomes doubly indented (e.g. ``buffer_size`` appears under ``touchscreens:`` and breaks YAML).
+    """
+    body = section_body or ""
+    inj = (compiler_lvgl or "").rstrip()
+    if _LVGL_PAGES_MARKER not in body:
+        return body
+    pattern = re.compile(r"^.*" + re.escape(_LVGL_PAGES_MARKER) + r".*$", re.MULTILINE)
+    return pattern.sub(inj, body, count=1)
+
 
 def _merge_lvgl_recipe_compiler(recipe_body: str | None, compiler_body: str | None) -> str:
     """Merge hardware recipe `lvgl` body with compiler-generated LVGL (config + pages + top_layer).
@@ -2147,8 +2163,8 @@ def _merge_lvgl_recipe_compiler(recipe_body: str | None, compiler_body: str | No
     c = (compiler_body or "").rstrip()
     if not c:
         return r
-    if "#__LVGL_PAGES__" in r:
-        return r.replace("#__LVGL_PAGES__", c)
+    if _LVGL_PAGES_MARKER in r:
+        return _replace_lvgl_pages_marker(r, c)
     return c
 
 
@@ -2242,8 +2258,8 @@ def _ensure_project_sections(project: dict, device: object | None, recipe_text: 
             recipe_lvgl = recipe_sections.get(key) or ""
             if (stored_body or "").strip():
                 content = stored_body
-                if "#__LVGL_PAGES__" in content and compiler_lvgl.strip():
-                    content = content.replace("#__LVGL_PAGES__", compiler_lvgl.rstrip())
+                if _LVGL_PAGES_MARKER in content and compiler_lvgl.strip():
+                    content = _replace_lvgl_pages_marker(content, compiler_lvgl)
             else:
                 content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
         else:
@@ -2298,8 +2314,8 @@ def _build_section_engine_pieces(
                 content = _section_body_from_value(stored_raw, key) or ""
                 if not (content or "").strip():
                     content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
-                elif "#__LVGL_PAGES__" in content and compiler_lvgl.strip():
-                    content = content.replace("#__LVGL_PAGES__", compiler_lvgl.rstrip())
+                elif _LVGL_PAGES_MARKER in content and compiler_lvgl.strip():
+                    content = _replace_lvgl_pages_marker(content, compiler_lvgl)
             else:
                 content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
         else:
