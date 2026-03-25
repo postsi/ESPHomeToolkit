@@ -150,6 +150,18 @@ const stageRef = useRef<any>(null);
   const selectedSet = new Set(selectedIds);
   const [dragAtLimit, setDragAtLimit] = useState(false);
   const [resizeAtLimit, setResizeAtLimit] = useState(false);
+  /** Shift+shell-only resize: inverse scale on inner group so Konva's Group scale (needed by Transformer) doesn't stretch children. */
+  const [shellCounterScale, setShellCounterScale] = useState<{
+    id: string;
+    sx: number;
+    sy: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    setShellCounterScale((prev) =>
+      prev && !selectedIds.includes(prev.id) ? null : prev
+    );
+  }, [selectedIds]);
 
   const widgetById = useMemo(() => {
     const m = new Map<string, Widget>();
@@ -637,20 +649,27 @@ const stageRef = useRef<any>(null);
             }}
             onTransform={(e) => {
               if (simulationMode) return;
-              // Shift = shell-only resize: Konva scales the whole Group, which stretches children.
-              // Bake scale into width/height each frame so children keep their local sizes during the drag.
-              if (!(e.evt as { shiftKey?: boolean })?.shiftKey) return;
+              const sk = !!(e.evt as { shiftKey?: boolean })?.shiftKey;
+              if (!sk) {
+                setShellCounterScale((prev) => (prev?.id === w.id ? null : prev));
+                return;
+              }
               const node = e.target;
-              const scaleX = node.scaleX();
-              const scaleY = node.scaleY();
-              if (Math.abs(scaleX - 1) < 1e-9 && Math.abs(scaleY - 1) < 1e-9) return;
-              node.scaleX(1);
-              node.scaleY(1);
-              const oldW = node.width();
-              const oldH = node.height();
-              node.width(Math.max(20, oldW * scaleX));
-              node.height(Math.max(20, oldH * scaleY));
-              node.getLayer()?.batchDraw();
+              const psx = node.scaleX();
+              const psy = node.scaleY();
+              if (Math.abs(psx) < 1e-10 || Math.abs(psy) < 1e-10) return;
+              const ix = 1 / psx;
+              const iy = 1 / psy;
+              setShellCounterScale((prev) => {
+                if (
+                  prev?.id === w.id &&
+                  Math.abs(prev.sx - ix) < 1e-7 &&
+                  Math.abs(prev.sy - iy) < 1e-7
+                ) {
+                  return prev;
+                }
+                return { id: w.id, sx: ix, sy: iy };
+              });
             }}
             onTransformEnd={(e) => {
               const node = e.target;
@@ -696,11 +715,20 @@ const stageRef = useRef<any>(null);
                 const modelY = yy - parentAbs.ay;
                 onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
               }
+              setShellCounterScale((prev) => (prev?.id === w.id ? null : prev));
               setResizeAtLimit(false);
             }}
           >
-            {baseLocal}
-            {kids.map((k) => renderWidget(k, selectedSet.has(k.id), { localPosition: true }))}
+            <Group
+              x={0}
+              y={0}
+              listening={false}
+              scaleX={shellCounterScale?.id === w.id ? shellCounterScale.sx : 1}
+              scaleY={shellCounterScale?.id === w.id ? shellCounterScale.sy : 1}
+            >
+              {baseLocal}
+              {kids.map((k) => renderWidget(k, selectedSet.has(k.id), { localPosition: true }))}
+            </Group>
           </Group>
         );
       }
