@@ -145,7 +145,15 @@ export async function enqueueMacSim(
     hardware_recipe_id?: string;
     screen?: { width: number; height: number };
   }
-): Promise<{ ok: boolean; warnings?: unknown[]; error?: string; detail?: string }> {
+): Promise<{
+  ok: boolean;
+  warnings?: unknown[];
+  error?: string;
+  detail?: string;
+  mac_sim_esphome_name?: string;
+  mac_sim_api_key_generated?: boolean;
+  mac_sim_api_key_hint?: string;
+}> {
   const u = new URL(`${API_BASE}/mac_sim/enqueue`, window.location.origin);
   u.searchParams.set("entry_id", entryId);
   return apiPost(u.pathname + u.search, body);

@@ -26,6 +26,8 @@ CONF_WIFI_PASSWORD_SECRET = "wifi_password"
 CONF_DEFAULT_LOG_LEVEL = "default_log_level"
 # Long random secret: Mac agent sends this after connecting to HA WebSocket (integration options).
 CONF_MAC_SIM_TOKEN = "mac_sim_token"
+# ESPHome Native API encryption key for the Mac SDL build only (separate from the physical device).
+CONF_MAC_SIM_API_KEY = "mac_sim_api_encryption_key"
 
 STORAGE_VERSION = 1
 

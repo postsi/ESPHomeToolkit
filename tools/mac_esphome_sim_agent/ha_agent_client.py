@@ -5,7 +5,11 @@ receive run jobs, execute esphome run (SDL).
 
 Usage (after install-macos.sh):
   source .venv/bin/activate
-  python ha_agent_client.py --ha-url https://homeassistant.local:8123 --token-file ~/.config/esptoolkit_mac_sim_token
+  # Use http:// if your browser uses http:// for HA (typical on LAN); use https:// only when HA serves TLS.
+  python ha_agent_client.py --ha-url http://homeassistant.local:8123 --token-file ~/.esptoolkit_mac_sim_token
+
+  # Debug: print the exact YAML before each esphome run (inspect line numbers from errors)
+  python ha_agent_client.py ... --dump-yaml
 
 Use the same token as in HA: Settings → Devices & services → EspToolkit → Configure (Mac sim token).
 """
@@ -25,6 +29,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import websockets
+
+from esphome_transform import transform_esphome_yaml_for_host_sdl
 
 LOG = logging.getLogger("ha_mac_sim_agent")
 
@@ -68,7 +74,29 @@ async def _run_esphome(yaml_text: str) -> int:
         Path(path).unlink(missing_ok=True)
 
 
-async def _client_loop(uri: str, token: str, insecure_tls: bool) -> None:
+def _ssl_mismatch_tip(uri: str, exc: BaseException) -> None:
+    """Suggest http:// when wss:// fails with TLS errors (HA often serves plain HTTP on :8123)."""
+    if not uri.lower().startswith("wss:"):
+        return
+    msg = str(exc).lower()
+    if isinstance(exc, ssl.SSLError) or "ssl" in msg or "record layer" in msg or "tls" in msg:
+        LOG.warning(
+            "If Home Assistant is opened in the browser as http:// (not https://), use the same for "
+            "--ha-url, e.g. http://grimwoodha:8123 — otherwise TLS talks to a non-TLS port and SSL fails."
+        )
+
+
+def _dump_yaml_to_terminal(yaml_text: str) -> None:
+    """Print exact YAML passed to esphome (stderr, so it stays readable vs log lines)."""
+    sep = "=" * 72
+    print(sep, file=sys.stderr)
+    print("MAC SIM YAML (next esphome run)", file=sys.stderr)
+    print(sep, file=sys.stderr)
+    print(yaml_text, file=sys.stderr, end="" if yaml_text.endswith("\n") else "\n")
+    print(sep, file=sys.stderr)
+
+
+async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: bool) -> None:
     ssl_ctx: ssl.SSLContext | None = None
     if uri.startswith("wss"):
         ssl_ctx = ssl.create_default_context()
@@ -128,12 +156,33 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool) -> None:
                         if mtype == "pong":
                             continue
                         if mtype == "run":
-                            y = data.get("yaml")
-                            if not isinstance(y, str) or not y.strip():
-                                LOG.error("Empty yaml in run message")
-                                continue
-                            LOG.info("Received run job (%d bytes YAML)", len(y))
-                            rc = await _run_esphome(y)
+                            source_yaml = data.get("source_yaml")
+                            transformed_yaml: str
+                            if isinstance(source_yaml, str) and source_yaml.strip():
+                                try:
+                                    transformed_yaml, tw = transform_esphome_yaml_for_host_sdl(
+                                        source_yaml,
+                                        int(data.get("screen_width") or 480),
+                                        int(data.get("screen_height") or 320),
+                                        api_encryption_key=str(data.get("api_encryption_key") or ""),
+                                        esphome_name=str(data.get("esphome_name") or "macsim"),
+                                    )
+                                    for w in tw:
+                                        LOG.warning("transform warning: %s", w)
+                                except Exception as exc:
+                                    LOG.error("Mac-side transform failed: %s", exc)
+                                    continue
+                            else:
+                                # Backward compatibility with older HA payloads.
+                                y = data.get("yaml")
+                                if not isinstance(y, str) or not y.strip():
+                                    LOG.error("Empty yaml in run message")
+                                    continue
+                                transformed_yaml = y
+                            LOG.info("Received run job (%d bytes YAML)", len(transformed_yaml))
+                            if dump_yaml:
+                                _dump_yaml_to_terminal(transformed_yaml)
+                            rc = await _run_esphome(transformed_yaml)
                             LOG.info("esphome run finished with code %s", rc)
                         else:
                             LOG.debug("Message: %s", data)
@@ -142,6 +191,7 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool) -> None:
                     with contextlib.suppress(asyncio.CancelledError):
                         await ping_task
         except (websockets.ConnectionClosed, OSError) as e:
+            _ssl_mismatch_tip(uri, e)
             LOG.warning("Disconnected (%s); reconnecting in 5s…", e)
             await asyncio.sleep(5)
 
@@ -151,7 +201,7 @@ def main() -> None:
     p.add_argument(
         "--ha-url",
         required=True,
-        help="Home Assistant base URL, e.g. https://homeassistant.local:8123",
+        help="HA base URL — match your browser: http://host:8123 for plain HTTP (typical LAN), https://… if HA uses TLS",
     )
     p.add_argument("--token-file", required=True, help="File containing mac_sim_token (same as HA integration options)")
     p.add_argument(
@@ -160,6 +210,11 @@ def main() -> None:
         help="Disable TLS certificate verification (dev only)",
     )
     p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument(
+        "--dump-yaml",
+        action="store_true",
+        help="Print the full received YAML to stderr before each esphome run (debug invalid YAML / structure)",
+    )
     args = p.parse_args()
 
     logging.basicConfig(
@@ -174,7 +229,9 @@ def main() -> None:
 
     uri = _ws_url_from_ha_url(args.ha_url)
     try:
-        asyncio.run(_client_loop(uri, token, args.insecure_tls))
+        asyncio.run(
+            _client_loop(uri, token, args.insecure_tls, dump_yaml=args.dump_yaml),
+        )
     except KeyboardInterrupt:
         LOG.info("Stopped")
 

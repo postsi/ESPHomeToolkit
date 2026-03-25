@@ -15,9 +15,10 @@
     "step": {
       "init": {
         "title": "Mac SDL simulator (optional)",
-        "description": "Shared secret for the Mac agent that connects outbound to Home Assistant (not the add-on API token). Generate a long random string (e.g. openssl rand -hex 32), paste it here, and use the same value in ha_agent_client.py --token-file on your Mac. Then use Mac sim in the Designer (next to Simulate) while a device project is open.",
+        "description": "Mac sim agent token: shared secret for the Mac program that connects outbound to Home Assistant (not the add-on API token). Mac sim API encryption key: used only in the SDL build so Home Assistant sees a separate device named macsim (auto-generated on first Mac sim if left empty). Paste the key when adding the macsim device under Settings → Devices & services → ESPHome.",
         "data": {
-          "mac_sim_token": "Mac sim agent token"
+          "mac_sim_token": "Mac sim agent token",
+          "mac_sim_api_encryption_key": "Mac sim API encryption key (optional)"
         }
       }
     }

@@ -9,7 +9,7 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers import selector
 
-from .const import CONF_BASE_URL, CONF_MAC_SIM_TOKEN, CONF_TOKEN, DOMAIN
+from .const import CONF_BASE_URL, CONF_MAC_SIM_API_KEY, CONF_MAC_SIM_TOKEN, CONF_TOKEN, DOMAIN
 
 
 class ESPToolkitOptionsFlow(config_entries.OptionsFlow):
@@ -24,14 +24,27 @@ class ESPToolkitOptionsFlow(config_entries.OptionsFlow):
             token = (user_input.get(CONF_MAC_SIM_TOKEN) or "").strip()
             merged = dict(self.config_entry.options)
             merged[CONF_MAC_SIM_TOKEN] = token
+            new_api_key = (user_input.get(CONF_MAC_SIM_API_KEY) or "").strip()
+            if new_api_key:
+                merged[CONF_MAC_SIM_API_KEY] = new_api_key
             return self.async_create_entry(title="", data=merged)
 
         cur = (self.config_entry.options or {}).get(CONF_MAC_SIM_TOKEN) or ""
+        cur_api = (self.config_entry.options or {}).get(CONF_MAC_SIM_API_KEY) or ""
         schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_MAC_SIM_TOKEN,
                     default=cur,
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD,
+                        autocomplete="off",
+                    )
+                ),
+                vol.Optional(
+                    CONF_MAC_SIM_API_KEY,
+                    default=cur_api,
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(
                         type=selector.TextSelectorType.PASSWORD,

@@ -1,23 +1,13 @@
-"""Host/SDL YAML transform + shared state for Mac simulator agent (outbound WebSocket to HA)."""
+"""Local Mac-side ESPHome YAML transform for host + SDL simulation."""
 
 from __future__ import annotations
 
-import asyncio
 import json
-import logging
 import re
-import secrets
-from typing import TYPE_CHECKING, Any
 
-from .const import DOMAIN
+_TOP_LEVEL_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*$")
 
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
-_LOGGER = logging.getLogger(__name__)
-
-# Top-level ESPHome sections removed for host/SDL sim (hardware, connectivity, backlight, etc.).
-_MAC_SIM_DROP_SECTION_KEYS: frozenset[str] = frozenset(
+_DROP_SECTION_KEYS: frozenset[str] = frozenset(
     {
         "esp32",
         "esp8266",
@@ -70,12 +60,51 @@ _MAC_SIM_DROP_SECTION_KEYS: frozenset[str] = frozenset(
 )
 
 
-def ensure_mac_sim_hub(hass: HomeAssistant) -> dict[str, Any]:
-    """Singleton hub: one outbound agent session + outbound job queue."""
-    root = hass.data.setdefault(DOMAIN, {})
-    if "mac_sim_hub" not in root:
-        root["mac_sim_hub"] = {"lock": asyncio.Lock(), "session": None}
-    return root["mac_sim_hub"]
+def _trim_outer_blank_lines(s: str) -> str:
+    if not s:
+        return ""
+    lines = s.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _yaml_str_to_sections(yaml_str: str) -> dict[str, str]:
+    sections: dict[str, str] = {}
+    lines = yaml_str.splitlines()
+    i = 0
+    while i < len(lines):
+        m = _TOP_LEVEL_KEY_RE.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        key = m.group(1).strip().lower()
+        i += 1
+        content: list[str] = []
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt and not nxt[0].isspace() and _TOP_LEVEL_KEY_RE.match(nxt):
+                break
+            content.append(nxt)
+            i += 1
+        body = "\n".join(content).rstrip()
+        if key in sections and body:
+            sections[key] = f"{sections[key].rstrip()}\n\n{body}"
+        else:
+            sections[key] = body
+    return sections
+
+
+def _sections_to_yaml(sections: dict[str, str]) -> str:
+    parts: list[str] = []
+    for key, raw in sections.items():
+        body = _trim_outer_blank_lines(raw)
+        if not body and key not in ("wifi", "ota", "logger"):
+            continue
+        parts.append(f"{key}:\n{(body or '').rstrip()}\n")
+    return "\n".join(parts).rstrip() + "\n" if parts else ""
 
 
 def _first_id_in_section_body(body: str, key: str = "id") -> str | None:
@@ -89,8 +118,6 @@ def _first_id_in_section_body(body: str, key: str = "id") -> str | None:
 
 
 def _patch_esphome_name(body: str, name: str) -> str:
-    from .api.views import _trim_outer_blank_lines
-
     body = _trim_outer_blank_lines(body)
     q = json.dumps(name)
     line = f"name: {q}"
@@ -102,8 +129,6 @@ def _patch_esphome_name(body: str, name: str) -> str:
 
 
 def _patch_api_encryption_key(body: str, key_b64: str) -> str:
-    from .api.views import _trim_outer_blank_lines
-
     body = _trim_outer_blank_lines(body)
     q = json.dumps(key_b64)
     if not body:
@@ -121,33 +146,30 @@ def transform_esphome_yaml_for_host_sdl(
     api_encryption_key: str,
     esphome_name: str = "macsim",
 ) -> tuple[str, list[str]]:
-    """Strip MCU hardware, inject host + SDL display + SDL touchscreen. Returns (yaml, warnings)."""
-    from .api.views import _sections_to_yaml, _trim_outer_blank_lines, _yaml_str_to_section_map
-
     warnings: list[str] = []
     w = max(120, min(4096, int(width)))
     h = max(120, min(4096, int(height)))
-
     api_key = (api_encryption_key or "").strip()
     if not api_key:
-        raise ValueError("api_encryption_key is required for Mac SDL transform")
+        raise ValueError("api_encryption_key is required")
 
-    sections = _yaml_str_to_section_map(full_yaml)
+    sections = _yaml_str_to_sections(full_yaml)
     display_body = _trim_outer_blank_lines(sections.get("display") or "")
     touch_body = _trim_outer_blank_lines(sections.get("touchscreen") or "")
 
     display_id = _first_id_in_section_body(display_body) or "main_display"
     touchscreen_id = _first_id_in_section_body(touch_body) or "main_touchscreen"
 
-    for drop_key in _MAC_SIM_DROP_SECTION_KEYS:
+    for drop_key in _DROP_SECTION_KEYS:
         sections.pop(drop_key, None)
 
     sections.pop("display", None)
     sections.pop("touchscreen", None)
     sections.pop("host", None)
 
+    sections["esphome"] = _patch_esphome_name(sections.get("esphome") or "", esphome_name)
     sections["host"] = "  mac_address: \"06:35:69:ab:f6:79\"\n"
-
+    sections["api"] = _patch_api_encryption_key(sections.get("api") or "", api_key)
     sections["display"] = (
         f"  - id: {display_id}\n"
         "    platform: sdl\n"
@@ -157,40 +179,16 @@ def transform_esphome_yaml_for_host_sdl(
         f"      width: {w}\n"
         f"      height: {h}\n"
     )
-
     sections["touchscreen"] = (
         f"  - id: {touchscreen_id}\n"
         "    platform: sdl\n"
     )
 
-    if "esphome" in sections:
-        sections["esphome"] = _patch_esphome_name(sections.get("esphome") or "", esphome_name)
-    else:
-        sections["esphome"] = _patch_esphome_name("", esphome_name)
-
-    sections["api"] = _patch_api_encryption_key(sections.get("api") or "", api_key)
-
     header = (
-        f"# {DOMAIN} mac sim — host + SDL (mouse as touch). Not for flashing.\n"
-        f"# Display {w}x{h}; display_id={display_id}; touchscreen_id={touchscreen_id}\n"
-        "# Fonts/paths pointing at HA /config may need files on the Mac.\n\n"
+        "# esptoolkit mac sim — transformed on Mac host + SDL (mouse as touch).\n"
+        f"# Display {w}x{h}; display_id={display_id}; touchscreen_id={touchscreen_id}\n\n"
     )
-
     merged = _sections_to_yaml(sections)
     if not merged.strip():
         warnings.append("transform produced empty YAML")
     return header + merged, warnings
-
-
-def mac_sim_token_matches(expected: str, offered: str) -> bool:
-    """Constant-time compare for UTF-8 tokens."""
-    if not expected or not offered:
-        return False
-    try:
-        a = expected.encode("utf-8")
-        b = offered.encode("utf-8")
-    except Exception:
-        return False
-    if len(a) != len(b):
-        return False
-    return secrets.compare_digest(a, b)

@@ -1889,15 +1889,19 @@ if (baseId.startsWith("glance_card")) {
     }
     setMacSimBusy(true);
     try {
-      await enqueueMacSim(entryId, {
+      const res = await enqueueMacSim(entryId, {
         device_id: selectedDevice,
         project,
         hardware_recipe_id: selectedDeviceObj?.hardware_recipe_id ?? (project as any)?.device?.hardware_recipe_id,
         screen: { width: screenSize.width, height: screenSize.height },
       });
+      const extra =
+        res.mac_sim_api_key_generated && res.mac_sim_api_key_hint
+          ? ` ${res.mac_sim_api_key_hint}`
+          : "";
       setToast({
         type: "ok",
-        msg: "Mac sim: host/SDL YAML sent to your connected Mac agent (ESPHome window should open there).",
+        msg: `Mac sim: host/SDL YAML sent to your connected Mac agent (ESPHome window should open there).${extra}`,
       });
     } catch (e: any) {
       setToast({ type: "error", msg: `Mac sim: ${e?.message || e}` });

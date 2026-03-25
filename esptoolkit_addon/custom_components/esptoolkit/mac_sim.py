@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 import secrets
 from typing import TYPE_CHECKING, Any
 
@@ -86,27 +88,59 @@ def _first_id_in_section_body(body: str, key: str = "id") -> str | None:
     return None
 
 
+def _patch_esphome_name(body: str, name: str) -> str:
+    from .api.views import _trim_outer_blank_lines
+
+    body = _trim_outer_blank_lines(body)
+    q = json.dumps(name)
+    line = f"name: {q}"
+    if not body:
+        return f"  {line}\n"
+    if re.search(r"(?m)^\s*name\s*:", body):
+        return re.sub(r"(?m)^(\s*)name\s*:\s*.+$", lambda m: m.group(1) + line, body, count=1)
+    return f"  {line}\n{body}"
+
+
+def _patch_api_encryption_key(body: str, key_b64: str) -> str:
+    from .api.views import _trim_outer_blank_lines
+
+    body = _trim_outer_blank_lines(body)
+    q = json.dumps(key_b64)
+    if not body:
+        return f"  encryption:\n    key: {q}\n"
+    if re.search(r"(?m)^\s*key\s*:", body):
+        return re.sub(r"(?m)^(\s*)key\s*:\s*.+$", rf"\1key: {q}", body, count=1)
+    return f"  encryption:\n    key: {q}\n{body}"
+
+
 def transform_esphome_yaml_for_host_sdl(
     full_yaml: str,
     width: int,
     height: int,
+    *,
+    api_encryption_key: str,
+    esphome_name: str = "macsim",
 ) -> tuple[str, list[str]]:
     """Strip MCU hardware, inject host + SDL display + SDL touchscreen. Returns (yaml, warnings)."""
-    from .api.views import _sections_to_yaml, _yaml_str_to_section_map
+    from .api.views import _sections_to_yaml, _trim_outer_blank_lines, _yaml_str_to_section_map
 
     warnings: list[str] = []
     w = max(120, min(4096, int(width)))
     h = max(120, min(4096, int(height)))
 
+    api_key = (api_encryption_key or "").strip()
+    if not api_key:
+        raise ValueError("api_encryption_key is required for Mac SDL transform")
+
     sections = _yaml_str_to_section_map(full_yaml)
-    display_body = (sections.get("display") or "").strip()
-    touch_body = (sections.get("touchscreen") or "").strip()
+    display_body = _trim_outer_blank_lines(sections.get("display") or "")
+    touch_body = _trim_outer_blank_lines(sections.get("touchscreen") or "")
 
     display_id = _first_id_in_section_body(display_body) or "main_display"
     touchscreen_id = _first_id_in_section_body(touch_body) or "main_touchscreen"
 
-    for key in _MAC_SIM_DROP_SECTION_KEYS:
-        sections.pop(key, None)
+    for drop_key in _MAC_SIM_DROP_SECTION_KEYS:
+        sections.pop(drop_key, None)
 
     sections.pop("display", None)
     sections.pop("touchscreen", None)
@@ -128,6 +162,13 @@ def transform_esphome_yaml_for_host_sdl(
         f"  - id: {touchscreen_id}\n"
         "    platform: sdl\n"
     )
+
+    if "esphome" in sections:
+        sections["esphome"] = _patch_esphome_name(sections.get("esphome") or "", esphome_name)
+    else:
+        sections["esphome"] = _patch_esphome_name("", esphome_name)
+
+    sections["api"] = _patch_api_encryption_key(sections.get("api") or "", api_key)
 
     header = (
         f"# {DOMAIN} mac sim — host + SDL (mouse as touch). Not for flashing.\n"

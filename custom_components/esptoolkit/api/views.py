@@ -497,12 +497,24 @@ def _yaml_str_to_section_map(yaml_str: str, merge_duplicate_keys: bool = False) 
     return sections
 
 
+def _trim_outer_blank_lines(s: str) -> str:
+    """Remove leading/trailing blank lines only. Do not use str.strip() on section bodies — it strips indent from the first line."""
+    if not s:
+        return ""
+    lines = s.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
 def _sections_to_yaml(sections: dict[str, str]) -> str:
     """Build a single YAML document from section key -> body (body = content under 'key:', no header).
     Emits sections in SECTION_ORDER; only sections with non-empty content are included."""
     parts: list[str] = []
     for key in SECTION_ORDER:
-        raw = (sections.get(key) or "").strip()
+        raw = _trim_outer_blank_lines(sections.get(key) or "")
         if not raw:
             continue
         body = _section_body_from_value(
@@ -6400,7 +6412,7 @@ class MacSimAgentWebSocketView(HomeAssistantView):
         log = logging.getLogger(__name__ + ".mac_sim_agent")
 
         authenticated = False
-        out_q: asyncio.Queue[str] | None = None
+        out_q: asyncio.Queue[dict[str, Any]] | None = None
         session: dict | None = None
         out_task: asyncio.Task | None = None
 
@@ -6408,9 +6420,9 @@ class MacSimAgentWebSocketView(HomeAssistantView):
             assert out_q is not None
             try:
                 while True:
-                    yaml_doc = await out_q.get()
+                    run_job = await out_q.get()
                     try:
-                        await ws.send_str(json.dumps({"type": "run", "yaml": yaml_doc}))
+                        await ws.send_str(json.dumps({"type": "run", **run_job}))
                     except Exception as exc:
                         log.debug("mac_sim send to agent failed: %s", exc)
                         break
@@ -6466,7 +6478,7 @@ class MacSimAgentWebSocketView(HomeAssistantView):
 
 
 class MacSimEnqueueView(HomeAssistantView):
-    """Designer: compile device YAML, transform for host/SDL, push to connected Mac agent."""
+    """Designer: compile device YAML and push to connected Mac agent for local host/SDL transform + run."""
 
     url = f"/api/{DOMAIN}/mac_sim/enqueue"
     name = f"api:{DOMAIN}:mac_sim_enqueue"
@@ -6475,8 +6487,11 @@ class MacSimEnqueueView(HomeAssistantView):
     async def post(self, request):
         import copy
 
-        from ..const import CONF_MAC_SIM_TOKEN
-        from ..mac_sim import ensure_mac_sim_hub, transform_esphome_yaml_for_host_sdl
+        import base64
+        import secrets as secrets_mod
+
+        from ..const import CONF_MAC_SIM_API_KEY, CONF_MAC_SIM_TOKEN
+        from ..mac_sim import ensure_mac_sim_hub
 
         hass: HomeAssistant = request.app["hass"]
         entry_id = request.query.get("entry_id") or _active_entry_id(hass)
@@ -6486,7 +6501,15 @@ class MacSimEnqueueView(HomeAssistantView):
         entry = hass.config_entries.async_get_entry(entry_id)
         if not entry:
             return self.json({"ok": False, "error": "no_active_entry"}, status_code=500)
-        expected_tok = ((entry.options or {}).get(CONF_MAC_SIM_TOKEN) or "").strip()
+        opts = dict(entry.options or {})
+        api_key = (opts.get(CONF_MAC_SIM_API_KEY) or "").strip()
+        mac_sim_api_key_generated = False
+        if not api_key:
+            api_key = base64.b64encode(secrets_mod.token_bytes(32)).decode()
+            opts[CONF_MAC_SIM_API_KEY] = api_key
+            hass.config_entries.async_update_entry(entry, options=opts)
+            mac_sim_api_key_generated = True
+        expected_tok = (opts.get(CONF_MAC_SIM_TOKEN) or "").strip()
         if len(expected_tok) < 16:
             return self.json(
                 {
@@ -6544,11 +6567,6 @@ class MacSimEnqueueView(HomeAssistantView):
         except Exception as e:
             return self.json({"ok": False, "error": "compile_failed", "detail": str(e)}, status_code=500)
 
-        try:
-            sim_yaml, transform_warnings = transform_esphome_yaml_for_host_sdl(yaml_text, w, h)
-        except Exception as e:
-            return self.json({"ok": False, "error": "transform_failed", "detail": str(e)}, status_code=500)
-
         hub = ensure_mac_sim_hub(hass)
         sess = hub.get("session")
         if not sess or sess.get("ws") is None or sess["ws"].closed:
@@ -6561,16 +6579,30 @@ class MacSimEnqueueView(HomeAssistantView):
                 status_code=503,
             )
         try:
-            sess["out_q"].put_nowait(sim_yaml)
+            sess["out_q"].put_nowait(
+                {
+                    "source_yaml": yaml_text,
+                    "screen_width": w,
+                    "screen_height": h,
+                    "api_encryption_key": api_key,
+                    "esphome_name": "macsim",
+                }
+            )
         except asyncio.QueueFull:
             return self.json({"ok": False, "error": "queue_full"}, status_code=503)
 
-        return self.json(
-            {
-                "ok": True,
-                "warnings": (compile_warnings or []) + transform_warnings,
-            }
-        )
+        payload = {
+            "ok": True,
+            "warnings": (compile_warnings or []),
+            "mac_sim_esphome_name": "macsim",
+            "mac_sim_api_key_generated": mac_sim_api_key_generated,
+        }
+        if mac_sim_api_key_generated:
+            payload["mac_sim_api_key_hint"] = (
+                "A Mac sim API encryption key was saved in EspToolkit → Configure. "
+                "Add an ESPHome device named macsim in Home Assistant and paste that key."
+            )
+        return self.json(payload)
 
 
 def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
