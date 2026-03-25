@@ -2135,6 +2135,23 @@ SECTION_STATE_EDITED = "edited"
 COMPILER_OWNED_SECTIONS = frozenset({"lvgl"})
 
 
+def _merge_lvgl_recipe_compiler(recipe_body: str | None, compiler_body: str | None) -> str:
+    """Merge hardware recipe `lvgl` body with compiler-generated LVGL (config + pages + top_layer).
+
+    Recipe files use `#__LVGL_PAGES__` as a placeholder; it is replaced by the full compiler
+    emission so recipe keys (displays, byte_order, touchscreens, etc.) stay in the output.
+
+    If the recipe omits the marker, compiler output wins when present (legacy behavior).
+    """
+    r = (recipe_body or "").rstrip()
+    c = (compiler_body or "").rstrip()
+    if not c:
+        return r
+    if "#__LVGL_PAGES__" in r:
+        return r.replace("#__LVGL_PAGES__", c)
+    return c
+
+
 def _build_recipe_default_sections(recipe_text: str, device: object | None) -> dict[str, str]:
     """Build section key -> body from current recipe only (with substitutions). Used for Reset and for default_sections in panel v2."""
     recipe_sections = _parse_recipe_into_sections(recipe_text)
@@ -2174,9 +2191,12 @@ def _build_default_section_pieces(
         compiler_sections["script"] = (current + "\n" + stub.rstrip() + "\n") if current else (stub.rstrip() + "\n")
     pieces: dict[str, str] = {}
     for key in SECTION_ORDER:
-        content = compiler_sections.get(key) or recipe_sections.get(key)
-        if key == "lvgl" and content and "#__LVGL_PAGES__" in content and compiler_sections.get("lvgl"):
-            content = content.replace("#__LVGL_PAGES__", (compiler_sections["lvgl"] or "").rstrip())
+        if key == "lvgl":
+            content = _merge_lvgl_recipe_compiler(
+                recipe_sections.get(key), compiler_sections.get(key)
+            )
+        else:
+            content = compiler_sections.get(key) or recipe_sections.get(key)
         if key == "esphome" and content and ETD_DEVICE_NAME_PLACEHOLDER not in content:
             if re.search(r"^\s*name\s*:", content, re.MULTILINE):
                 content = re.sub(r"^(\s*name\s*:\s*).*$", r"\1" + ETD_DEVICE_NAME_PLACEHOLDER, content, count=1, flags=re.MULTILINE)
@@ -2217,9 +2237,17 @@ def _ensure_project_sections(project: dict, device: object | None, recipe_text: 
     for key in SECTION_ORDER:
         # Prefer stored (saved in Components) when present; otherwise fall back to compiler (prebuilts, HA bindings), then recipe.
         stored_body = _section_body_from_value(stored.get(key), key) if stored.get(key) else None
-        content = (stored_body if (stored_body or "").strip() else None) or compiler_sections.get(key) or recipe_sections.get(key)
-        if key == "lvgl" and content and "#__LVGL_PAGES__" in content and compiler_sections.get("lvgl"):
-            content = content.replace("#__LVGL_PAGES__", (compiler_sections["lvgl"] or "").rstrip())
+        if key == "lvgl":
+            compiler_lvgl = compiler_sections.get(key) or ""
+            recipe_lvgl = recipe_sections.get(key) or ""
+            if (stored_body or "").strip():
+                content = stored_body
+                if "#__LVGL_PAGES__" in content and compiler_lvgl.strip():
+                    content = content.replace("#__LVGL_PAGES__", compiler_lvgl.rstrip())
+            else:
+                content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
+        else:
+            content = (stored_body if (stored_body or "").strip() else None) or compiler_sections.get(key) or recipe_sections.get(key)
         if key == "esphome" and content and ETD_DEVICE_NAME_PLACEHOLDER not in content:
             if re.search(r"^\s*name\s*:", content, re.MULTILINE):
                 content = re.sub(r"^(\s*name\s*:\s*).*$", r"\1" + ETD_DEVICE_NAME_PLACEHOLDER, content, count=1, flags=re.MULTILINE)
@@ -2262,10 +2290,21 @@ def _build_section_engine_pieces(
 
     pieces: dict[str, str] = {}
     for key in SECTION_ORDER:
-        raw = stored.get(key) or compiler_sections.get(key) or recipe_sections.get(key)
-        content = _section_body_from_value(raw, key) if raw else (raw or "")
-        if key == "lvgl" and content and "#__LVGL_PAGES__" in content and compiler_sections.get("lvgl"):
-            content = content.replace("#__LVGL_PAGES__", (compiler_sections["lvgl"] or "").rstrip())
+        if key == "lvgl":
+            compiler_lvgl = compiler_sections.get(key) or ""
+            recipe_lvgl = recipe_sections.get(key) or ""
+            stored_raw = stored.get(key)
+            if stored_raw:
+                content = _section_body_from_value(stored_raw, key) or ""
+                if not (content or "").strip():
+                    content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
+                elif "#__LVGL_PAGES__" in content and compiler_lvgl.strip():
+                    content = content.replace("#__LVGL_PAGES__", compiler_lvgl.rstrip())
+            else:
+                content = _merge_lvgl_recipe_compiler(recipe_lvgl, compiler_lvgl)
+        else:
+            raw = stored.get(key) or compiler_sections.get(key) or recipe_sections.get(key)
+            content = _section_body_from_value(raw, key) if raw else (raw or "")
         if key == "esphome" and content and ETD_DEVICE_NAME_PLACEHOLDER not in content:
             if re.search(r"^\s*name\s*:", content, re.MULTILINE):
                 content = re.sub(r"^(\s*name\s*:\s*).*$", r"\1" + ETD_DEVICE_NAME_PLACEHOLDER, content, count=1, flags=re.MULTILINE)
