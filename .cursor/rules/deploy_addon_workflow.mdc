@@ -13,10 +13,12 @@ When the user asks to **deploy the addon**, **deploy the add-on**, or similar (a
    ```
    Prereqs: base image built (`./scripts/build-base.sh` once), `GITHUB_TOKEN` or `docker login ghcr.io`.
 
-2. **Reload add-on store** — Call **user-esptoolkit** MCP tool **`supervisor_store_reload`** (no arguments).
+2. **Reload add-on store** — Call **`supervisor_store_reload`** on **`user-GrimwoodHATools`** (no arguments). GrimwoodAIAgent does not expose this tool.
 
-3. **Update addon in HA** — On your **Home Assistant MCP** (HAMCPTools / `ha_*` tools), call **`ha_list_installed_addons`**, find the EspToolkit addon slug (e.g. `e7ee47f4_esptoolkit_addon`), then call **`ha_update_addon`** with that `slug`. (Supervisor blocks an add-on from updating **itself** via raw `POST /addons/.../update`; EspToolkit routes that case through Core **`hassio.addon_update`** — if you still see 403 on an older add-on version, update EspToolkit once from the UI, then MCP self-update works.)
+3. **Update addon in HA** — On **`user-GrimwoodAIAgent`** MCP (not GrimwoodHATools), read tool schemas then call **`ha_list_installed_addons`**, find the EspToolkit slug (e.g. `e7ee47f4_esptoolkit_addon`), then **`ha_update_addon`** with that `slug`. Using the AI Agent MCP avoids the add-on updating itself from inside the running container (403 / self-update block). If update still fails on an old version, update EspToolkit once from the HA UI, then retry.
 
-4. **Restart Home Assistant** — On the same MCP, call **`ha_restart`** (no arguments). A 502 from HA is expected while it restarts; HA is typically back in 30–60 seconds.
+4. **Restart Home Assistant** — On **`user-GrimwoodAIAgent`**, call **`ha_restart`** (no arguments). A 502 from HA is expected while it restarts; HA is typically back in 30–60 seconds.
+
+See **addon_update_grimwood_ai_agent.mdc** for the general rule: add-on **`ha_*`** update steps → **`user-GrimwoodAIAgent`**; store reload only → **`user-GrimwoodHATools`**.
 
 Do not run the clean-environment script or the full deploy cycle (validate test) unless the user explicitly asks for them.

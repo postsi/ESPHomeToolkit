@@ -5326,7 +5326,8 @@ class SchemasView(HomeAssistantView):
         items = []
         for p in sorted(schemas_path.glob("*.json")):
             wtype = p.stem
-            if wtype not in PALETTE_WIDGET_TYPES:
+            # Std LVGL palette + designer-only extras (arc_labeled, color_picker, white_picker, spinbox2, …)
+            if wtype not in COMPILABLE_WIDGET_TYPES:
                 continue
             try:
                 data = await hass.async_add_executor_job(_read_json_path, p)
