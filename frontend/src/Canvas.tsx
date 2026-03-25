@@ -578,7 +578,15 @@ const stageRef = useRef<any>(null);
             y={ay}
             width={w.w}
             height={w.h}
-            clipFunc={clip ? (ctx) => { ctx.rect(0, 0, w.w, w.h); } : undefined}
+            clipFunc={
+              clip
+                ? (ctx, shape) => {
+                    const sw = typeof shape?.width === "function" ? shape.width() : w.w;
+                    const sh = typeof shape?.height === "function" ? shape.height() : w.h;
+                    ctx.rect(0, 0, sw, sh);
+                  }
+                : undefined
+            }
             draggable={!w.parent_id && (!simulationMode || !simDraggable)}
             dragBoundFunc={!simulationMode && !w.parent_id ? (pos) => {
               const r = clampDragPosition(pos.x, pos.y, w.w, w.h, width, height);
@@ -626,6 +634,23 @@ const stageRef = useRef<any>(null);
                 .filter(Boolean) as { id: string; patch: Partial<Widget> }[];
               onChangeMany(patches, true);
               setDragAtLimit(false);
+            }}
+            onTransform={(e) => {
+              if (simulationMode) return;
+              // Shift = shell-only resize: Konva scales the whole Group, which stretches children.
+              // Bake scale into width/height each frame so children keep their local sizes during the drag.
+              if (!(e.evt as { shiftKey?: boolean })?.shiftKey) return;
+              const node = e.target;
+              const scaleX = node.scaleX();
+              const scaleY = node.scaleY();
+              if (Math.abs(scaleX - 1) < 1e-9 && Math.abs(scaleY - 1) < 1e-9) return;
+              node.scaleX(1);
+              node.scaleY(1);
+              const oldW = node.width();
+              const oldH = node.height();
+              node.width(Math.max(20, oldW * scaleX));
+              node.height(Math.max(20, oldH * scaleY));
+              node.getLayer()?.batchDraw();
             }}
             onTransformEnd={(e) => {
               const node = e.target;
