@@ -8,7 +8,7 @@ alwaysApply: true
 When **updating the EspToolkit add-on in Home Assistant** via MCP (after a deploy or when the user asks to update the add-on), use the **`user-GrimwoodAIAgent`** server for all **`ha_*`** calls that touch the add-on or core restart:
 
 - **`ha_list_installed_addons`** — find the EspToolkit slug (e.g. `e7ee47f4_esptoolkit_addon`).
-- **`ha_update_addon`** — pass `payload` with the add-on `slug` (schema: read the tool descriptor first).
+- **`ha_update_addon`** — on **GrimwoodAIAgent**, arguments are **top-level** `{ "slug": "e7ee47f4_esptoolkit_addon" }` (not wrapped in `payload`). On **GrimwoodHATools**, the same tool may use `{ "payload": { "slug": "..." } }` — always read that server’s tool JSON first.
 - **`ha_restart_addon`** / **`ha_start_addon`** / **`ha_stop_addon`** — if needed after update.
 - **`ha_restart`** — full Home Assistant restart when the deploy workflow calls for it.
 
