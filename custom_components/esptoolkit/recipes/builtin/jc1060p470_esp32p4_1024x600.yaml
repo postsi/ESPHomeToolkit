@@ -55,10 +55,17 @@ esp32:
   variant: esp32p4
   flash_size: 16MB
   cpu_frequency: 360MHZ
+  engineering_sample: true
   framework:
     type: esp-idf
     advanced:
       enable_idf_experimental_features: true
+      disable_vfs_support_termios: false
+      disable_vfs_support_select: false
+      disable_vfs_support_dir: false
+    sdkconfig_options:
+      CONFIG_SPIRAM_XIP_FROM_PSRAM: "y"   # Stop screen flashing during OTA
+      CONFIG_SDMMC_HOST_DEFAULT: "y"
 
 # ESP32-C6 WiFi Co-processor
 esp32_hosted:
@@ -114,12 +121,13 @@ display:
   - platform: mipi_dsi
     id: my_display
     model: JC1060P470
+    color_order: RGB
     reset_pin:
       number: GPIO05
     rotation: 0
     update_interval: never
     auto_clear_enabled: false
-    hsync_pulse_width: 20
+    hsync_pulse_width: 20     # The only difference to the examples provided
     # __LAMBDA_PLACEHOLDER__
 
 # Backlight control
@@ -138,4 +146,9 @@ light:
     gamma_correct: 1.0
 
 lvgl:
+  displays:
+    - my_display
+  byte_order: little_endian
+  touchscreens:
+    - my_touchscreen
   #__LVGL_PAGES__
