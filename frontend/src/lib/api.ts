@@ -162,26 +162,31 @@ export async function exportRecipe(recipe_id: string): Promise<any> {
   return data;
 }
 
-// --- Custom cards (v1: card = snapshot of current page) ---
+// --- Saved entity widgets (user snapshot of a page; stored in HA config) ---
 
-export async function listCards(): Promise<{ id: string; name: string; description: string; device_types: string[] }[]> {
-  const r = await fetch("/api/esptoolkit/cards");
-  if (!r.ok) throw new Error(`cards list failed: ${r.status}`);
+export async function listSavedEntityWidgets(): Promise<
+  { id: string; name: string; description: string; device_types: string[] }[]
+> {
+  const r = await fetch("/api/esptoolkit/entity-widgets");
+  if (!r.ok) throw new Error(`entity widgets list failed: ${r.status}`);
   const data = await r.json();
-  return data.cards || [];
+  const items = data.entity_widgets;
+  if (!Array.isArray(items)) throw new Error("entity_widgets missing or invalid in response");
+  return items;
 }
 
-export async function getCard(cardId: string): Promise<any> {
-  const r = await fetch(`/api/esptoolkit/cards/${encodeURIComponent(cardId)}`);
+export async function getSavedEntityWidget(entityWidgetId: string): Promise<any> {
+  const r = await fetch(`/api/esptoolkit/entity-widgets/${encodeURIComponent(entityWidgetId)}`);
+  const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    throw new Error(d?.error === "not_found" ? "Card not found" : `get card failed: ${r.status}`);
+    throw new Error(data?.error === "not_found" ? "Entity widget not found" : `get entity widget failed: ${r.status}`);
   }
-  const data = await r.json();
-  return data.card;
+  const def = data.entity_widget;
+  if (!def || typeof def !== "object") throw new Error("entity_widget missing in response");
+  return def;
 }
 
-export async function saveCard(definition: {
+export async function saveEntityWidget(definition: {
   id?: string;
   name: string;
   description?: string;
@@ -191,22 +196,24 @@ export async function saveCard(definition: {
   action_bindings?: any[];
   scripts?: any[];
 }): Promise<{ ok: boolean; id: string }> {
-  const r = await fetch("/api/esptoolkit/cards", {
+  const r = await fetch("/api/esptoolkit/entity-widgets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(definition),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data?.ok === false) {
-    throw new Error(data?.error ? String(data.error).replace(/_/g, " ") : `save card failed: ${r.status}`);
+    throw new Error(data?.error ? String(data.error).replace(/_/g, " ") : `save entity widget failed: ${r.status}`);
   }
   return { ok: true, id: data.id };
 }
 
-export async function deleteCard(cardId: string): Promise<void> {
-  const r = await fetch(`/api/esptoolkit/cards/${encodeURIComponent(cardId)}`, { method: "DELETE" });
+export async function deleteSavedEntityWidget(entityWidgetId: string): Promise<void> {
+  const r = await fetch(`/api/esptoolkit/entity-widgets/${encodeURIComponent(entityWidgetId)}`, {
+    method: "DELETE",
+  });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data?.ok === false) {
-    throw new Error(data?.error ? String(data.error) : `delete card failed: ${r.status}`);
+    throw new Error(data?.error ? String(data.error) : `delete entity widget failed: ${r.status}`);
   }
 }

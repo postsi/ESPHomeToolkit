@@ -32,19 +32,23 @@ def test_project_get_put_roundtrip(ha_api, api_path, entry_id, device_id):
     assert json.dumps(proj1, sort_keys=True) == json.dumps(proj2, sort_keys=True), "Project changed after get->put->get"
 
 
-def test_cards_list_then_get_one(ha_api):
-    """GET /cards returns list; GET /cards/{id} for first id returns card object."""
-    status, data = ha_api.get_json("/api/esptoolkit/cards")
+def test_entity_widgets_list_then_get_one(ha_api):
+    """GET /entity-widgets returns list; GET detail for first id returns definition."""
+    status, data = ha_api.get_json("/api/esptoolkit/entity-widgets")
     if status != 200:
-        pytest.skip("Cards list failed or empty")
-    cards = data if isinstance(data, list) else data.get("cards", data.get("items", []))
-    if not cards:
-        pytest.skip("No cards")
-    first = cards[0]
-    card_id = first.get("id") or first.get("card_id") or (first if isinstance(first, str) else None)
-    if not card_id:
-        pytest.skip("Cannot get card id from list item")
-    status2, card = ha_api.get_json(f"/api/esptoolkit/cards/{card_id}")
+        pytest.skip("Entity widgets list failed or empty")
+    assert isinstance(data, dict), "entity-widgets list should return a JSON object"
+    items = data.get("entity_widgets")
+    assert isinstance(items, list), "response should include entity_widgets array"
+    if not items:
+        pytest.skip("No saved entity widgets")
+    first = items[0]
+    ewid = first.get("id")
+    if not ewid:
+        pytest.skip("Cannot get entity widget id from list item")
+    status2, body = ha_api.get_json(f"/api/esptoolkit/entity-widgets/{ewid}")
     assert status2 == 200
-    assert isinstance(card, dict)
-    assert card.get("id") == card_id or card.get("name") or "name" in card or "widgets" in card
+    assert isinstance(body, dict)
+    inner = body.get("entity_widget")
+    assert isinstance(inner, dict) and inner, "response should include entity_widget object"
+    assert inner.get("id") == ewid or inner.get("name") or "name" in inner or "widgets" in inner

@@ -5,9 +5,9 @@ Build TestDummy project JSON for maximum coverage:
 - HA links and bindings using entities that exercise rich properties
   (e.g. light with color + white, battery sensor for bar/label)
 
-Card library: GET /api/esptoolkit/cards was empty at implementation time. When
-cards exist, extend this script (or a test) to apply a card to the project so
-it contains card-derived widgets, links, and scripts for full coverage.
+Saved entity widgets: GET /api/esptoolkit/entity-widgets was empty at implementation time. When
+definitions exist, extend this script (or a test) to apply one to the project so
+it contains entity-widget widgets, links, and scripts for full coverage.
 """
 import json
 

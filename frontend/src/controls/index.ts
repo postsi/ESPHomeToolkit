@@ -1840,10 +1840,10 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
     },
   },
 
-  // --- v0.57.0 : Card Library v1 (container macros) ---
+  // --- v0.57.0 : Entity widgets v1 (container macros) ---
   {
     id: "conditional_card",
-    title: "Card Library disabled • Conditional",
+    title: "Entity disabled • Conditional",
     description: "Shows/hides its contents based on a condition over an entity value. Product-mode helper.",
     build: ({ entity_id, condition = 'x == "on"', x = 20, y = 20, label = "Conditional" }: any) => {
       const rootId = uid("cond");
@@ -1869,7 +1869,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
   },
   {
     id: "entity_card",
-    title: "Card Library disabled • Entity Card",
+    title: "Entity disabled • Detail tile",
     description: "Lovelace-style entity card (icon, name, state) with configurable tap action.",
     build: ({ entity_id, x = 20, y = 20, label = "Entity", tap_action = "more-info", service, service_data }) => {
       const ent = entity_id || "sensor.example";
@@ -1896,7 +1896,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
   },
   {
     id: "tile_card",
-    title: "Card Library disabled • Tile Card",
+    title: "Entity disabled • Toggle tile",
     description: "Lovelace-style tile card (big icon, label) with configurable tap action.",
     build: ({ entity_id, x = 20, y = 20, label = "Tile", tap_action = "toggle", service, service_data }) => {
       const ent = entity_id || "switch.example";
@@ -1918,12 +1918,12 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
     },
   },
 
-  // --- v0.60.0 : Card Library Phase 2 enhancements (Phase 2 cards + layout helpers) ---
-  // v0.70: Thermostat card — snippet-style (arc + current/setpoint + +/-), scripts for inc/dec, optional preset/fan/hvac.
+  // --- v0.60.0 : Entity widgets phase 2 (layout helpers) ---
+  // v0.70: Thermostat entity widget — arc + current/setpoint + +/-, scripts for inc/dec, optional preset/fan/hvac.
   {
     id: "thermostat_card",
-    title: "Card Library • Thermostat Card",
-    description: "Thermostat card: arc setpoint, current temp, +/- buttons (scripts), optional mode/preset/fan. Binds to climate.*",
+    title: "Entity • Thermostat",
+    description: "Thermostat: arc setpoint, current temp, +/- buttons (scripts), optional mode/preset/fan. Binds to climate.*",
     entityDomain: "climate",
     build: ({ entity_id, x = 20, y = 20, label = "Thermostat", th_min = 5, th_max = 35, th_step = 1, caps = null }) => {
       const ent = entity_id || "climate.example";
@@ -1935,7 +1935,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
       const maxT = typeof attrs.max_temp === "number" ? attrs.max_temp : th_max;
       const stepT = typeof attrs.target_temp_step === "number" ? attrs.target_temp_step : (th_step <= 0 ? 1 : th_step);
 
-      const rootId = uid("card_th");
+      const rootId = uid("entity_th");
       const lblTitle = uid("lbl_th_title");
       const lblSetpointTop = uid("lbl_th_set_top");
       const arcSet = uid("arc_th_set");
@@ -1960,9 +1960,9 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
       const cardH = 270 + (hvacModes.length ? 40 : 0) + (presetModes.length ? 40 : 0) + (fanModes.length ? 40 : 0);
       const pad = 10;
       const arcSize = 120;
-      const arcX = x + (cardW - arcSize) / 2;
-      const arcY = y + 58;
-      const bottomRowY = y + 200;
+      const arcRelX = (cardW - arcSize) / 2;
+      const arcRelY = 58;
+      const bottomRelY = 200;
       const bottomRowH = 36;
       const btnSize = 36;
       const accentColor = 0x9c27b0;
@@ -1982,13 +1982,34 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
           props: {},
           style: { bg_color: bgDark, radius: 10 },
         },
-        { id: lblTitle, type: "label", x: x + pad, y: y + 8, w: 100, h: 22, props: { text: label }, style: { text_color: textGray } },
-        { id: lblSetpointTop, type: "label", x: x + cardW - pad - 50, y: y + 8, w: 50, h: 22, props: { text: "-°" }, style: { text_color: accentColor } },
+        {
+          id: lblTitle,
+          type: "label",
+          parent_id: rootId,
+          x: pad,
+          y: 8,
+          w: 100,
+          h: 22,
+          props: { text: label },
+          style: { text_color: textGray },
+        },
+        {
+          id: lblSetpointTop,
+          type: "label",
+          parent_id: rootId,
+          x: cardW - pad - 50,
+          y: 8,
+          w: 50,
+          h: 22,
+          props: { text: "-°" },
+          style: { text_color: accentColor },
+        },
         {
           id: arcSet,
           type: "arc",
-          x: arcX,
-          y: arcY,
+          parent_id: rootId,
+          x: arcRelX,
+          y: arcRelY,
           w: arcSize,
           h: arcSize,
           props: {
@@ -2015,12 +2036,23 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
               }
             : {},
         },
-        { id: lblCur, type: "label", x: arcX + 20, y: arcY + arcSize / 2 - 14, w: arcSize - 40, h: 28, props: { text: "—.—°" }, style: { text_color: accentColor } },
+        {
+          id: lblCur,
+          type: "label",
+          parent_id: rootId,
+          x: arcRelX + 20,
+          y: arcRelY + arcSize / 2 - 14,
+          w: arcSize - 40,
+          h: 28,
+          props: { text: "—.—°" },
+          style: { text_color: accentColor },
+        },
         {
           id: bottomRowId,
           type: "container",
-          x: x + (cardW - 150) / 2,
-          y: bottomRowY,
+          parent_id: rootId,
+          x: (cardW - 150) / 2,
+          y: bottomRelY,
           w: 150,
           h: bottomRowH,
           props: {},
@@ -2028,20 +2060,32 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
         {
           id: btnMinus,
           type: "button",
-          x: x + (cardW - 150) / 2,
-          y: bottomRowY,
+          parent_id: rootId,
+          x: (cardW - 150) / 2,
+          y: bottomRelY,
           w: btnSize,
           h: btnSize,
           props: { text: "-" },
           style: { bg_color: trackColor, radius: 6 },
           events: entity_id ? { on_click: `then:\n  - script.execute: ${scriptIdDec}` } : {},
         },
-        { id: lblSet, type: "label", x: x + (cardW - 150) / 2 + btnSize, y: bottomRowY + 8, w: 150 - 2 * btnSize, h: 22, props: { text: "Set -" }, style: { text_color: textMuted } },
+        {
+          id: lblSet,
+          type: "label",
+          parent_id: rootId,
+          x: (cardW - 150) / 2 + btnSize,
+          y: bottomRelY + 8,
+          w: 150 - 2 * btnSize,
+          h: 22,
+          props: { text: "Set -" },
+          style: { text_color: textMuted },
+        },
         {
           id: btnPlus,
           type: "button",
-          x: x + (cardW - 150) / 2 + 150 - btnSize,
-          y: bottomRowY,
+          parent_id: rootId,
+          x: (cardW - 150) / 2 + 150 - btnSize,
+          y: bottomRelY,
           w: btnSize,
           h: btnSize,
           props: { text: "+" },
@@ -2050,12 +2094,13 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
         },
       ];
 
-      let rowY = bottomRowY + bottomRowH + 12;
+      let rowY = bottomRelY + bottomRowH + 12;
       if (hvacModes.length) {
         widgets.push({
           id: ddHvac,
           type: "dropdown",
-          x: x + pad,
+          parent_id: rootId,
+          x: pad,
           y: rowY,
           w: cardW - 2 * pad,
           h: 36,
@@ -2078,7 +2123,8 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
         widgets.push({
           id: ddPreset,
           type: "dropdown",
-          x: x + pad,
+          parent_id: rootId,
+          x: pad,
           y: rowY,
           w: cardW - 2 * pad,
           h: 36,
@@ -2101,7 +2147,8 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
         widgets.push({
           id: ddFan,
           type: "dropdown",
-          x: x + pad,
+          parent_id: rootId,
+          x: pad,
           y: rowY,
           w: cardW - 2 * pad,
           h: 36,
@@ -2200,7 +2247,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "light_card",
-    title: "Card Library • Light Card",
+    title: "Entity • Light",
     description: "Light card: toggle + brightness; colour/white pickers when supported. Binds to light.*",
     entityDomain: "light",
     build: ({ entity_id, x = 20, y = 20, label = "Light", caps = null }) => {
@@ -2293,7 +2340,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "switch_card",
-    title: "Card Library • Switch Card",
+    title: "Entity • Switch",
     description: "Switch card: toggle button + state label. Binds to switch.*",
     entityDomain: "switch",
     build: ({ entity_id, x = 20, y = 20, label = "Switch" }) => {
@@ -2329,7 +2376,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "cover_card",
-    title: "Card Library • Cover Card",
+    title: "Entity • Cover",
     description: "Cover card: position slider + open/stop/close. Optional tilt when supported. Binds to cover.*",
     entityDomain: "cover",
     build: ({ entity_id, x = 20, y = 20, label = "Cover", caps = null }) => {
@@ -2402,7 +2449,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "fan_card",
-    title: "Card Library • Fan Card",
+    title: "Entity • Fan",
     description: "Fan card: toggle + percentage; optional oscillate, direction, preset when supported. Binds to fan.*",
     entityDomain: "fan",
     build: ({ entity_id, x = 20, y = 20, label = "Fan", caps = null }) => {
@@ -2519,7 +2566,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "lock_card",
-    title: "Card Library • Lock Card",
+    title: "Entity • Lock",
     description: "Lock card: Lock / Unlock buttons + state label. Binds to lock.*",
     entityDomain: "lock",
     build: ({ entity_id, x = 20, y = 20, label = "Lock" }) => {
@@ -2557,7 +2604,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "media_player_card",
-    title: "Card Library • Media Player Card",
+    title: "Entity • Media player",
     description: "Media player: title, transport, volume slider, mute/vol buttons; optional source when supported. Binds to media_player.*",
     entityDomain: "media_player",
     build: ({ entity_id, x = 20, y = 20, label = "Media", caps = null }) => {
@@ -2645,7 +2692,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "media_control_card",
-    title: "Card Library disabled • Media Control Card",
+    title: "Entity disabled • Media Control Card",
     description:
       "Media control card: title, media title, transport controls, volume controls, and optional source row. Binds to media_player.*",
     build: ({
@@ -2843,7 +2890,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "cover_card",
-    title: "Card Library disabled • Cover Card",
+    title: "Entity disabled • Cover Card",
     description:
       "Cover card: open/stop/close + position slider, with optional tilt controls when supported. Binds to cover.* entities.",
     build: ({ entity_id, x = 20, y = 20, label = "Cover", cover_show_tilt = true, caps = null }) => {
@@ -2960,7 +3007,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "glance_card",
-    title: "Card Library disabled • Glance Card",
+    title: "Entity disabled • Glance Card",
     description: "Glance card: up to 4 entity rows (name + state). Provide entities: string[] to pre-bind.",
     build: ({ entities = [], x = 20, y = 20, label = "Glance", max_rows = 4 }) => buildGlanceCard({ entities, x, y, label, max_rows }),
   },
@@ -2968,19 +3015,19 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
   // v0.61: Glance card presets (row count variants)
   {
     id: "glance_card_2",
-    title: "Card Library disabled • Glance Card (2 rows)",
+    title: "Entity disabled • Glance Card (2 rows)",
     description: "Glance card preset with 2 rows.",
     build: ({ entities = [], x = 20, y = 20, label = "Glance (2)" }) => buildGlanceCard({ entities, x, y, label, max_rows: 2 }),
   },
   {
     id: "glance_card_3",
-    title: "Card Library disabled • Glance Card (3 rows)",
+    title: "Entity disabled • Glance Card (3 rows)",
     description: "Glance card preset with 3 rows.",
     build: ({ entities = [], x = 20, y = 20, label = "Glance (3)" }) => buildGlanceCard({ entities, x, y, label, max_rows: 3 }),
   },
   {
     id: "glance_card_6",
-    title: "Card Library disabled • Glance Card (6 rows)",
+    title: "Entity disabled • Glance Card (6 rows)",
     description: "Glance card preset with 6 rows.",
     build: ({ entities = [], x = 20, y = 20, label = "Glance (6)" }) => buildGlanceCard({ entities, x, y, label, max_rows: 6 }),
   },
@@ -2988,7 +3035,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
     {
     id: "grid_card_2x2",
-    title: "Card Library disabled • Grid Card (2×2)",
+    title: "Entity disabled • Grid Card (2×2)",
     description: "2×2 grid of tiles. Provide entities: string[] (up to 4) to pre-bind; configurable tap action per tile.",
     build: ({ entities = [], x = 20, y = 20, label = "Grid (2×2)", tap_action = "toggle", service, service_data }) => buildGridCard({ entities, x, y, label, cols: 2, rows: 2, tap_action, service, service_data }),
   },
@@ -2996,14 +3043,14 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
   // v0.61: Grid card size variants
   {
     id: "grid_card_3x2",
-    title: "Card Library disabled • Grid Card (3×2)",
+    title: "Entity disabled • Grid Card (3×2)",
     description: "3×2 grid of tiles (6). Provide entities: string[] (up to 6).",
     build: ({ entities = [], x = 20, y = 20, label = "Grid (3×2)", tap_action = "toggle", service, service_data }) =>
       buildGridCard({ entities, x, y, label, cols: 3, rows: 2, tap_action, service, service_data }),
   },
   {
     id: "grid_card_3x3",
-    title: "Card Library disabled • Grid Card (3×3)",
+    title: "Entity disabled • Grid Card (3×3)",
     description: "3×3 grid of tiles (9). Provide entities: string[] (up to 9).",
     build: ({ entities = [], x = 20, y = 20, label = "Grid (3×3)", tap_action = "toggle", service, service_data }) =>
       buildGridCard({ entities, x, y, label, cols: 3, rows: 3, tap_action, service, service_data }),
@@ -3012,7 +3059,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "layout_stack_vertical",
-    title: "Card Library disabled • Layout Helper (Vertical Stack)",
+    title: "Entity disabled • Layout Helper (Vertical Stack)",
     description: "Drops three stacked containers as a layout scaffold (no bindings).",
     build: ({ x = 20, y = 20, w = 320, h = 420, gap = 12 }) => {
       const widgets: any[] = [];
@@ -3027,10 +3074,10 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
 
 
-  // --- Card Library Phase 3 (v0.70.0) ---
+  // --- Entity widgets phase 3 (v0.70.0) ---
   {
     id: "gauge_card",
-    title: "Card Library disabled • Gauge",
+    title: "Entity disabled • Gauge",
     description: "A simple gauge for numeric sensors (arc + value label).",
     build: ({ entity_id, x = 20, y = 20, label = "Gauge", min = 0, max = 100, unit = "" }: any) => {
       const rootId = uid('card_gauge');
@@ -3055,7 +3102,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "scene_card",
-    title: "Card Library disabled • Scene",
+    title: "Entity disabled • Scene",
     description: "Run a Home Assistant scene.",
     build: ({ entity_id, x = 20, y = 20, label = "Scene" }: any) => {
       const btnId = uid('btn_scene');
@@ -3078,7 +3125,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "script_card",
-    title: "Card Library disabled • Script",
+    title: "Entity disabled • Script",
     description: "Run a Home Assistant script.",
     build: ({ entity_id, x = 20, y = 20, label = "Script" }: any) => {
       const btnId = uid('btn_script');
@@ -3101,7 +3148,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
 
   {
     id: "chips_card",
-    title: "Card Library disabled • Chips",
+    title: "Entity disabled • Chips",
     description: "Compact status chips for up to 6 entities.",
     build: ({ entities = [], x = 20, y = 20, label = "Status", max_items = 6 }: any) => {
       const rootId = uid('card_chips');

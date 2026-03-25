@@ -2,10 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import packageJson from "../package.json";
 import Canvas from "./Canvas";
 import { usePreviewFontResolver } from "./usePreviewFontResolver";
-import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listCards, getCard, saveCard, deleteCard, previewWidgetYaml} from "./lib/api";
+import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listSavedEntityWidgets, getSavedEntityWidget, saveEntityWidget, deleteSavedEntityWidget, previewWidgetYaml} from "./lib/api";
 import { collectWidgetIds, updateSectionsWidgetRef } from "./projectSections";
 import { CONTROL_TEMPLATES, type ControlTemplate } from "./controls";
 import { PREBUILT_WIDGETS, type PrebuiltWidget } from "./prebuiltWidgets";
+import {
+  ENTITY_WIDGET_TITLE_PREFIX,
+  isEntityWidgetTemplateTitle,
+  isSavedEntityWidgetTemplateId,
+  savedEntityWidgetStorageId,
+  SAVED_ENTITY_WIDGET_PREFIX,
+} from "./entityWidgetTitles";
+import { normalizeWidgetsForEntityWidgetExport } from "./entityWidgetLayout";
 import { DOMAIN_PRESETS } from "./bindings/domains";
 import {
   getDisplayActionsForType,
@@ -390,34 +398,34 @@ export default function App() {
   // v0.36: allow explicit selection of a variant, otherwise auto-pick based on capabilities.
   const [tmplVariant, setTmplVariant] = useState<string>("auto");
 
-  // v0.60: Card wizard options (cards share the same post-drop wizard).
+  // v0.60: Entity widget wizard options (shared post-drop wizard for multi-widget templates).
   const [tmplTapAction, setTmplTapAction] = useState<string>("toggle");
   const [tmplService, setTmplService] = useState<string>("");
   const [tmplServiceData, setTmplServiceData] = useState<string>("");
   const [tmplEntities, setTmplEntities] = useState<string[]>([]);
 
-  // v0.68: Conditional card wizard builder
+  // v0.68: Conditional entity widget wizard builder
   const [tmplCondOp, setTmplCondOp] = useState<string>("equals");
   const [tmplCondValue, setTmplCondValue] = useState<string>("on");
   const [tmplCondNumeric, setTmplCondNumeric] = useState<boolean>(false);
 
-  // v0.61: Richer card wizard options
+  // v0.61: Richer entity widget wizard options
   // Thermostat
   const [tmplThMin, setTmplThMin] = useState<number>(5);
   const [tmplThMax, setTmplThMax] = useState<number>(35);
   const [tmplThStep, setTmplThStep] = useState<number>(1);
 
-  // Media card
+  // Media entity widget
   const [tmplMediaShowTransport, setTmplMediaShowTransport] = useState<boolean>(true);
   const [tmplMediaShowVolume, setTmplMediaShowVolume] = useState<boolean>(true);
   const [tmplMediaShowMute, setTmplMediaShowMute] = useState<boolean>(true);
   const [tmplMediaShowSource, setTmplMediaShowSource] = useState<boolean>(true);
   const [tmplMediaDefaultSource, setTmplMediaDefaultSource] = useState<string>("");
 
-  // Cover card
+  // Cover entity widget
   const [tmplCoverShowTilt, setTmplCoverShowTilt] = useState<boolean>(true);
 
-  // Multi-entity cards
+  // Multi-entity layouts (glance/grid template ids)
   const [tmplGlanceRows, setTmplGlanceRows] = useState<number>(4);
   const [tmplGridSize, setTmplGridSize] = useState<"2x2" | "3x2" | "3x3">("2x2");
 
@@ -492,7 +500,7 @@ async function onUploadAssetFile(file: File) {
 }
 
 const [lintOpen, setLintOpen] = useState<boolean>(false);
-  const [paletteTab, setPaletteTab] = useState<"std" | "cards" | "widgets">("std");
+  const [paletteTab, setPaletteTab] = useState<"basic" | "prebuilt" | "entity">("basic");
   const [inspectorTab, setInspectorTab] = useState<"properties" | "bindings" | "builder" | "yaml" | "importlog">("properties");
   const [editingWidgetId, setEditingWidgetId] = useState<string>("");
   useEffect(() => {
@@ -581,32 +589,40 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
   const [recipeMgrBusy, setRecipeMgrBusy] = useState<boolean>(false);
   const [recipeMgrErr, setRecipeMgrErr] = useState<string>("");
 
-  // v1: Custom cards (card = snapshot of current page)
-  const [customCards, setCustomCards] = useState<{ id: string; name: string; description: string; device_types: string[] }[]>([]);
-  const [cardsError, setCardsError] = useState<string | null>(null);
-  const [saveCardOpen, setSaveCardOpen] = useState<boolean>(false);
-  const [saveCardName, setSaveCardName] = useState<string>("");
-  const [saveCardDescription, setSaveCardDescription] = useState<string>("");
-  const [saveCardDeviceType, setSaveCardDeviceType] = useState<string>("climate");
-  const [saveCardBusy, setSaveCardBusy] = useState<boolean>(false);
-  const [saveCardErr, setSaveCardErr] = useState<string>("");
-  // v0.70.137: Context menu for deleting custom cards
-  const [cardContextMenu, setCardContextMenu] = useState<{ x: number; y: number; cardId: string; cardName: string } | null>(null);
+  // User-saved entity widgets (snapshot of current page)
+  const [customEntityWidgets, setCustomEntityWidgets] = useState<
+    { id: string; name: string; description: string; device_types: string[] }[]
+  >([]);
+  const [customEntityWidgetsError, setCustomEntityWidgetsError] = useState<string | null>(null);
+  const [saveEntityWidgetOpen, setSaveEntityWidgetOpen] = useState<boolean>(false);
+  const [saveEntityWidgetName, setSaveEntityWidgetName] = useState<string>("");
+  const [saveEntityWidgetDescription, setSaveEntityWidgetDescription] = useState<string>("");
+  const [saveEntityWidgetDeviceType, setSaveEntityWidgetDeviceType] = useState<string>("climate");
+  const [saveEntityWidgetBusy, setSaveEntityWidgetBusy] = useState<boolean>(false);
+  const [saveEntityWidgetErr, setSaveEntityWidgetErr] = useState<string>("");
+  const [entityWidgetContextMenu, setEntityWidgetContextMenu] = useState<{
+    x: number;
+    y: number;
+    entityWidgetId: string;
+    entityWidgetName: string;
+  } | null>(null);
   const [pageTabContextMenu, setPageTabContextMenu] = useState<{ x: number; y: number; pageIndex: number } | null>(null);
 
-  async function refreshCustomCards() {
+  async function refreshCustomEntityWidgets() {
     try {
-      const cards = await listCards();
-      setCustomCards(cards);
-      setCardsError(null);
+      const items = await listSavedEntityWidgets();
+      setCustomEntityWidgets(items);
+      setCustomEntityWidgetsError(null);
     } catch (e: any) {
-      setCustomCards([]);
+      setCustomEntityWidgets([]);
       const msg = String(e?.message || e);
-      setCardsError(msg.includes("404") || msg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : msg);
+      setCustomEntityWidgetsError(
+        msg.includes("404") || msg.includes("no_active_entry") ? INTEGRATION_NOT_CONFIGURED_MSG : msg
+      );
     }
   }
   useEffect(() => {
-    if (paletteTab === "cards") refreshCustomCards();
+    if (paletteTab === "entity") refreshCustomEntityWidgets();
   }, [paletteTab]);
 
   async function doImportRecipe() {
@@ -998,7 +1014,7 @@ useEffect(() => {
 }, [project]);
 
 useEffect(() => {
-  // v0.61: prefill card options from capabilities when available.
+  // v0.61: prefill entity widget options from capabilities when available.
   if (!tmplWizard || !tmplCaps) return;
   try {
     if (tmplWizard.template_id === "thermostat_card") {
@@ -1020,8 +1036,9 @@ useEffect(() => {
 }, [tmplCaps, tmplWizard]);
 
   function templateDomain(template_id: string): string {
-    if ((template_id || "").startsWith("custom:")) {
-      const c = customCards.find((cc) => "custom:" + cc.id === template_id);
+    if (isSavedEntityWidgetTemplateId(template_id || "")) {
+      const sid = savedEntityWidgetStorageId(template_id);
+      const c = customEntityWidgets.find((cc) => cc.id === sid);
       return (c?.device_types?.[0] || "").toLowerCase();
     }
     const m = /^ha_([a-z0-9]+)_/i.exec(template_id || "");
@@ -1030,16 +1047,23 @@ useEffect(() => {
 
   const allTemplatesForWizard = [...CONTROL_TEMPLATES, ...(pluginControls ?? [])];
   const wizardTemplate = tmplWizard
-    ? (tmplWizard.template_id.startsWith("custom:")
+    ? (isSavedEntityWidgetTemplateId(tmplWizard.template_id)
         ? (() => {
-            const c = customCards.find((cc) => "custom:" + cc.id === tmplWizard.template_id);
+            const c = customEntityWidgets.find(
+              (cc) => SAVED_ENTITY_WIDGET_PREFIX + cc.id === tmplWizard.template_id
+            );
             return c
-              ? { id: tmplWizard.template_id, title: "Card Library • " + c.name, entityDomain: c.device_types?.[0] || "climate", description: c.description || "Custom card" }
+              ? {
+                  id: tmplWizard.template_id,
+                  title: ENTITY_WIDGET_TITLE_PREFIX + c.name,
+                  entityDomain: c.device_types?.[0] || "climate",
+                  description: c.description || "Saved entity widget",
+                }
               : allTemplatesForWizard.find((t) => t?.id === tmplWizard.template_id) ?? null;
           })()
         : allTemplatesForWizard.find((t) => t?.id === tmplWizard.template_id) ?? null)
     : null;
-  const wizardIsCard = !!(wizardTemplate && String((wizardTemplate as any).title || "").startsWith("Card Library •"));
+  const wizardIsEntityWidget = !!(wizardTemplate && isEntityWidgetTemplateTitle((wizardTemplate as any).title));
   const wizardIsMultiEntity = !!(tmplWizard && (tmplWizard.template_id.startsWith("glance_card") || tmplWizard.template_id.startsWith("grid_card_")));
   const wizardWantsTapAction = !!(tmplWizard && (tmplWizard.template_id === "entity_card" || tmplWizard.template_id === "tile_card" || tmplWizard.template_id.startsWith("glance_card") || tmplWizard.template_id.startsWith("grid_card_")));
   const wizardEntitySlots = (() => {
@@ -1102,13 +1126,13 @@ useEffect(() => {
     setTmplCaps(null);
     setTmplVariant("auto");
 
-    // v0.60: card wizard extras
+    // v0.60: entity widget wizard extras
     setTmplTapAction(template_id === "entity_card" ? "more-info" : template_id === "tile_card" ? "toggle" : "toggle");
     setTmplService("");
     setTmplServiceData("");
     setTmplEntities([]);
 
-    // v0.61: defaults for richer card options
+    // v0.61: defaults for richer entity widget options
     setTmplThMin(5); setTmplThMax(35); setTmplThStep(1);
     setTmplMediaShowTransport(true); setTmplMediaShowVolume(true); setTmplMediaShowMute(true); setTmplMediaShowSource(true); setTmplMediaDefaultSource("");
     setTmplCoverShowTilt(true);
@@ -1172,15 +1196,15 @@ if (baseId.startsWith("glance_card")) {
 }
 
 // ha_auto returns empty widgets; must resolve to real template from entity domain + caps
-    // Card Library templates are never resolved via pickCapabilityVariant (that's for ha_* only)
-    const isCardLibrary = (tid: string) => {
+    // Built-in Entity widget templates are never resolved via pickCapabilityVariant (that's for ha_* only)
+    const isBuiltInEntityTemplate = (tid: string) => {
       const t = allTemplates.find((x) => x?.id === tid);
-      return t && String((t as any).title ?? "").startsWith("Card Library •");
+      return t && isEntityWidgetTemplateTitle((t as any).title ?? "");
     };
     let resolvedId = baseId;
-    if (baseId.startsWith("custom:")) {
+    if (isSavedEntityWidgetTemplateId(baseId)) {
       resolvedId = baseId;
-    } else if (isCardLibrary(baseId)) {
+    } else if (isBuiltInEntityTemplate(baseId)) {
       resolvedId = baseId;
     } else if (baseId === "ha_auto") {
       const dom = entity_id.split(".")[0]?.toLowerCase() || "";
@@ -1209,10 +1233,10 @@ if (baseId.startsWith("glance_card")) {
     } else {
       resolvedId = pickCapabilityVariant(baseId, tmplCaps, tmplVariant);
     }
-    if (resolvedId.startsWith("custom:")) {
-      const cardId = resolvedId.slice(7);
+    if (isSavedEntityWidgetTemplateId(resolvedId)) {
+      const storageId = savedEntityWidgetStorageId(resolvedId);
       try {
-        const def = await getCard(cardId);
+        const def = await getSavedEntityWidget(storageId);
         const domain = (def.device_types && def.device_types[0]) || "climate";
         const placeholder = domain + ".example";
         built = {
@@ -1359,45 +1383,63 @@ if (baseId.startsWith("glance_card")) {
 
     const insertX = tmplWizard.x;
     const insertY = tmplWizard.y;
-    const isCard = /_card$/.test(tmplWizard.template_id) || tmplWizard.template_id.startsWith("custom:");
+    const isEntityBundleTemplate =
+      /_card$/.test(tmplWizard.template_id) || isSavedEntityWidgetTemplateId(tmplWizard.template_id);
 
-    if (isCard && ws.length > 0) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const w of ws) {
-        const x = Number(w.x ?? 0), y = Number(w.y ?? 0), ww = Number(w.w ?? 0), hh = Number(w.h ?? 0);
-        minX = Math.min(minX, x); minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x + ww); maxY = Math.max(maxY, y + hh);
-      }
-      const gw = Math.max(1, maxX - minX), gh = Math.max(1, maxY - minY);
-      const firstIsContainer = ws[0].type === "container";
-      if (firstIsContainer) {
-        ws[0].x = insertX;
-        ws[0].y = insertY;
-        ws[0].w = gw;
-        ws[0].h = gh;
-        for (let i = 1; i < ws.length; i++) {
-          ws[i].parent_id = ws[0].id;
-          ws[i].x = Number(ws[i].x ?? 0) - minX;
-          ws[i].y = Number(ws[i].y ?? 0) - minY;
-        }
+    if (isEntityBundleTemplate && ws.length > 0) {
+      const ids = new Set(ws.map((w: any) => w?.id).filter(Boolean));
+      const roots = ws.filter((w: any) => w && (!w.parent_id || !ids.has(w.parent_id)));
+      if (roots.length === 1 && roots[0].type === "container") {
+        const root = roots[0];
+        root.x = insertX;
+        root.y = insertY;
       } else {
-        const groupId = uid("group");
-        const groupWidget = {
-          id: groupId,
-          type: "container",
-          x: insertX,
-          y: insertY,
-          w: gw,
-          h: gh,
-          props: {},
-          style: { bg_color: 0x1e1e1e, radius: 10 },
-        };
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
         for (const w of ws) {
-          w.parent_id = groupId;
-          w.x = Number(w.x ?? 0) - minX;
-          w.y = Number(w.y ?? 0) - minY;
+          const x = Number(w.x ?? 0),
+            y = Number(w.y ?? 0),
+            ww = Number(w.w ?? 0),
+            hh = Number(w.h ?? 0);
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + ww);
+          maxY = Math.max(maxY, y + hh);
         }
-        ws.unshift(groupWidget as any);
+        const gw = Math.max(1, maxX - minX),
+          gh = Math.max(1, maxY - minY);
+        const firstIsContainer = ws[0].type === "container";
+        if (firstIsContainer) {
+          ws[0].x = insertX;
+          ws[0].y = insertY;
+          ws[0].w = gw;
+          ws[0].h = gh;
+          for (let i = 1; i < ws.length; i++) {
+            ws[i].parent_id = ws[0].id;
+            ws[i].x = Number(ws[i].x ?? 0) - minX;
+            ws[i].y = Number(ws[i].y ?? 0) - minY;
+          }
+        } else {
+          const groupId = uid("group");
+          const groupWidget = {
+            id: groupId,
+            type: "container",
+            x: insertX,
+            y: insertY,
+            w: gw,
+            h: gh,
+            props: {},
+            style: { bg_color: 0x1e1e1e, radius: 10 },
+          };
+          for (const w of ws) {
+            w.parent_id = groupId;
+            w.x = Number(w.x ?? 0) - minX;
+            w.y = Number(w.y ?? 0) - minY;
+          }
+          ws.unshift(groupWidget as any);
+        }
       }
     } else {
       for (const w of ws) {
@@ -2321,7 +2363,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     if (Array.isArray(actionBindings)) {
       (p2 as any).action_bindings = actionBindings.filter((ab: any) => !toDelete.has(String(ab?.widget_id || "")));
     }
-    // Remove scripts that belonged to deleted card roots (e.g. thermostat inc/dec).
+    // Remove scripts that belonged to deleted entity-widget roots (e.g. thermostat inc/dec).
     const scripts = (p2 as any).scripts;
     if (Array.isArray(scripts)) {
       (p2 as any).scripts = scripts.filter((s: any) => !toDelete.has(String(s?._source_root_id ?? "")));
@@ -2827,7 +2869,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modalHeader">
               <div>
-                <div className="title">{wizardIsCard ? "Add Card" : "Add Home Assistant Control"}</div>
+                <div className="title">{wizardIsEntityWidget ? "Add entity widget" : "Add Home Assistant control"}</div>
                 <div className="muted">
                   Template: <code>{tmplWizard.template_id}</code>{wizardTemplate ? <span> • {String((wizardTemplate as any).title || "")}</span> : null}
                 </div>
@@ -2921,7 +2963,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                     })()}
                   </div>
                   <div className="muted" style={{ marginTop: 6 }}>
-                    List shows only entities for this card type. Type to filter or pick from the list.
+                    List shows only entities for this template. Type to filter or pick from the list.
                   </div>
                 </>
               ) : (
@@ -3179,7 +3221,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
               <button className="ghost" onClick={() => setTmplWizard(null)}>Cancel</button>
               <button onClick={() => void applyTemplateWizard()} disabled={!project}>
-                {wizardIsCard ? "Insert card" : "Insert control"}
+                {wizardIsEntityWidget ? "Insert entity widget" : "Insert control"}
               </button>
             </div>
           </div>
@@ -3535,34 +3577,39 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         </div>
       )}
 
-      {saveCardOpen && (
-        <div className="modalOverlay" onClick={() => !saveCardBusy && setSaveCardOpen(false)}>
+      {saveEntityWidgetOpen && (
+        <div
+          className="modalOverlay"
+          onClick={() => !saveEntityWidgetBusy && setSaveEntityWidgetOpen(false)}
+        >
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="modalHeader">
-              <div className="title">Save as card</div>
-              <button className="ghost" disabled={saveCardBusy} onClick={() => setSaveCardOpen(false)}>✕</button>
+              <div className="title">Save as entity widget</div>
+              <button className="ghost" disabled={saveEntityWidgetBusy} onClick={() => setSaveEntityWidgetOpen(false)}>
+                ✕
+              </button>
             </div>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Saves the current page as a reusable card. Entity IDs will be replaced with a placeholder for the chosen device type.
+              Saves the current page as a reusable entity widget. Layout is grouped under one root when needed. Home Assistant entity IDs are replaced with a placeholder for the chosen device type.
             </p>
-            <label className="label">Card name</label>
+            <label className="label">Name</label>
             <input
-              value={saveCardName}
-              onChange={(e) => setSaveCardName(e.target.value)}
-              placeholder="e.g. My climate card"
+              value={saveEntityWidgetName}
+              onChange={(e) => setSaveEntityWidgetName(e.target.value)}
+              placeholder="e.g. My climate panel"
               style={{ width: "100%", marginBottom: 8 }}
             />
             <label className="label">Description (optional)</label>
             <input
-              value={saveCardDescription}
-              onChange={(e) => setSaveCardDescription(e.target.value)}
+              value={saveEntityWidgetDescription}
+              onChange={(e) => setSaveEntityWidgetDescription(e.target.value)}
               placeholder="e.g. Thermostat with preset dropdown"
               style={{ width: "100%", marginBottom: 8 }}
             />
             <label className="label">Device type</label>
             <select
-              value={saveCardDeviceType}
-              onChange={(e) => setSaveCardDeviceType(e.target.value)}
+              value={saveEntityWidgetDeviceType}
+              onChange={(e) => setSaveEntityWidgetDeviceType(e.target.value)}
               title="Entity domain (entity_id will be stripped to this type)"
               style={{ width: "100%", padding: "8px 10px", marginBottom: 12 }}
             >
@@ -3577,70 +3624,90 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               <option value="number">number</option>
               <option value="select">select</option>
             </select>
-            {saveCardErr && <div className="error" style={{ marginBottom: 8 }}>{saveCardErr}</div>}
+            {saveEntityWidgetErr && <div className="error" style={{ marginBottom: 8 }}>{saveEntityWidgetErr}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button className="ghost" disabled={saveCardBusy} onClick={() => setSaveCardOpen(false)}>Cancel</button>
+              <button className="ghost" disabled={saveEntityWidgetBusy} onClick={() => setSaveEntityWidgetOpen(false)}>
+                Cancel
+              </button>
               <button
-                disabled={saveCardBusy || !saveCardName.trim()}
+                disabled={saveEntityWidgetBusy || !saveEntityWidgetName.trim()}
                 onClick={async () => {
-                  if (!project || !saveCardName.trim()) return;
+                  if (!project || !saveEntityWidgetName.trim()) return;
                   const page = project.pages?.[safePageIndex];
-                  if (!page?.widgets?.length) return setSaveCardErr("Current page has no widgets.");
+                  if (!page?.widgets?.length) return setSaveEntityWidgetErr("Current page has no widgets.");
                   const widgetIds = new Set((page.widgets || []).map((w: any) => w?.id).filter(Boolean));
                   const links = ((project as any).links || []).filter((l: any) => widgetIds.has(l?.target?.widget_id));
-                  const action_bindings = ((project as any).action_bindings || []).filter((ab: any) => widgetIds.has(ab?.widget_id));
-                  const placeholder = saveCardDeviceType + ".example";
+                  const action_bindings = ((project as any).action_bindings || []).filter((ab: any) =>
+                    widgetIds.has(ab?.widget_id)
+                  );
+                  const placeholder = saveEntityWidgetDeviceType + ".example";
                   const strippedLinks = links.map((l: any) => ({
                     ...l,
                     source: l.source ? { ...l.source, entity_id: placeholder } : l.source,
                   }));
                   const strippedActions = action_bindings.map((ab: any) => ({
                     ...ab,
-                    call: ab.call ? { ...ab.call, entity_id: ab.call.entity_id ? placeholder : ab.call.entity_id } : ab.call,
+                    call: ab.call
+                      ? { ...ab.call, entity_id: ab.call.entity_id ? placeholder : ab.call.entity_id }
+                      : ab.call,
                   }));
-                  const slug = saveCardName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "card";
-                  setSaveCardBusy(true);
-                  setSaveCardErr("");
+                  const widgetsNorm = normalizeWidgetsForEntityWidgetExport(page.widgets || []);
+                  const widgetsJson = JSON.stringify(widgetsNorm);
+                  const allScripts = ((project as any).scripts || []).filter(Boolean);
+                  const strippedScripts = allScripts
+                    .filter((s: any) => s?.id && widgetsJson.includes(String(s.id)))
+                    .map((s: any) => ({
+                      ...s,
+                      entity_id: s.entity_id ? placeholder : s.entity_id,
+                    }));
+                  const slug =
+                    saveEntityWidgetName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") ||
+                    "entity_widget";
+                  setSaveEntityWidgetBusy(true);
+                  setSaveEntityWidgetErr("");
                   try {
-                    await saveCard({
+                    await saveEntityWidget({
                       id: slug,
-                      name: saveCardName.trim(),
-                      description: saveCardDescription.trim() || undefined,
-                      device_types: [saveCardDeviceType],
-                      widgets: JSON.parse(JSON.stringify(page.widgets || [])),
+                      name: saveEntityWidgetName.trim(),
+                      description: saveEntityWidgetDescription.trim() || undefined,
+                      device_types: [saveEntityWidgetDeviceType],
+                      widgets: widgetsNorm,
                       links: strippedLinks,
                       action_bindings: strippedActions,
+                      scripts: strippedScripts,
                     });
-                    setSaveCardOpen(false);
-                    await refreshCustomCards();
-                    setToast({ type: "ok", msg: `Saved as card: ${saveCardName.trim()}` });
-                    setPaletteTab("cards");
+                    setSaveEntityWidgetOpen(false);
+                    await refreshCustomEntityWidgets();
+                    setToast({ type: "ok", msg: `Saved entity widget: ${saveEntityWidgetName.trim()}` });
+                    setPaletteTab("entity");
                   } catch (e: any) {
-                    setSaveCardErr(String(e?.message || e));
+                    setSaveEntityWidgetErr(String(e?.message || e));
                   } finally {
-                    setSaveCardBusy(false);
+                    setSaveEntityWidgetBusy(false);
                   }
                 }}
               >
-                {saveCardBusy ? "Saving…" : "Save card"}
+                {saveEntityWidgetBusy ? "Saving…" : "Save entity widget"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Context menu for deleting custom cards */}
-      {cardContextMenu && (
+      {entityWidgetContextMenu && (
         <div
           style={{ position: "fixed", inset: 0, zIndex: 9999 }}
-          onClick={() => setCardContextMenu(null)}
-          onContextMenu={(e) => { e.preventDefault(); setCardContextMenu(null); }}
+          onClick={() => setEntityWidgetContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setEntityWidgetContextMenu(null);
+          }}
         >
           <div
             style={{
               position: "absolute",
-              left: cardContextMenu.x,
-              top: cardContextMenu.y,
+              left: entityWidgetContextMenu.x,
+              top: entityWidgetContextMenu.y,
               background: "#2a2a2a",
               border: "1px solid #444",
               borderRadius: 6,
@@ -3651,7 +3718,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ padding: "8px 12px", fontSize: 11, color: "#888", borderBottom: "1px solid #444" }}>
-              {cardContextMenu.cardName}
+              {entityWidgetContextMenu.entityWidgetName}
             </div>
             <button
               type="button"
@@ -3669,20 +3736,20 @@ function nudgeSelected(dx: number, dy: number, step: number) {
               onMouseOver={(e) => (e.currentTarget.style.background = "#3a3a3a")}
               onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
               onClick={async () => {
-                const cardId = cardContextMenu.cardId;
-                const cardName = cardContextMenu.cardName;
-                setCardContextMenu(null);
-                if (!confirm(`Delete custom card "${cardName}"?\n\nThis cannot be undone.`)) return;
+                const ewid = entityWidgetContextMenu.entityWidgetId;
+                const nm = entityWidgetContextMenu.entityWidgetName;
+                setEntityWidgetContextMenu(null);
+                if (!confirm(`Delete saved entity widget "${nm}"?\n\nThis cannot be undone.`)) return;
                 try {
-                  await deleteCard(cardId);
-                  await refreshCustomCards();
-                  setToast({ type: "ok", msg: `Deleted card: ${cardName}` });
+                  await deleteSavedEntityWidget(ewid);
+                  await refreshCustomEntityWidgets();
+                  setToast({ type: "ok", msg: `Deleted: ${nm}` });
                 } catch (e: any) {
                   setToast({ type: "error", msg: `Failed to delete: ${e?.message || e}` });
                 }
               }}
             >
-              🗑 Delete card
+              🗑 Delete
             </button>
           </div>
         </div>
@@ -4487,7 +4554,20 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={deployToConfig} title="Save compiled YAML to /config/esphome/ then run add-on (validate + compile + upload)">Deploy</button>
         <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={deployToHost} title="Deploy to a specific host (hostname or IP)">Deploy to Host</button>
         <button className="secondary" disabled={busy || !selectedDevice || !project} onClick={() => setFullYamlOpen(true)} title="View full compiled ESPHome YAML">Full YAML</button>
-        <button className="secondary" disabled={!project || !project.pages?.[safePageIndex]?.widgets?.length} onClick={() => { setSaveCardOpen(true); setSaveCardErr(""); setSaveCardName(""); setSaveCardDescription(""); setSaveCardDeviceType("climate"); }} title="Save current page as a reusable card (reusable UI snippet you can drop on other projects)">Save as card</button>
+        <button
+          className="secondary"
+          disabled={!project || !project.pages?.[safePageIndex]?.widgets?.length}
+          onClick={() => {
+            setSaveEntityWidgetOpen(true);
+            setSaveEntityWidgetErr("");
+            setSaveEntityWidgetName("");
+            setSaveEntityWidgetDescription("");
+            setSaveEntityWidgetDeviceType("climate");
+          }}
+          title="Save current page as a reusable entity widget (drop onto other projects from the Entity palette)"
+        >
+          Save as entity widget
+        </button>
         <span className="muted" style={{ marginRight: 4 }}>|</span>
         {/* Group: Advanced */}
         <span style={{ display: "inline-flex", gap: 8, alignItems: "center", opacity: showAdvancedToolsProminent ? 1 : 0.7 }}>
@@ -4507,14 +4587,14 @@ function nudgeSelected(dx: number, dy: number, step: number) {
       >
         <aside className="designerPanel designerPanelLeft" style={{ minWidth: 200, maxWidth: 220 }}>
           <div className="panelTabs">
-            <button type="button" className={`panelTab ${paletteTab === "std" ? "active" : ""}`} onClick={() => setPaletteTab("std")}>Std LVGL</button>
-            <button type="button" className={`panelTab ${paletteTab === "cards" ? "active" : ""}`} onClick={() => setPaletteTab("cards")}>Card Library</button>
-            <button type="button" className={`panelTab ${paletteTab === "widgets" ? "active" : ""}`} onClick={() => setPaletteTab("widgets")}>Widgets</button>
+            <button type="button" className={`panelTab ${paletteTab === "basic" ? "active" : ""}`} onClick={() => setPaletteTab("basic")}>Basic</button>
+            <button type="button" className={`panelTab ${paletteTab === "prebuilt" ? "active" : ""}`} onClick={() => setPaletteTab("prebuilt")}>Prebuilt</button>
+            <button type="button" className={`panelTab ${paletteTab === "entity" ? "active" : ""}`} onClick={() => setPaletteTab("entity")}>Entity</button>
           </div>
           <div className="panelContent">
-            {paletteTab === "std" && (
+            {paletteTab === "basic" && (
               <>
-                <div className="sectionTitle">LVGL widgets</div>
+                <div className="sectionTitle">Basic widgets</div>
                 <div className="palette">
                   {(schemaIndex ?? []).filter(Boolean).map((s) => (
                     <div key={s?.type ?? ""} className="paletteItem" draggable onDragStart={(e) => { console.log('[ETD DragStart] widget:', s?.type); e.dataTransfer.setData("application/x-esphome-widget-type", s?.type ?? ""); e.dataTransfer.effectAllowed = "copy"; }} title={`Drag ${s?.title ?? s?.type ?? ""} onto canvas`}>
@@ -4524,41 +4604,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 </div>
               </>
             )}
-            {paletteTab === "cards" && (
-              <>
-                <div className="sectionTitle" title="Card = reusable UI snippet (e.g. thermostat, fan) you can drop on the canvas.">Card Library</div>
-                <div className="muted" style={{ fontSize: 10, marginBottom: 8 }}>Cards = reusable UI snippets. Drop onto the canvas.</div>
-                {cardsError && <div className="error" style={{ marginBottom: 8 }}>{cardsError}</div>}
-                <div className="palette">
-                  {[...(CONTROL_TEMPLATES || []), ...(pluginControls || [])].filter((t: any) => t && String((t as any).title ?? "").startsWith("Card Library • ") && !String((t as any).title ?? "").startsWith("Card Library disabled • ")).map((t: any) => (
-                    <div
-                      key={t.id}
-                      className="paletteItem"
-                      draggable
-                      onDragStart={(e) => { console.log('[ETD DragStart] card:', t.id); e.dataTransfer.setData("application/x-esphome-control-template", t.id); e.dataTransfer.effectAllowed = "copy"; }}
-                      onClick={() => { if (project && selectedDevice) openTemplateWizard(t.id, 80, 80); else setToast({ type: "error", msg: "Select a device first, then add cards" }); }}
-                      title={String((t as any).description ?? "") + " (click or drag onto canvas)"}
-                    >
-                      {t.title ?? t.id}
-                    </div>
-                  ))}
-                  {customCards.map((c) => (
-                    <div
-                      key={"custom:" + c.id}
-                      className="paletteItem"
-                      draggable
-                      onDragStart={(e) => { console.log('[ETD DragStart] custom card:', c.id); e.dataTransfer.setData("application/x-esphome-control-template", "custom:" + c.id); e.dataTransfer.effectAllowed = "copy"; }}
-                      onClick={() => { if (project && selectedDevice) openTemplateWizard("custom:" + c.id, 80, 80); else setToast({ type: "error", msg: "Select a device first, then add cards" }); }}
-                      onContextMenu={(e) => { e.preventDefault(); setCardContextMenu({ x: e.clientX, y: e.clientY, cardId: c.id, cardName: c.name }); }}
-                      title={(c.description || "") + " (click or drag • right-click to delete)"}
-                    >
-                      {c.name} <span className="muted" style={{ fontSize: 10 }}>(custom)</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            {paletteTab === "widgets" && (
+            {paletteTab === "prebuilt" && (
               <>
                 <div className="sectionTitle">Prebuilt widgets</div>
                 <div className="palette">
@@ -4610,6 +4656,80 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       style={{ display: "flex", alignItems: "center", minWidth: 0 }}
                     >
                       <span style={{ flex: 1, minWidth: 0 }}>{pw.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {paletteTab === "entity" && (
+              <>
+                <div
+                  className="sectionTitle"
+                  title="Multi-widget layouts bound to Home Assistant entities. Built-in templates or your saved entity widgets."
+                >
+                  Entity widgets
+                </div>
+                <div className="muted" style={{ fontSize: 10, marginBottom: 8 }}>
+                  Built-in or saved layouts. Drop onto the canvas, then pick an entity in the wizard.
+                </div>
+                {customEntityWidgetsError && (
+                  <div className="error" style={{ marginBottom: 8 }}>{customEntityWidgetsError}</div>
+                )}
+                <div className="palette">
+                  {[...(CONTROL_TEMPLATES || []), ...(pluginControls || [])]
+                    .filter((t: any) => t && isEntityWidgetTemplateTitle((t as any).title))
+                    .map((t: any) => (
+                      <div
+                        key={t.id}
+                        className="paletteItem"
+                        draggable
+                        onDragStart={(e) => {
+                          console.log("[ETD DragStart] entity template:", t.id);
+                          e.dataTransfer.setData("application/x-esphome-control-template", t.id);
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        onClick={() => {
+                          if (project && selectedDevice) openTemplateWizard(t.id, 80, 80);
+                          else setToast({ type: "error", msg: "Select a device first, then add an entity widget." });
+                        }}
+                        title={String((t as any).description ?? "") + " (click or drag onto canvas)"}
+                      >
+                        {t.title ?? t.id}
+                      </div>
+                    ))}
+                  {customEntityWidgets.map((c) => (
+                    <div
+                      key={SAVED_ENTITY_WIDGET_PREFIX + c.id}
+                      className="paletteItem"
+                      draggable
+                      onDragStart={(e) => {
+                        console.log("[ETD DragStart] saved entity widget:", c.id);
+                        e.dataTransfer.setData(
+                          "application/x-esphome-control-template",
+                          SAVED_ENTITY_WIDGET_PREFIX + c.id
+                        );
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      onClick={() => {
+                        if (project && selectedDevice)
+                          openTemplateWizard(SAVED_ENTITY_WIDGET_PREFIX + c.id, 80, 80);
+                        else setToast({ type: "error", msg: "Select a device first, then add an entity widget." });
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setEntityWidgetContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          entityWidgetId: c.id,
+                          entityWidgetName: c.name,
+                        });
+                      }}
+                      title={(c.description || "") + " (click or drag • right-click to delete)"}
+                    >
+                      {c.name}{" "}
+                      <span className="muted" style={{ fontSize: 10 }}>
+                        (saved)
+                      </span>
                     </div>
                   ))}
                 </div>

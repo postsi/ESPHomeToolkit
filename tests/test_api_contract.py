@@ -56,12 +56,14 @@ def test_recipes_list(ha_api):
         assert "recipes" in data
 
 
-def test_cards_list(ha_api):
-    """GET /api/esptoolkit/cards returns list or object with cards."""
-    status, data = ha_api.get_json("/api/esptoolkit/cards")
+def test_entity_widgets_list(ha_api):
+    """GET /api/esptoolkit/entity-widgets returns ok + entity_widgets array."""
+    status, data = ha_api.get_json("/api/esptoolkit/entity-widgets")
     assert status in (200, 401, 404, 500)
     if status == 200:
-        assert isinstance(data, (dict, list))
+        assert isinstance(data, dict)
+        assert "entity_widgets" in data
+        assert isinstance(data["entity_widgets"], list)
 
 
 def test_entities_list(ha_api):

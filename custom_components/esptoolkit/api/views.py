@@ -5201,7 +5201,7 @@ class SelfCheckView(HomeAssistantView):
                 },
             },
             {
-                "name": "sample_entity_card_light",
+                "name": "sample_entity_widget_light",
                 "project": {
                     "model_version": 1,
                     "hardware": {"recipe_id": "sunton_2432s028r_320x240"},
@@ -5645,34 +5645,35 @@ def list_all_recipes(hass) -> list[dict]:
     return sorted(recipes, key=_sort_key)
 
 
-# --- Custom cards (v1: card = snapshot of current page, stored under config) ---
+# --- Saved entity widgets (user snapshot of a page; JSON under config) ---
 
-def _cards_root(hass: HomeAssistant) -> Path:
-    """Return /config/esptoolkit/cards/; survives integration upgrades."""
-    root = Path(hass.config.path(CONFIG_DIR)) / "cards"
+
+def _entity_widgets_dir(hass: HomeAssistant) -> Path:
+    root = Path(hass.config.path(CONFIG_DIR)) / "entity_widgets"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
-def _safe_card_id(card_id: str) -> str:
-    """Filesystem-safe card id (used as filename stem)."""
-    s = re.sub(r"[^a-zA-Z0-9_-]", "_", str(card_id).strip())
-    return s[:120] if s else "card"
+def _safe_entity_widget_id(raw_id: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9_-]", "_", str(raw_id).strip())
+    return s[:120] if s else "entity_widget"
 
 
-def list_custom_cards(hass: HomeAssistant) -> list[dict]:
-    """Return list of custom card metadata (id, name, description, device_types)."""
+def _entity_widget_paths_by_id(hass: HomeAssistant) -> dict[str, Path]:
+    base = _entity_widgets_dir(hass)
+    return {p.stem: p for p in sorted(base.glob("*.json"))}
+
+
+def list_saved_entity_widgets(hass: HomeAssistant) -> list[dict]:
     out: list[dict] = []
-    root = _cards_root(hass)
-    for p in sorted(root.glob("*.json")):
-        card_id = p.stem
+    for wid, path in sorted(_entity_widget_paths_by_id(hass).items()):
         try:
-            data = json.loads(p.read_text("utf-8"))
+            data = json.loads(path.read_text("utf-8"))
             if not isinstance(data, dict):
                 continue
             out.append({
-                "id": card_id,
-                "name": data.get("name") or card_id,
+                "id": wid,
+                "name": data.get("name") or wid,
                 "description": data.get("description") or "",
                 "device_types": data.get("device_types") or [],
             })
@@ -5681,37 +5682,38 @@ def list_custom_cards(hass: HomeAssistant) -> list[dict]:
     return out
 
 
-class CardsListView(HomeAssistantView):
-    url = f"/api/{DOMAIN}/cards"
-    name = f"api:{DOMAIN}:cards_list"
+class SavedEntityWidgetsListView(HomeAssistantView):
+    url = f"/api/{DOMAIN}/entity-widgets"
+    name = f"api:{DOMAIN}:entity_widgets_list"
     requires_auth = False
 
     async def get(self, request):
         hass = request.app["hass"]
-        return self.json({"ok": True, "cards": list_custom_cards(hass)})
+        return self.json({"ok": True, "entity_widgets": list_saved_entity_widgets(hass)})
 
 
-class CardDetailView(HomeAssistantView):
-    url = f"/api/{DOMAIN}/cards/{{card_id}}"
-    name = f"api:{DOMAIN}:cards_detail"
+class SavedEntityWidgetDetailView(HomeAssistantView):
+    url = f"/api/{DOMAIN}/entity-widgets/{{entity_widget_id}}"
+    name = f"api:{DOMAIN}:entity_widget_detail"
     requires_auth = False
 
-    async def get(self, request, card_id: str):
+    async def get(self, request, entity_widget_id: str):
         hass = request.app["hass"]
-        safe_id = _safe_card_id(card_id)
-        path = _cards_root(hass) / f"{safe_id}.json"
-        if not path.exists() or not path.is_file():
+        safe_id = _safe_entity_widget_id(entity_widget_id)
+        paths = _entity_widget_paths_by_id(hass)
+        path = paths.get(safe_id)
+        if path is None or not path.is_file():
             return self.json({"ok": False, "error": "not_found"}, status_code=404)
         try:
             data = json.loads(path.read_text("utf-8"))
-            return self.json({"ok": True, "card": data})
+            return self.json({"ok": True, "entity_widget": data})
         except Exception as e:
             return self.json({"ok": False, "error": str(e)}, status_code=500)
 
 
-class CardSaveView(HomeAssistantView):
-    url = f"/api/{DOMAIN}/cards"
-    name = f"api:{DOMAIN}:cards_save"
+class SavedEntityWidgetSaveView(HomeAssistantView):
+    url = f"/api/{DOMAIN}/entity-widgets"
+    name = f"api:{DOMAIN}:entity_widgets_save"
     requires_auth = False
 
     async def post(self, request):
@@ -5722,10 +5724,10 @@ class CardSaveView(HomeAssistantView):
             return self.json({"ok": False, "error": "invalid_json"}, status_code=400)
         if not isinstance(body, dict):
             return self.json({"ok": False, "error": "invalid_body"}, status_code=400)
-        card_id = body.get("id") or body.get("name")
-        if not card_id or not str(card_id).strip():
+        ewid = body.get("id") or body.get("name")
+        if not ewid or not str(ewid).strip():
             return self.json({"ok": False, "error": "id_or_name_required"}, status_code=400)
-        safe_id = _safe_card_id(str(card_id).strip())
+        safe_id = _safe_entity_widget_id(str(ewid).strip())
         required = ("name", "device_types", "widgets", "links")
         for k in required:
             if k not in body:
@@ -5742,7 +5744,7 @@ class CardSaveView(HomeAssistantView):
             "action_bindings": body.get("action_bindings") or [],
             "scripts": body.get("scripts") or [],
         }
-        path = _cards_root(hass) / f"{safe_id}.json"
+        path = _entity_widgets_dir(hass) / f"{safe_id}.json"
         try:
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
@@ -5750,16 +5752,17 @@ class CardSaveView(HomeAssistantView):
         return self.json({"ok": True, "id": safe_id})
 
 
-class CardDeleteView(HomeAssistantView):
-    url = f"/api/{DOMAIN}/cards/{{card_id}}"
-    name = f"api:{DOMAIN}:cards_delete"
+class SavedEntityWidgetDeleteView(HomeAssistantView):
+    url = f"/api/{DOMAIN}/entity-widgets/{{entity_widget_id}}"
+    name = f"api:{DOMAIN}:entity_widget_delete"
     requires_auth = False
 
-    async def delete(self, request, card_id: str):
+    async def delete(self, request, entity_widget_id: str):
         hass = request.app["hass"]
-        safe_id = _safe_card_id(card_id)
-        path = _cards_root(hass) / f"{safe_id}.json"
-        if not path.exists():
+        safe_id = _safe_entity_widget_id(entity_widget_id)
+        paths = _entity_widget_paths_by_id(hass)
+        path = paths.get(safe_id)
+        if path is None or not path.exists():
             return self.json({"ok": False, "error": "not_found"}, status_code=404)
         try:
             path.unlink(missing_ok=True)
@@ -6944,11 +6947,11 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(DeviceProjectView)
     hass.http.register_view(CleanupOrphansView)
 
-    # Custom cards (v1: snapshot as card, stored under config)
-    hass.http.register_view(CardsListView)
-    hass.http.register_view(CardDetailView)
-    hass.http.register_view(CardSaveView)
-    hass.http.register_view(CardDeleteView)
+    # Saved entity widgets (user snapshots under config)
+    hass.http.register_view(SavedEntityWidgetsListView)
+    hass.http.register_view(SavedEntityWidgetDetailView)
+    hass.http.register_view(SavedEntityWidgetSaveView)
+    hass.http.register_view(SavedEntityWidgetDeleteView)
 
     # Hardware recipes (RecipesView is registered in panel; clone/export/etc need entry)
     hass.http.register_view(RecipeCloneView)

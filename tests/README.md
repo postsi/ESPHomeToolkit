@@ -54,7 +54,7 @@ ESPTOOLKIT_ADDON_URL=https://... ESPTOOLKIT_ADDON_TOKEN=... pytest tests/ -v
 | `test_api_contract.py` | Integration endpoints return expected status and response shape. |
 | `test_data_consistency.py` | Project entity refs exist; pages/widgets structure is valid. |
 | `test_schema_contract.py` | Every widget type in project has a schema; props are valid. |
-| `test_e2e_workflow.py` | Get→put→get project roundtrip; cards list then get one. |
+| `test_e2e_workflow.py` | Get→put→get project roundtrip; entity-widgets list then get one. |
 
 ## Adding fixtures (optional)
 
