@@ -3,7 +3,16 @@
  * Services listed per domain for action bindings (user sees only relevant options).
  */
 
-export type DisplayAction = "label_text" | "slider_value" | "arc_value" | "bar_value" | "widget_checked" | "button_bg_color" | "button_white_temp" | "led_brightness";
+export type DisplayAction =
+  | "label_text"
+  | "slider_value"
+  | "arc_value"
+  | "bar_value"
+  | "spinbox2_value"
+  | "widget_checked"
+  | "button_bg_color"
+  | "button_white_temp"
+  | "led_brightness";
 
 /** Display target actions allowed per widget type (what property of the widget gets the HA value). */
 export const DISPLAY_ACTIONS_BY_WIDGET_TYPE: Record<string, DisplayAction[]> = {
@@ -22,6 +31,7 @@ export const DISPLAY_ACTIONS_BY_WIDGET_TYPE: Record<string, DisplayAction[]> = {
   spinner: [],
   roller: ["label_text"],
   spinbox: ["label_text"],
+  spinbox2: ["spinbox2_value"],
   textarea: ["label_text"],
   qrcode: ["label_text"],
   color_picker: ["button_bg_color", "label_text"],
@@ -35,6 +45,7 @@ export const DISPLAY_ACTION_LABELS: Record<DisplayAction, string> = {
   slider_value: "Set slider position",
   arc_value: "Set arc value",
   bar_value: "Set bar value",
+  spinbox2_value: "Set value",
   widget_checked: "Set on/off state",
   button_bg_color: "Set button colour",
   button_white_temp: "Set white temperature",
@@ -58,6 +69,7 @@ export const EVENTS_BY_WIDGET_TYPE: Record<string, string[]> = {
   spinner: [],
   roller: ["on_change"],
   spinbox: ["on_change"],
+  spinbox2: ["on_change"],
   textarea: ["on_value", "on_ready", "on_focus", "on_defocus"],
   qrcode: [],
   color_picker: ["on_click", "on_apply"],
@@ -137,7 +149,7 @@ export const SERVICES_BY_DOMAIN: Record<string, { service: string; label: string
 };
 
 /** Display actions that accept only numeric values (arc, bar, slider). Do not offer state (text) for these. */
-export const NUMERIC_ONLY_DISPLAY_ACTIONS: DisplayAction[] = ["arc_value", "bar_value", "slider_value"];
+export const NUMERIC_ONLY_DISPLAY_ACTIONS: DisplayAction[] = ["arc_value", "bar_value", "slider_value", "spinbox2_value"];
 
 export function displayActionRequiresNumericSource(action: string): boolean {
   return NUMERIC_ONLY_DISPLAY_ACTIONS.includes(action as DisplayAction);

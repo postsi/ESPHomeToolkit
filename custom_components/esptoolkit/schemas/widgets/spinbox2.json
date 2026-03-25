@@ -1,0 +1,45 @@
+{
+  "type": "spinbox2",
+  "title": "Spinbox2",
+  "description": "Stepper: centre label shows value; − / + buttons change by a fixed step (label + buttons, not LVGL spinbox).",
+  "esphome": {
+    "root_key": "container",
+    "props": {},
+    "style": {},
+    "events": {}
+  },
+  "props": {
+    "value": { "type": "number", "title": "Value", "default": 0 },
+    "min_value": { "type": "number", "title": "Min", "default": 0 },
+    "max_value": { "type": "number", "title": "Max", "default": 100 },
+    "step": { "type": "number", "title": "Step", "default": 1, "min": 0.0001 },
+    "decimal_places": { "type": "number", "title": "Decimal places", "min": 0, "max": 6, "default": 0 },
+    "minus_text": { "type": "string", "title": "Minus button text", "default": "-" },
+    "plus_text": { "type": "string", "title": "Plus button text", "default": "+" }
+  },
+  "style": {
+    "bg_color": { "type": "color", "title": "Background", "default": "0x1e293b" },
+    "border_width": { "type": "number", "title": "Border width", "min": 0, "max": 20, "default": 1 },
+    "border_color": { "type": "color", "title": "Border color", "default": "0x475569" },
+    "radius": { "type": "number", "title": "Corner radius", "min": 0, "max": 60, "default": 6 },
+    "text_color": { "type": "color", "title": "Value text colour", "default": "0xe2e8f0" }
+  },
+  "events": {
+    "on_change": { "type": "yaml_block", "title": "on_change", "default": "" }
+  },
+  "groups": {
+    "Spinbox2": {
+      "section": "props",
+      "keys": ["value", "min_value", "max_value", "step", "decimal_places", "minus_text", "plus_text"]
+    },
+    "Common": {
+      "section": "props",
+      "keys": ["align", "hidden", "clickable", "scrollable", "scrollbar_mode", "scroll_dir", "opacity", "group"]
+    },
+    "Style": {
+      "section": "style",
+      "keys": ["bg_color", "border_width", "border_color", "radius", "text_color"]
+    },
+    "Events": { "section": "events", "keys": ["on_change"] }
+  }
+}

@@ -1196,6 +1196,126 @@ const stageRef = useRef<any>(null);
       );
     }
 
+    if (type === "spinbox2") {
+      const mn = Number(p.min_value ?? 0);
+      const mx = Number(p.max_value ?? 100);
+      const step = Math.max(1e-6, Number(p.step ?? 1));
+      const dec = Math.max(0, Math.min(6, Number(p.decimal_places ?? 0)));
+      const rawVal = override?.value !== undefined ? Number(override.value) : Number(p.value ?? 0);
+      const displayVal =
+        override?.text != null && String(override.text) !== ""
+          ? String(override.text)
+          : dec >= 1
+            ? rawVal.toFixed(dec)
+            : String(Math.round(rawVal));
+      const btnW = Math.max(28, Math.min(64, Math.floor(w.w / 4)));
+      const lblW = Math.max(20, w.w - 2 * btnW);
+      const radius = Math.min(24, Math.max(0, Number(s.radius ?? 6)));
+      const bg = toFillColor(s.bg_color, "#1e293b");
+      const border = toFillColor(s.border_color, "#475569");
+      const bw = Number(s.border_width ?? 1);
+      const btnFill = "#0f172a";
+      const minusLabel = String(p.minus_text ?? "-");
+      const plusLabel = String(p.plus_text ?? "+");
+      const handleStep = (dir: number) => {
+        if (!simulationMode || !onSimulateUpdate || !onSimulateAction) return;
+        let next = rawVal + dir * step;
+        if (next < mn) next = mn;
+        if (next > mx) next = mx;
+        const rounded = dec > 0 ? Math.round(next * 10 ** dec) / 10 ** dec : Math.round(next);
+        onSimulateUpdate(w.id, { value: rounded, text: dec >= 1 ? rounded.toFixed(dec) : String(rounded) });
+        onSimulateAction(w.id, "on_change", { value: rounded });
+      };
+      return (
+        <Group key={w.id}>
+          {base}
+          <Rect x={ax} y={ay} width={w.w} height={w.h} fill={bg} stroke={border} strokeWidth={bw} cornerRadius={radius} listening={false} />
+          <Rect
+            x={ax}
+            y={ay}
+            width={btnW}
+            height={w.h}
+            fill={btnFill}
+            stroke={border}
+            strokeWidth={bw > 0 ? 1 : 0}
+            cornerRadius={radius}
+            opacity={0.95}
+            listening={!!simulationMode}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              handleStep(-1);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              handleStep(-1);
+            }}
+          />
+          <Text
+            text={minusLabel}
+            x={ax}
+            y={ay}
+            width={btnW}
+            height={w.h}
+            align="center"
+            verticalAlign="middle"
+            fontSize={Math.min(20, fontSize + 4)}
+            fontFamily={textFontFamily}
+            letterSpacing={letterSpace}
+            fill={textColor}
+            listening={false}
+          />
+          <Text
+            text={displayVal}
+            x={ax + btnW}
+            y={ay}
+            width={lblW}
+            height={w.h}
+            align="center"
+            verticalAlign="middle"
+            fontSize={fontSize}
+            fontFamily={textFontFamily}
+            letterSpacing={letterSpace}
+            fill={textColor}
+            listening={false}
+          />
+          <Rect
+            x={ax + btnW + lblW}
+            y={ay}
+            width={btnW}
+            height={w.h}
+            fill={btnFill}
+            stroke={border}
+            strokeWidth={bw > 0 ? 1 : 0}
+            cornerRadius={radius}
+            opacity={0.95}
+            listening={!!simulationMode}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              handleStep(1);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              handleStep(1);
+            }}
+          />
+          <Text
+            text={plusLabel}
+            x={ax + btnW + lblW}
+            y={ay}
+            width={btnW}
+            height={w.h}
+            align="center"
+            verticalAlign="middle"
+            fontSize={Math.min(20, fontSize + 4)}
+            fontFamily={textFontFamily}
+            letterSpacing={letterSpace}
+            fill={textColor}
+            listening={false}
+          />
+        </Group>
+      );
+    }
+
     if (type === "spinbox") {
       // Native spinbox: value box only (no +/-). Prebuilt "Spinbox with +/-" adds real - and + buttons as siblings.
       const rangeFrom = Number(p.range_from ?? 0);

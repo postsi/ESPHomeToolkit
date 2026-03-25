@@ -27,6 +27,8 @@ import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+import socket
+from logging.handlers import RotatingFileHandler
 
 import websockets
 
@@ -96,6 +98,18 @@ def _dump_yaml_to_terminal(yaml_text: str) -> None:
     print(sep, file=sys.stderr)
 
 
+def _get_primary_ip() -> str | None:
+    """Best-effort pick of primary outbound IP (no packets sent)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return None
+
+
 async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: bool) -> None:
     ssl_ctx: ssl.SSLContext | None = None
     if uri.startswith("wss"):
@@ -160,12 +174,16 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
                             transformed_yaml: str
                             if isinstance(source_yaml, str) and source_yaml.strip():
                                 try:
+                                    host_ip = _get_primary_ip()
+                                    host_hostname = socket.gethostname()
                                     transformed_yaml, tw = transform_esphome_yaml_for_host_sdl(
                                         source_yaml,
                                         int(data.get("screen_width") or 480),
                                         int(data.get("screen_height") or 320),
-                                        api_encryption_key=str(data.get("api_encryption_key") or ""),
-                                        esphome_name=str(data.get("esphome_name") or "macsim"),
+                                        api_encryption_key=None,
+                                        esphome_name=None,
+                                        host_ip=host_ip,
+                                        host_hostname=host_hostname,
                                     )
                                     for w in tw:
                                         LOG.warning("transform warning: %s", w)
@@ -180,6 +198,7 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
                                     continue
                                 transformed_yaml = y
                             LOG.info("Received run job (%d bytes YAML)", len(transformed_yaml))
+                            LOG.info("ESPHome run starting (streaming logs)…")
                             if dump_yaml:
                                 _dump_yaml_to_terminal(transformed_yaml)
                             rc = await _run_esphome(transformed_yaml)
@@ -215,12 +234,33 @@ def main() -> None:
         action="store_true",
         help="Print the full received YAML to stderr before each esphome run (debug invalid YAML / structure)",
     )
+    p.add_argument(
+        "--log-file",
+        default=str(Path("~/Library/Logs/esptoolkit-mac-sim-agent.log").expanduser()),
+        help="Write agent + ESPHome output to this file (helps when running under launchd)",
+    )
     args = p.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s %(message)s",
-    )
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    root = logging.getLogger()
+    root.setLevel(log_level)
+    # Always log to console
+    sh = logging.StreamHandler()
+    sh.setLevel(log_level)
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+    # Also log to file (rotating)
+    try:
+        lf = Path(args.log_file).expanduser()
+        lf.parent.mkdir(parents=True, exist_ok=True)
+        fh = RotatingFileHandler(lf, maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+        fh.setLevel(log_level)
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+        LOG.info("Logging to %s", str(lf))
+    except Exception as e:
+        LOG.warning("Could not set up log file: %s", e)
 
     token = Path(args.token_file).expanduser().read_text(encoding="utf-8").strip()
     if len(token) < 16:

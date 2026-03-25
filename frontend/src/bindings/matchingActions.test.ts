@@ -12,10 +12,12 @@ import {
 
 describe("matchingActions", () => {
   describe("constants", () => {
-    it("INPUT_WIDGET_TYPES includes arc, slider, bar, spinbox, switch, checkbox", () => {
+    it("INPUT_WIDGET_TYPES includes arc, slider, bar, spinbox, spinbox2, switch, checkbox", () => {
       expect(INPUT_WIDGET_TYPES).toContain("arc");
       expect(INPUT_WIDGET_TYPES).toContain("slider");
       expect(INPUT_WIDGET_TYPES).toContain("bar");
+      expect(INPUT_WIDGET_TYPES).toContain("spinbox");
+      expect(INPUT_WIDGET_TYPES).toContain("spinbox2");
       expect(INPUT_WIDGET_TYPES).toContain("switch");
     });
     it("OPTION_SELECT_WIDGET_TYPES includes dropdown and roller", () => {
@@ -56,6 +58,22 @@ describe("matchingActions", () => {
       expect(out.length).toBeGreaterThan(0);
       expect(out[0].call.domain).toBe("climate");
       expect(out[0].call.service).toBe("set_temperature");
+    });
+
+    it("returns number set_value on_change for spinbox2 + number state", () => {
+      const out = getMatchingActionBindings("spinbox2", "number.target", "state", "");
+      expect(out.length).toBeGreaterThan(0);
+      expect(out[0].event).toBe("on_change");
+      expect(out[0].call.domain).toBe("number");
+      expect(out[0].call.service).toBe("set_value");
+    });
+
+    it("returns input_number set_value on_change for spinbox2 + input_number state", () => {
+      const out = getMatchingActionBindings("spinbox2", "input_number.target", "state", "");
+      expect(out.length).toBeGreaterThan(0);
+      expect(out[0].event).toBe("on_change");
+      expect(out[0].call.domain).toBe("input_number");
+      expect(out[0].call.service).toBe("set_value");
     });
 
     it("returns switch toggle for button + binary/state", () => {

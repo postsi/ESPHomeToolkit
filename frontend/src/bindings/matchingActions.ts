@@ -13,7 +13,7 @@ import { domainFromEntityId } from "./bindingConfig";
 /** Sentinel for action binding data: compiler replaces with lambda mapping selected index x to option text. */
 export const SELECT_OPTION_TEXT_SENTINEL = "!lambda SELECT_OPTION_TEXT";
 
-export const INPUT_WIDGET_TYPES = ["arc", "slider", "bar", "spinbox", "switch", "checkbox"] as const;
+export const INPUT_WIDGET_TYPES = ["arc", "slider", "bar", "spinbox", "spinbox2", "switch", "checkbox"] as const;
 
 /** Widgets that send selected option (index) and can have matching actions for text-based services (e.g. climate HVAC mode). */
 export const OPTION_SELECT_WIDGET_TYPES = ["dropdown", "roller"] as const;
@@ -47,9 +47,13 @@ export function getMatchingActionBindings(
     slider: preferredEvent === "on_value" ? "on_value" : "on_release",
     bar: preferredEvent === "on_value" ? "on_value" : "on_release",
     spinbox: "on_change",
+    spinbox2: "on_change",
   };
   const eventForValue = numericValueEvents[type];
-  if (eventForValue && (kind === "attribute_number" || (kind === "state" && domain === "number"))) {
+  if (
+    eventForValue
+    && (kind === "attribute_number" || (kind === "state" && (domain === "number" || domain === "input_number")))
+  ) {
     if (domain === "climate" && attribute === "temperature") {
       return [
         {

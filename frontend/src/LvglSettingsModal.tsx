@@ -17,7 +17,7 @@ type Props = {
   onSave: (config: LvglConfig) => void;
 };
 
-const WIDGET_TYPES = ["button", "label", "arc", "slider", "bar", "checkbox", "dropdown", "roller", "spinbox", "textarea", "switch", "container"];
+const WIDGET_TYPES = ["button", "label", "arc", "slider", "bar", "checkbox", "dropdown", "roller", "spinbox", "spinbox2", "textarea", "switch", "container"];
 
 export default function LvglSettingsModal({ open, onClose, config, onSave }: Props) {
   const [tab, setTab] = useState<Tab>("main");

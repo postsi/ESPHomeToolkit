@@ -241,6 +241,7 @@ const WIDGET_TO_LVGL_COMPONENTS: Record<string, { types: string[]; default: stri
   bar: { types: ["sensor", "number"], default: "number" },
   slider: { types: ["sensor", "number"], default: "number" },
   spinbox: { types: ["sensor", "number"], default: "number" },
+  spinbox2: { types: ["sensor", "number"], default: "number" },
   dropdown: { types: ["select"], default: "select" },
   roller: { types: ["select"], default: "select" },
   label: { types: ["text_sensor"], default: "text_sensor" },
@@ -1808,6 +1809,15 @@ if (baseId.startsWith("glance_card")) {
       } else if (action === "arc_value" || action === "slider_value" || action === "bar_value") {
         const num = typeof raw === "number" ? raw : parseFloat(String(raw));
         if (!Number.isNaN(num)) overrides[widgetId] = { ...overrides[widgetId], value: num * scale };
+      } else if (action === "spinbox2_value") {
+        if (widgetTypeById[widgetId] === "spinbox2") {
+          const num = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+          if (!Number.isNaN(num)) {
+            const n = num * scale;
+            const s = fmt.replace("%.2f", n.toFixed(2)).replace("%.1f", n.toFixed(1)).replace("%.0f", String(Math.round(n)));
+            overrides[widgetId] = { ...overrides[widgetId], value: n, text: s };
+          }
+        }
       } else if (action === "widget_checked") {
         overrides[widgetId] = { ...overrides[widgetId], checked: !!raw };
       } else if (action === "button_bg_color") {
@@ -4832,15 +4842,36 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                     const id = uid(type);
                     const isColorPicker = String(type).toLowerCase() === "color_picker";
                     const isWhitePicker = String(type).toLowerCase() === "white_picker";
+                    const isSpinbox2 = String(type).toLowerCase() === "spinbox2";
                     const w = {
                       id,
                       type,
                       x,
                       y,
-                      w: isColorPicker || isWhitePicker ? 80 : 120,
+                      w: isColorPicker || isWhitePicker ? 80 : isSpinbox2 ? 200 : 120,
                       h: isColorPicker || isWhitePicker ? 36 : 48,
-                      props: isColorPicker ? { value: 0x4080FF } : isWhitePicker ? { value: 326 } : {},
-                      style: isColorPicker ? { bg_color: 0x4080FF, radius: 8 } : isWhitePicker ? { bg_color: 0xFFD9BC, radius: 8 } : {},
+                      props: isColorPicker
+                        ? { value: 0x4080FF }
+                        : isWhitePicker
+                          ? { value: 326 }
+                          : isSpinbox2
+                            ? {
+                                value: 15,
+                                min_value: 5,
+                                max_value: 30,
+                                step: 1,
+                                decimal_places: 1,
+                                minus_text: "-",
+                                plus_text: "+",
+                              }
+                            : {},
+                      style: isColorPicker
+                        ? { bg_color: 0x4080FF, radius: 8 }
+                        : isWhitePicker
+                          ? { bg_color: 0xFFD9BC, radius: 8 }
+                          : isSpinbox2
+                            ? { bg_color: 0x1e293b, border_width: 1, border_color: 0x475569, radius: 6, text_color: 0xe2e8f0 }
+                            : {},
                       events: {},
                     };
                     if (!pg) { console.log('[ETD onDropCreate] No page, aborting'); return; }
@@ -5340,6 +5371,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   ).slice(0, 200);
                   const effectiveDisplayAction = displayActions.includes(bindAction as any) ? bindAction : (displayActions[0] || "label_text");
                   const requiresNumeric = displayActionRequiresNumericSource(effectiveDisplayAction);
+                  const numericEntityAllowsState =
+                    requiresNumeric && ["number", "input_number"].includes(bindDomain);
                   const selectedEntityAttrs = (() => {
                       if (!bindEntity) return [];
                       const attrs = bindingEntityDetails?.entity_id === bindEntity
@@ -5607,9 +5640,19 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                           </div>
                           <div>
                             <div className="fieldLabel" style={{ fontSize: 11, marginBottom: 2 }}>Attribute</div>
-                            <div className="muted" style={{ fontSize: 10, marginBottom: 4 }}>{requiresNumeric ? "Numeric attribute only (arc/bar/slider need a number)." : "HA state or entity attribute to show."}</div>
-                            <select value={bindAttr || (requiresNumeric && selectedEntityAttrs.length > 0 ? selectedEntityAttrs[0] : "")} onChange={(e)=>setBindAttr(e.target.value)} style={{ width: "100%" }}>
-                              {!requiresNumeric && <option value="">(state)</option>}
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 4 }}>{requiresNumeric ? "Numeric only: pick an attribute, or (state) for number / input_number entities." : "HA state or entity attribute to show."}</div>
+                            <select
+                              value={
+                                bindAttr !== ""
+                                  ? bindAttr
+                                  : requiresNumeric && !numericEntityAllowsState && selectedEntityAttrs.length > 0
+                                    ? selectedEntityAttrs[0]
+                                    : ""
+                              }
+                              onChange={(e) => setBindAttr(e.target.value)}
+                              style={{ width: "100%" }}
+                            >
+                              {(!requiresNumeric || numericEntityAllowsState) && <option value="">(state)</option>}
                               {selectedEntityAttrs.map((k)=> <option key={k} value={k}>{k}</option>)}
                             </select>
                           </div>
@@ -5622,7 +5665,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                               ))}
                             </select>
                           </div>
-                          {(bindAction === "label_text" || bindAction === "arc_value" || bindAction === "slider_value" || bindAction === "bar_value") && (
+                          {(bindAction === "label_text" || bindAction === "arc_value" || bindAction === "slider_value" || bindAction === "bar_value" || bindAction === "spinbox2_value") && (
                             <>
                               <div>
                                 <div className="fieldLabel" style={{ fontSize: 11, marginBottom: 2 }}>Format</div>
@@ -5636,10 +5679,16 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                               </div>
                             </>
                           )}
-                          <button disabled={!project || !selectedWidgetIds.length || !bindEntity || (requiresNumeric && !bindAttr && selectedEntityAttrs.length === 0)} onClick={() => {
+                          <button disabled={!project || !selectedWidgetIds.length || !bindEntity || (requiresNumeric && !numericEntityAllowsState && !bindAttr && selectedEntityAttrs.length === 0)} onClick={() => {
                             if (!project) return;
                             const wid = selectedWidgetIds[0];
-                            const ent = bindEntity; const attr = bindAttr || (requiresNumeric && selectedEntityAttrs.length > 0 ? selectedEntityAttrs[0] : "");
+                            const ent = bindEntity;
+                            const attr =
+                              bindAttr.trim() !== ""
+                                ? bindAttr
+                                : requiresNumeric && !numericEntityAllowsState && selectedEntityAttrs.length > 0
+                                  ? selectedEntityAttrs[0]
+                                  : "";
                             const act = displayActions.includes(bindAction as any) ? bindAction : (displayActions[0] || "label_text");
                             const p2 = clone(project);
                             (p2 as any).bindings = (p2 as any).bindings || [];
@@ -5656,7 +5705,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                             else if (attr) kind = "attribute_number";
                             const v = entities.find((x)=>x.entity_id===ent)?.attributes?.[linkAttr || attr];
                             if ((linkAttr || attr) && (typeof v === "string" || Array.isArray(v) || (v && typeof v === "object"))) kind = "attribute_text";
-                            if (!linkAttr && !attr && act === "label_text") kind = "state";
+                            if (!linkAttr && !attr && (act === "label_text" || act === "spinbox2_value")) kind = "state";
                             (p2 as any).bindings.push({ entity_id: ent, kind, attribute: linkAttr || attr || undefined });
                             (p2 as any).links.push({ source: { entity_id: ent, kind, attribute: linkAttr || attr || "" }, target: { widget_id: wid, action: act, format: (bindFormat != null && String(bindFormat).trim() !== "") ? String(bindFormat).trim() : "%.1f", scale: bindScale } });
                             const pageWidgets = (p2 as any).pages?.[safePageIndex]?.widgets || [];
@@ -5714,7 +5763,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                           }}>Add display binding</button>
                           {((INPUT_WIDGET_TYPES.includes(widgetType as any) || OPTION_SELECT_WIDGET_TYPES.includes(widgetType as any) || CLICK_TOGGLE_WIDGET_TYPES.includes(widgetType as any)) ||
                             spinboxChildId ||
-                            ["arc_value", "slider_value", "bar_value", "widget_checked"].includes(bindAction)) && (
+                            ["arc_value", "slider_value", "bar_value", "spinbox2_value", "widget_checked"].includes(bindAction)) && (
                             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", fontSize: 12, color: "#b8bfc9" }}>
                               <input type="checkbox" checked={createMatchingActions} onChange={(e)=>setCreateMatchingActions(e.target.checked)} />
                               Also create action bindings to send value to HA

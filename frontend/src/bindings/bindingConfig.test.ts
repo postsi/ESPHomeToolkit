@@ -30,10 +30,11 @@ describe("bindingConfig", () => {
   });
 
   describe("displayActionRequiresNumericSource", () => {
-    it("returns true for arc_value, bar_value, slider_value", () => {
+    it("returns true for arc_value, bar_value, slider_value, spinbox2_value", () => {
       expect(displayActionRequiresNumericSource("arc_value")).toBe(true);
       expect(displayActionRequiresNumericSource("bar_value")).toBe(true);
       expect(displayActionRequiresNumericSource("slider_value")).toBe(true);
+      expect(displayActionRequiresNumericSource("spinbox2_value")).toBe(true);
     });
     it("returns false for label_text, widget_checked", () => {
       expect(displayActionRequiresNumericSource("label_text")).toBe(false);
@@ -43,6 +44,7 @@ describe("bindingConfig", () => {
       expect(NUMERIC_ONLY_DISPLAY_ACTIONS).toContain("arc_value");
       expect(NUMERIC_ONLY_DISPLAY_ACTIONS).toContain("bar_value");
       expect(NUMERIC_ONLY_DISPLAY_ACTIONS).toContain("slider_value");
+      expect(NUMERIC_ONLY_DISPLAY_ACTIONS).toContain("spinbox2_value");
     });
   });
 
@@ -52,6 +54,9 @@ describe("bindingConfig", () => {
     });
     it("returns only arc_value for arc (no text; default ESPHome arc has no label)", () => {
       expect(getDisplayActionsForType("arc")).toEqual(["arc_value"]);
+    });
+    it("returns spinbox2_value for spinbox2", () => {
+      expect(getDisplayActionsForType("spinbox2")).toEqual(["spinbox2_value"]);
     });
     it("returns default label_text for unknown type", () => {
       expect(getDisplayActionsForType("unknown")).toEqual(["label_text"]);
@@ -67,6 +72,9 @@ describe("bindingConfig", () => {
     });
     it("returns on_release and on_value for arc", () => {
       expect(getEventsForType("arc")).toEqual(["on_release", "on_value"]);
+    });
+    it("returns on_change for spinbox2", () => {
+      expect(getEventsForType("spinbox2")).toEqual(["on_change"]);
     });
     it("returns empty array for unknown type", () => {
       expect(getEventsForType("unknown")).toEqual([]);

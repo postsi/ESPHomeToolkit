@@ -799,6 +799,18 @@ def _compile_ha_bindings(project: dict) -> str:
     dropdown_options_by_id = _dropdown_options_map()
     roller_options_by_id = _roller_options_map()
 
+    def _widget_props_by_id() -> dict[str, dict]:
+        m: dict[str, dict] = {}
+        for page in project.get("pages") or []:
+            if not isinstance(page, dict):
+                continue
+            for w in page.get("widgets") or []:
+                if isinstance(w, dict) and w.get("id"):
+                    m[str(w["id"])] = dict(w.get("props") or {})
+        return m
+
+    widget_props_by_id = _widget_props_by_id()
+
     # Container id -> spinbox child id (for "Spinbox with +/-" prebuilt: link targets container, we update the spinbox child)
     def _container_spinbox_child_map() -> dict[str, str]:
         out: dict[str, str] = {}
@@ -886,6 +898,43 @@ def _compile_ha_bindings(project: dict) -> str:
                     outs.append(f"{i3}value: !lambda return (x * {float(scale)});\n")
                 else:
                     outs.append(f"{i3}value: !lambda return x;\n")
+            elif action == "spinbox2_value":
+                if (widget_type_by_id.get(wid) or "") != "spinbox2":
+                    continue
+                wp = widget_props_by_id.get(wid) or {}
+                try:
+                    vmn = float(wp.get("min_value", 0))
+                except (TypeError, ValueError):
+                    vmn = 0.0
+                try:
+                    vmx = float(wp.get("max_value", 100))
+                except (TypeError, ValueError):
+                    vmx = 100.0
+                vdec = int(wp.get("decimal_places", 0) or 0)
+                vdec = max(0, min(6, vdec))
+                vmul = float(10**vdec) if vdec > 0 else 0.0
+                g_id = f"etd_sb2_{wid_safe}_val"
+                lbl_id = f"{wid}_v"
+                fmt_s = str(fmt or ("%.0f" if vdec == 0 else f"%.{vdec}f"))
+                fmt_esc = fmt_s.replace("\\", "\\\\").replace('"', '\\"')
+                outs.append(f"{i2}- lambda: |-\n")
+                outs.append(f"{i3}float __v = (float)x;\n")
+                if isinstance(scale, (int, float)) and float(scale) != 1.0:
+                    outs.append(f"{i3}__v = __v * {float(scale)};\n")
+                outs.append(f"{i3}if (__v < {vmn}f) __v = {vmn}f;\n")
+                outs.append(f"{i3}if (__v > {vmx}f) __v = {vmx}f;\n")
+                if vdec > 0:
+                    outs.append(f"{i3}const float __mul = {vmul:.1f}f;\n")
+                    outs.append(f"{i3}__v = (__mul != 0.0f) ? (roundf(__v * __mul) / __mul) : __v;\n")
+                else:
+                    outs.append(f"{i3}__v = roundf(__v);\n")
+                outs.append(f"{i3}id({g_id}) = __v;\n")
+                outs.append(f"{i2}- lvgl.label.update:\n")
+                outs.append(f"{i3}id: {lbl_id}\n")
+                outs.append(f"{i3}text: !lambda |-\n")
+                outs.append(f"{i3}  char b[48];\n")
+                outs.append(f"{i3}  snprintf(b, sizeof(b), \"{fmt_esc}\", (double) id({g_id}));\n")
+                outs.append(f"{i3}  return std::string(b);\n")
             elif action == "label_text":
                 wtype = widget_type_by_id.get(display_wid) or "label"
                 if wtype == "button":
@@ -1829,7 +1878,8 @@ def _build_compiler_sections(project: dict, device: object | None = None) -> dic
     wpicker_defaults = _collect_white_picker_defaults(project)
     cpicker_globals_yaml = _compile_color_picker_globals(cpicker_defaults)
     wpicker_globals_yaml = _compile_white_picker_globals(wpicker_defaults)
-    if locks_yaml.strip() or cpicker_globals_yaml.strip() or wpicker_globals_yaml.strip():
+    spinbox2_globals_yaml = _compile_spinbox2_globals(project)
+    if locks_yaml.strip() or cpicker_globals_yaml.strip() or wpicker_globals_yaml.strip() or spinbox2_globals_yaml.strip():
         combined = (_strip_section_key(locks_yaml, "globals") or "").rstrip()
         if cpicker_globals_yaml.strip():
             cpicker_part = _strip_section_key(cpicker_globals_yaml, "globals").rstrip()
@@ -1837,6 +1887,9 @@ def _build_compiler_sections(project: dict, device: object | None = None) -> dic
         if wpicker_globals_yaml.strip():
             wpicker_part = _strip_section_key(wpicker_globals_yaml, "globals").rstrip()
             combined = (combined + "\n" + wpicker_part).rstrip() if combined else wpicker_part
+        if spinbox2_globals_yaml.strip():
+            sb2_part = _strip_section_key(spinbox2_globals_yaml, "globals").rstrip()
+            combined = (combined + "\n" + sb2_part).rstrip() if combined else sb2_part
         out["globals"] = combined
 
     # Script (project scripts + color picker + white picker scripts)
@@ -2719,7 +2772,7 @@ PALETTE_WIDGET_TYPES = frozenset({
     "tileview",
 })
 # Widget types we compile and edit but do not show in Std LVGL palette (e.g. designer-only widgets).
-EXTRA_WIDGET_TYPES = frozenset({"arc_labeled", "color_picker", "white_picker"})
+EXTRA_WIDGET_TYPES = frozenset({"arc_labeled", "color_picker", "white_picker", "spinbox2"})
 COMPILABLE_WIDGET_TYPES = PALETTE_WIDGET_TYPES | EXTRA_WIDGET_TYPES
 
 
@@ -3617,6 +3670,271 @@ def _compile_white_picker_globals(wpicker_defaults: list[tuple[str, str, int]]) 
     return "globals:\n" + "".join(out).rstrip() + "\n" if out else ""
 
 
+def _spinbox2_rewrite_action_lambdas(yaml_text: str, g_id: str) -> str:
+    if not yaml_text:
+        return yaml_text
+    t = yaml_text
+    t = re.sub(r"!lambda return \(float\)x\s*;", f"!lambda return (float)id({g_id});", t)
+    t = re.sub(r"!lambda return \(int\)x\s*;", f"!lambda return (int)id({g_id});", t)
+    return t
+
+
+def _spinbox2_harden_ha_then(yaml_text: str, wid_safe: str) -> str:
+    if not yaml_text.strip() or "homeassistant.action" not in yaml_text:
+        return yaml_text
+    if "delay: 150ms" in yaml_text:
+        return yaml_text
+    m_eid = re.search(r"^\s*entity_id:\s*([A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*$", yaml_text, re.M)
+    lock_lines = ["  - lambda: id(etd_ui_lock_until) = millis() + 500;"]
+    if m_eid:
+        sid = _slugify_entity_id(m_eid.group(1))
+        lock_lines.append(f"  - lambda: id(etd_lock_{sid}) = millis() + 500;")
+        lock_lines.append(f"  - lambda: id(etd_lock_{sid}_{wid_safe}) = millis() + 500;")
+    lines = yaml_text.splitlines()
+    out_ln: list[str] = []
+    inserted = False
+    for ln in lines:
+        out_ln.append(ln)
+        if not inserted and ln.strip() == "then:":
+            out_ln.extend(lock_lines)
+            out_ln.append("  - delay: 150ms")
+            inserted = True
+    return "\n".join(out_ln)
+
+
+def _compile_spinbox2_globals(project: dict) -> str:
+    out: list[str] = []
+    for page in project.get("pages") or []:
+        if not isinstance(page, dict):
+            continue
+        for w in page.get("widgets") or []:
+            if not isinstance(w, dict):
+                continue
+            if str(w.get("type") or "") != "spinbox2":
+                continue
+            wid = str(w.get("id") or "").strip()
+            if not wid:
+                continue
+            props = w.get("props") or {}
+            try:
+                val = float(props.get("value", 0))
+            except (TypeError, ValueError):
+                val = 0.0
+            g = f"etd_sb2_{_safe_id(wid)}_val"
+            out.append(f"  - id: {g}\n")
+            out.append("    type: float\n")
+            out.append("    restore_value: no\n")
+            out.append(f"    initial_value: {val}\n")
+    return "globals:\n" + "".join(out).rstrip() + "\n" if out else ""
+
+
+def _emit_spinbox2_yaml(
+    w: dict,
+    indent: str,
+    ab_list: list | None,
+    parent_w: int | None,
+    parent_h: int | None,
+    option_maps: dict[str, list[str]] | None,
+) -> str:
+    """Emit container + minus/plus buttons + value label; runtime value stored in etd_sb2_<id>_val global."""
+    option_maps = option_maps or {}
+    ab_list = list(ab_list or [])
+    wid = str(w.get("id") or "w")
+    wid_safe = _safe_id(wid)
+    g_id = f"etd_sb2_{wid_safe}_val"
+    props = dict(w.get("props") or {})
+    style = dict(w.get("style") or {})
+    x_val = int(w.get("x", 0))
+    y_val = int(w.get("y", 0))
+    w_val = int(w.get("w", 200))
+    h_val = int(w.get("h", 48))
+    align = str(props.get("align", "TOP_LEFT") or "TOP_LEFT").strip().upper()
+    if align and align != "TOP_LEFT" and parent_w is not None and parent_h is not None:
+        pw2, ph2 = parent_w // 2, parent_h // 2
+        if align == "CENTER":
+            x_val = x_val + w_val // 2 - pw2
+            y_val = y_val + h_val // 2 - ph2
+        elif align == "TOP_MID":
+            x_val = x_val + w_val // 2 - pw2
+        elif align == "TOP_RIGHT":
+            x_val = x_val + w_val - parent_w
+        elif align == "LEFT_MID":
+            y_val = y_val + h_val // 2 - ph2
+        elif align == "RIGHT_MID":
+            x_val = x_val + w_val - parent_w
+            y_val = y_val + h_val // 2 - ph2
+        elif align == "BOTTOM_LEFT":
+            y_val = y_val + h_val - parent_h
+        elif align == "BOTTOM_MID":
+            x_val = x_val + w_val // 2 - pw2
+            y_val = y_val + h_val - parent_h
+        elif align == "BOTTOM_RIGHT":
+            x_val = x_val + w_val - parent_w
+            y_val = y_val + h_val - parent_h
+    try:
+        value = float(props.get("value", 0))
+    except (TypeError, ValueError):
+        value = 0.0
+    try:
+        mn = float(props.get("min_value", 0))
+    except (TypeError, ValueError):
+        mn = 0.0
+    try:
+        mx = float(props.get("max_value", 100))
+    except (TypeError, ValueError):
+        mx = 100.0
+    try:
+        step = float(props.get("step", 1))
+    except (TypeError, ValueError):
+        step = 1.0
+    if step <= 0:
+        step = 1.0
+    dec = int(props.get("decimal_places", 0) or 0)
+    dec = max(0, min(6, dec))
+    minus_txt = json.dumps(str(props.get("minus_text", "-") or "-"))
+    plus_txt = json.dumps(str(props.get("plus_text", "+") or "+"))
+    btn_w = max(28, min(64, w_val // 4))
+    lbl_w = max(20, w_val - 2 * btn_w)
+    mul = float(10**dec) if dec > 0 else 0.0
+    step_lit = f"{step:.8f}".rstrip("0").rstrip(".")
+    if not step_lit or step_lit == "-":
+        step_lit = "1"
+    fmt_c = "%.0f" if dec == 0 else f"%.{dec}f"
+    init_text = f"{value:.{dec}f}" if dec > 0 else str(int(round(value)))
+    init_text_j = json.dumps(init_text)
+
+    i1 = indent + "    "
+    i2 = indent + "      "
+    i3 = indent + "        "
+    i4 = indent + "          "
+    i5 = indent + "            "
+    i6 = indent + "              "
+
+    parts: list[str] = [
+        f"{indent}- container:\n",
+        f"{i1}id: {wid}\n",
+        f"{i1}x: {x_val}\n",
+        f"{i1}y: {y_val}\n",
+        f"{i1}width: {w_val}\n",
+        f"{i1}height: {h_val}\n",
+    ]
+    bc = style.get("bg_color")
+    if bc is not None:
+        hx = _hex_color_for_yaml(bc)
+        if hx is not None:
+            parts.append(f"{i1}bg_color: 0x{int(hx):06X}\n")
+    bw = int(style.get("border_width", 1) or 0)
+    if bw > 0:
+        parts.append(f"{i1}border_width: {bw}\n")
+        brc = style.get("border_color")
+        if brc is not None:
+            hx2 = _hex_color_for_yaml(brc)
+            if hx2 is not None:
+                parts.append(f"{i1}border_color: 0x{int(hx2):06X}\n")
+    rad = int(style.get("radius", 6) or 0)
+    if rad > 0:
+        parts.append(f"{i1}radius: {rad}\n")
+    parts.append(f"{i1}pad_all: 0\n")
+    parts.append(f"{i1}widgets:\n")
+
+    tc = style.get("text_color") or 0xE2E8F0
+    tcx = _hex_color_for_yaml(tc)
+    lbl_color_line = ""
+    if tcx is not None:
+        lbl_color_line = f"{i3}text_color: 0x{int(tcx):06X}\n"
+
+    lbl_id = f"{wid}_v"
+    btn_minus = f"{wid}_m"
+    btn_plus = f"{wid}_p"
+
+    ab_on_change = None
+    for ab in ab_list:
+        if isinstance(ab, dict) and str(ab.get("event") or "") == "on_change":
+            ab_on_change = ab
+            break
+
+    def _lambda_lines(sign: int) -> list[str]:
+        op = "-" if sign < 0 else "+"
+        lines = [
+            f"float st = {step_lit}f;",
+            f"float v = id({g_id}) {op} st;",
+            f"if (v < {mn}f) v = {mn}f;",
+            f"if (v > {mx}f) v = {mx}f;",
+        ]
+        if dec > 0:
+            lines.append(f"const float __mul = {mul:.1f}f;")
+            lines.append("v = (__mul != 0.0f) ? (roundf(v * __mul) / __mul) : v;")
+        else:
+            lines.append("v = roundf(v);")
+        lines.append(f"id({g_id}) = v;")
+        return lines
+
+    def _on_click_yaml(sign: int) -> str:
+        lam_lines = _lambda_lines(sign)
+        block = [f"{i4}on_click:", f"{i5}then:", f"{i6}- lambda: |-"]
+        for ll in lam_lines:
+            block.append(f"{i6}    {ll}")
+        block.append(f"{i6}- lvgl.label.update:")
+        block.append(f"{i6}    id: {lbl_id}")
+        block.append(f"{i6}    text: !lambda |-")
+        block.append(f"{i6}      char b[48];")
+        block.append(f"{i6}      snprintf(b, sizeof(b), \"{fmt_c}\", (double) id({g_id}));")
+        block.append(f"{i6}      return std::string(b);")
+        if ab_on_change:
+            if ab_on_change.get("yaml_override"):
+                raw_ha = str(ab_on_change.get("yaml_override") or "").strip()
+            elif ab_on_change.get("call"):
+                raw_ha = _action_binding_call_to_yaml(
+                    ab_on_change["call"], widget_id=wid, wtype="spinbox2", option_maps=option_maps
+                )
+            else:
+                raw_ha = ""
+            if raw_ha:
+                raw_ha = _spinbox2_rewrite_action_lambdas(raw_ha, g_id)
+                raw_ha = _spinbox2_harden_ha_then(raw_ha, wid_safe)
+                ha_lines = [ln for ln in raw_ha.strip().splitlines() if ln.strip()]
+                if ha_lines and ha_lines[0].strip() == "then:":
+                    ha_lines = ha_lines[1:]
+                if ha_lines:
+                    lead0 = min(len(ln) - len(ln.lstrip(" ")) for ln in ha_lines)
+                    for ln in ha_lines:
+                        d = len(ln) - len(ln.lstrip(" "))
+                        rest = ln.lstrip(" ")
+                        block.append(i6 + (" " * max(0, d - lead0)) + rest)
+        return "\n".join(block) + "\n"
+
+    parts.append(f"{i2}- button:\n")
+    parts.append(f"{i3}id: {btn_minus}\n")
+    parts.append(f"{i3}x: 0\n")
+    parts.append(f"{i3}y: 0\n")
+    parts.append(f"{i3}width: {btn_w}\n")
+    parts.append(f"{i3}height: {h_val}\n")
+    parts.append(f"{i3}text: {minus_txt}\n")
+    parts.append(_on_click_yaml(-1))
+
+    parts.append(f"{i2}- label:\n")
+    parts.append(f"{i3}id: {lbl_id}\n")
+    parts.append(f"{i3}x: {btn_w}\n")
+    parts.append(f"{i3}y: 0\n")
+    parts.append(f"{i3}width: {lbl_w}\n")
+    parts.append(f"{i3}height: {h_val}\n")
+    parts.append(f"{i3}text: {init_text_j}\n")
+    if lbl_color_line:
+        parts.append(lbl_color_line)
+    parts.append(f"{i3}text_align: CENTER\n")
+
+    parts.append(f"{i2}- button:\n")
+    parts.append(f"{i3}id: {btn_plus}\n")
+    parts.append(f"{i3}x: {btn_w + lbl_w}\n")
+    parts.append(f"{i3}y: 0\n")
+    parts.append(f"{i3}width: {btn_w}\n")
+    parts.append(f"{i3}height: {h_val}\n")
+    parts.append(f"{i3}text: {plus_txt}\n")
+    parts.append(_on_click_yaml(1))
+
+    return "".join(parts)
+
+
 def _compile_white_picker_scripts(wpicker_defaults: list[tuple[str, str, int]], project: dict) -> str:
     if not wpicker_defaults:
         return ""
@@ -4390,6 +4708,8 @@ def _compile_lvgl_pages_schema_driven(
                 w_emit["style"]["bg_color"] = _mireds_to_rgb_hex(initial_m)
                 w_emit["props"] = {k: v for k, v in props.items() if k != "value"}
                 raw = _emit_widget_from_schema(w_emit, schema, ab_list, parent_w, parent_h, option_maps)
+            elif wtype == "spinbox2":
+                raw = _emit_spinbox2_yaml(w, indent, ab_list, parent_w, parent_h, option_maps)
             elif wtype == "arc_labeled":
                 # Emit container with arc + line widgets (ticks) + label widgets (scale numbers) so they appear on device.
                 x_val = int(w.get("x", 0))
