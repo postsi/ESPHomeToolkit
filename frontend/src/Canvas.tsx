@@ -416,6 +416,7 @@ const stageRef = useRef<any>(null);
         onTransformEnd={(e) => {
           const node = e.target;
           const alt = !!(e.evt as { altKey?: boolean }).altKey; // hold ALT to disable snapping
+          const shiftResizeShellOnly = !!(e.evt as { shiftKey?: boolean }).shiftKey; // grouped container: resize frame, not children
           const scaleX = node.scaleX();
           const scaleY = node.scaleY();
           node.scaleX(1);
@@ -436,7 +437,7 @@ const stageRef = useRef<any>(null);
           }
 
           const children = childrenByParent.get(w.id);
-          if (children && children.length > 0) {
+          if (children && children.length > 0 && !shiftResizeShellOnly) {
             const sx = oldW > 0 ? ww / oldW : 1;
             const sy = oldH > 0 ? hh / oldH : 1;
             const patches: { id: string; patch: Partial<Widget> }[] = [
@@ -629,6 +630,7 @@ const stageRef = useRef<any>(null);
             onTransformEnd={(e) => {
               const node = e.target;
               const alt = !!(e.evt as { altKey?: boolean }).altKey;
+              const shiftResizeShellOnly = !!(e.evt as { shiftKey?: boolean }).shiftKey;
               const scaleX = node.scaleX();
               const scaleY = node.scaleY();
               node.scaleX(1);
@@ -646,7 +648,7 @@ const stageRef = useRef<any>(null);
                 yy = snap(yy, gridSize);
               }
               const children = childrenByParent.get(w.id);
-              if (children && children.length > 0) {
+              if (children && children.length > 0 && !shiftResizeShellOnly) {
                 const sx = oldW > 0 ? ww / oldW : 1;
                 const sy = oldH > 0 ? hh / oldH : 1;
                 const patches: { id: string; patch: Partial<Widget> }[] = [

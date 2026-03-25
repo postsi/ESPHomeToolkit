@@ -1,3 +1,5 @@
+import { fitContainerToDirectChildrenBounds } from "../entityWidgetLayout";
+
 export type ControlTemplate = {
   id: string;
   title: string;
@@ -1957,7 +1959,6 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
       const fanOpts = fanModes.length ? fanModes.join("\\n") : "(none)";
 
       const cardW = 170;
-      const cardH = 270 + (hvacModes.length ? 40 : 0) + (presetModes.length ? 40 : 0) + (fanModes.length ? 40 : 0);
       const pad = 10;
       const arcSize = 120;
       const arcRelX = (cardW - arcSize) / 2;
@@ -1978,7 +1979,7 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
           x,
           y,
           w: cardW,
-          h: cardH,
+          h: 1,
           props: {},
           style: { bg_color: bgDark, radius: 10 },
         },
@@ -2166,6 +2167,8 @@ export const CONTROL_TEMPLATES: ControlTemplate[] = ([
             : {},
         });
       }
+
+      fitContainerToDirectChildrenBounds(widgets, rootId);
 
       const bindings = entity_id
         ? [

@@ -4735,7 +4735,9 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 </div>
               </>
             )}
-            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>Drag onto canvas. Hold <code>ALT</code> to disable snapping.</div>
+            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+              Drag onto canvas. <code>ALT</code> disables snapping. Resize a group: hold <code>Shift</code> to change only the container (children stay same size/position).
+            </div>
           </div>
         </aside>
 
