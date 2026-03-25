@@ -95,6 +95,8 @@ export default function Canvas({
     const layoutPos = useMemo(() => computeLayoutPositions(widgets), [widgets]);
 const stageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
+  /** Inner content group under a container-with-children (inverse scale for Shift shell-only resize). Updated imperatively to avoid React re-renders every transform frame. */
+  const containerShellInnerRefs = useRef<Map<string, any>>(new Map());
 
   // Remember positions at drag start for multi-drag delta application
   const dragStartRef = useRef<Record<string, { x: number; y: number }>>({});
@@ -150,18 +152,14 @@ const stageRef = useRef<any>(null);
   const selectedSet = new Set(selectedIds);
   const [dragAtLimit, setDragAtLimit] = useState(false);
   const [resizeAtLimit, setResizeAtLimit] = useState(false);
-  /** Shift+shell-only resize: inverse scale on inner group so Konva's Group scale (needed by Transformer) doesn't stretch children. */
-  const [shellCounterScale, setShellCounterScale] = useState<{
-    id: string;
-    sx: number;
-    sy: number;
-  } | null>(null);
 
+  const selectedIdsKey = [...selectedIds].sort().join("|");
   React.useEffect(() => {
-    setShellCounterScale((prev) =>
-      prev && !selectedIds.includes(prev.id) ? null : prev
-    );
-  }, [selectedIds]);
+    for (const g of containerShellInnerRefs.current.values()) {
+      g?.scaleX?.(1);
+      g?.scaleY?.(1);
+    }
+  }, [selectedIdsKey]);
 
   const widgetById = useMemo(() => {
     const m = new Map<string, Widget>();
@@ -649,27 +647,20 @@ const stageRef = useRef<any>(null);
             }}
             onTransform={(e) => {
               if (simulationMode) return;
+              const inner = containerShellInnerRefs.current.get(w.id);
+              if (!inner) return;
               const sk = !!(e.evt as { shiftKey?: boolean })?.shiftKey;
               if (!sk) {
-                setShellCounterScale((prev) => (prev?.id === w.id ? null : prev));
+                inner.scaleX(1);
+                inner.scaleY(1);
                 return;
               }
               const node = e.target;
               const psx = node.scaleX();
               const psy = node.scaleY();
               if (Math.abs(psx) < 1e-10 || Math.abs(psy) < 1e-10) return;
-              const ix = 1 / psx;
-              const iy = 1 / psy;
-              setShellCounterScale((prev) => {
-                if (
-                  prev?.id === w.id &&
-                  Math.abs(prev.sx - ix) < 1e-7 &&
-                  Math.abs(prev.sy - iy) < 1e-7
-                ) {
-                  return prev;
-                }
-                return { id: w.id, sx: ix, sy: iy };
-              });
+              inner.scaleX(1 / psx);
+              inner.scaleY(1 / psy);
             }}
             onTransformEnd={(e) => {
               const node = e.target;
@@ -715,17 +706,27 @@ const stageRef = useRef<any>(null);
                 const modelY = yy - parentAbs.ay;
                 onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
               }
-              setShellCounterScale((prev) => (prev?.id === w.id ? null : prev));
+              const innerDone = containerShellInnerRefs.current.get(w.id);
+              innerDone?.scaleX(1);
+              innerDone?.scaleY(1);
               setResizeAtLimit(false);
+            }}
+            onTransformStart={() => {
+              const inner0 = containerShellInnerRefs.current.get(w.id);
+              inner0?.scaleX(1);
+              inner0?.scaleY(1);
             }}
           >
             <Group
               x={0}
               y={0}
-              listening={false}
-              scaleX={shellCounterScale?.id === w.id ? shellCounterScale.sx : 1}
-              scaleY={shellCounterScale?.id === w.id ? shellCounterScale.sy : 1}
+              ref={(node) => {
+                if (node) containerShellInnerRefs.current.set(w.id, node);
+                else containerShellInnerRefs.current.delete(w.id);
+              }}
             >
+              {/* Catch pointer events in "holes" (non-listening decoration rects) so hits don't fall through to the stage and start box-select; children still draw on top. */}
+              <Rect x={0} y={0} width={w.w} height={w.h} fill="rgba(0,0,0,0.01)" listening={true} />
               {baseLocal}
               {kids.map((k) => renderWidget(k, selectedSet.has(k.id), { localPosition: true }))}
             </Group>
@@ -1751,6 +1752,7 @@ const stageRef = useRef<any>(null);
         <Transformer
           ref={trRef}
           rotateEnabled={false}
+          shiftBehavior="none"
           anchorSize={10}
           anchorFill="#06b6d4"
           anchorStroke="#fff"
