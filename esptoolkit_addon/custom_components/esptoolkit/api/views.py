@@ -4620,6 +4620,32 @@ def _preview_widget_yaml(project: dict, widget_id: str, page_index: int = 0) -> 
     return "\n".join(out_lines), event_snippets
 
 
+def _project_display_dimensions(project: dict) -> tuple[int, int]:
+    """Display size for LVGL align conversion and overlays.
+
+    Prefer ``project.device.screen`` (same as the designer canvas); fall back to
+    ``WxH`` parsed from ``hardware_recipe_id``. Using only the recipe string caused
+    mis-aligned roots and clipped content when the saved screen size differed
+    (e.g. custom ``device.screen`` vs recipe default).
+    """
+    if not isinstance(project, dict):
+        return 480, 320
+    dev = project.get("device") or {}
+    scr = dev.get("screen") or {}
+    try:
+        sw = int(scr.get("width") or 0)
+        sh = int(scr.get("height") or 0)
+        if sw > 0 and sh > 0:
+            return sw, sh
+    except (TypeError, ValueError):
+        pass
+    recipe_id = str((project.get("hardware") or {}).get("recipe_id", "") or dev.get("hardware_recipe_id", "") or "")
+    m = re.search(r"(\d{3,4})x(\d{3,4})", recipe_id, re.I) if recipe_id else None
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return 480, 320
+
+
 def _compile_lvgl_pages_schema_driven(
     project: dict,
     cpicker_defaults: list[tuple[str, str, int]] | None = None,
@@ -5049,10 +5075,7 @@ def _compile_lvgl_pages_schema_driven(
         ]
         kids = children_map(all_widgets)
         roots = [w for w in all_widgets if not w.get("parent_id")]
-        # Display dims for align conversion: extract from recipe_id (e.g. guition_s3_4848s040_480x480)
-        recipe_id = str((project.get("hardware") or {}).get("recipe_id", "") or (project.get("device") or {}).get("hardware_recipe_id", "") or "")
-        m = re.search(r"(\d{3,4})x(\d{3,4})", recipe_id, re.I) if recipe_id else None
-        disp_w, disp_h = (int(m.group(1)), int(m.group(2))) if m else (480, 320)
+        disp_w, disp_h = _project_display_dimensions(project)
         if not roots:
             out.append("      widgets: []\n")
         else:
@@ -5065,9 +5088,7 @@ def _compile_lvgl_pages_schema_driven(
     tl_widgets = top_layer.get("widgets") or []
     has_tl = isinstance(tl_widgets, list) and tl_widgets
     if has_tl or cpicker_defaults or wpicker_defaults:
-        recipe_id = str((project.get("hardware") or {}).get("recipe_id", "") or (project.get("device") or {}).get("hardware_recipe_id", "") or "")
-        m = re.search(r"(\d{3,4})x(\d{3,4})", recipe_id, re.I) if recipe_id else None
-        disp_w, disp_h = (int(m.group(1)), int(m.group(2))) if m else (480, 320)
+        disp_w, disp_h = _project_display_dimensions(project)
         out.append("  top_layer:\n")
         out.append("    id: top_layer\n")
         out.append("    widgets:\n")

@@ -144,7 +144,7 @@ export default function Canvas({
       .filter(Boolean);
     trRef.current.nodes(nodes);
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedIds]);
+  }, [selectedIds, frameOnlyResize]);
 
   // When box-selecting, listen for mouseup globally so we catch release outside the stage
   const finishSelectionBox = useCallback(() => {
@@ -238,9 +238,12 @@ export default function Canvas({
         setFrameOnlyResize(false);
         return;
       }
+      // Plain G only: Ctrl/Cmd+G is "Group" in App.tsx — do not steal or double-fire.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key !== "g" && e.key !== "G") return;
       if (!selectedSingleGroupContainer) return;
       e.preventDefault();
+      e.stopPropagation();
       setFrameOnlyResize((v) => !v);
     };
     window.addEventListener("keydown", onKey, true);
@@ -283,7 +286,8 @@ export default function Canvas({
           })()
         : bg;
     const border = toFillColor(s.border_color ?? p.border_color, isSel ? "#059669" : "#374151");
-    const borderWidth = Number(s.border_width ?? p.border_width ?? 2);
+    // Match device/compiler: no implicit border (schema default 0). Selection stroke is separate.
+    const borderWidth = Number(s.border_width ?? p.border_width ?? 0);
     const opacityRaw = s.opa ?? p.opacity ?? 100;
     const opacity = typeof opacityRaw === "number" ? opacityRaw / 100 : 1;
     const radiusRaw = Math.min(12, Math.max(0, Number(s.radius ?? s.corner_radius ?? p.radius ?? p.corner_radius ?? 8)));
@@ -499,13 +503,14 @@ export default function Canvas({
           const shiftResizeShellOnly = shouldResizeShellOnly(e); // grouped container: resize frame, not children
           const scaleX = node.scaleX();
           const scaleY = node.scaleY();
+          // Bake scale from model w/h, not node.width(): Group client rect can include overflow (e.g. arc_labeled) and overshoots.
+          const baseW = Number(w.w) > 0 ? Number(w.w) : Math.max(1, node.width());
+          const baseH = Number(w.h) > 0 ? Number(w.h) : Math.max(1, node.height());
           node.scaleX(1);
           node.scaleY(1);
 
-          const oldW = node.width();
-          const oldH = node.height();
-          let ww = Math.max(20, oldW * scaleX);
-          let hh = Math.max(20, oldH * scaleY);
+          let ww = Math.max(20, baseW * scaleX);
+          let hh = Math.max(20, baseH * scaleY);
           let xx = node.x();
           let yy = node.y();
 
@@ -518,8 +523,8 @@ export default function Canvas({
 
           const children = childrenByParent.get(w.id);
           if (children && children.length > 0 && !shiftResizeShellOnly) {
-            const sx = oldW > 0 ? ww / oldW : 1;
-            const sy = oldH > 0 ? hh / oldH : 1;
+            const sx = baseW > 0 ? ww / baseW : 1;
+            const sy = baseH > 0 ? hh / baseH : 1;
             const patches: { id: string; patch: Partial<Widget> }[] = [
               { id: w.id, patch: { w: ww, h: hh } },
               ...children.map((c) => ({
@@ -740,12 +745,12 @@ export default function Canvas({
               const shiftResizeShellOnly = shouldResizeShellOnly(e);
               const scaleX = node.scaleX();
               const scaleY = node.scaleY();
+              const baseW = Number(w.w) > 0 ? Number(w.w) : Math.max(1, node.width());
+              const baseH = Number(w.h) > 0 ? Number(w.h) : Math.max(1, node.height());
               node.scaleX(1);
               node.scaleY(1);
-              const oldW = node.width();
-              const oldH = node.height();
-              let ww = Math.max(20, oldW * scaleX);
-              let hh = Math.max(20, oldH * scaleY);
+              let ww = Math.max(20, baseW * scaleX);
+              let hh = Math.max(20, baseH * scaleY);
               let xx = node.x();
               let yy = node.y();
               if (!alt) {
@@ -756,8 +761,8 @@ export default function Canvas({
               }
               const children = childrenByParent.get(w.id);
               if (children && children.length > 0 && !shiftResizeShellOnly) {
-                const sx = oldW > 0 ? ww / oldW : 1;
-                const sy = oldH > 0 ? hh / oldH : 1;
+                const sx = baseW > 0 ? ww / baseW : 1;
+                const sy = baseH > 0 ? hh / baseH : 1;
                 const patches: { id: string; patch: Partial<Widget> }[] = [
                   { id: w.id, patch: { w: ww, h: hh } },
                   ...children.map((c) => ({
@@ -1871,7 +1876,7 @@ export default function Canvas({
       >
         {frameOnlyResize && (
           <span>
-            Frame-only resize: parent shell only (children stay same size). Press <strong>G</strong> to toggle, <strong>Esc</strong> to exit.
+            Frame-only resize: parent shell only (plain <strong>G</strong> toggles — not Cmd/Ctrl+G, which groups). <strong>Esc</strong> exits.
             {(dragAtLimit || resizeAtLimit) ? " " : ""}
           </span>
         )}
