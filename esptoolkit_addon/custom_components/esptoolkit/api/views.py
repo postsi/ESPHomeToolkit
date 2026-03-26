@@ -6979,16 +6979,6 @@ class MacSimEnqueueView(HomeAssistantView):
         if isinstance(body.get("hardware_recipe_id"), str) and body.get("hardware_recipe_id").strip():
             recipe_override = body.get("hardware_recipe_id").strip()
 
-        screen = body.get("screen") if isinstance(body.get("screen"), dict) else {}
-        try:
-            w = int(screen.get("width") or (device.project or {}).get("device", {}).get("screen", {}).get("width") or 480)
-        except (TypeError, ValueError):
-            w = 480
-        try:
-            h = int(screen.get("height") or (device.project or {}).get("device", {}).get("screen", {}).get("height") or 320)
-        except (TypeError, ValueError):
-            h = 320
-
         dev_for_compile = device
         if project_override is not None or recipe_override is not None:
             dev_for_compile = copy.deepcopy(device)
@@ -6996,6 +6986,37 @@ class MacSimEnqueueView(HomeAssistantView):
                 dev_for_compile.project = project_override
             if recipe_override is not None:
                 dev_for_compile.hardware_recipe_id = recipe_override
+
+        # SDL framebuffer must match _project_display_dimensions (LVGL emit); do not use 480×320
+        # when height is missing — that clips e.g. 480×480 recipe layouts.
+        proj = dev_for_compile.project if isinstance(dev_for_compile.project, dict) else {}
+        proj = copy.deepcopy(proj)
+        dev_for_dim = dict(proj.get("device") or {})
+        if getattr(dev_for_compile, "hardware_recipe_id", None):
+            dev_for_dim.setdefault("hardware_recipe_id", dev_for_compile.hardware_recipe_id)
+        proj["device"] = dev_for_dim
+        disp_w, disp_h = _project_display_dimensions(proj)
+
+        screen = body.get("screen") if isinstance(body.get("screen"), dict) else {}
+        try:
+            sw = int(screen.get("width") or 0)
+        except (TypeError, ValueError):
+            sw = 0
+        try:
+            sh = int(screen.get("height") or 0)
+        except (TypeError, ValueError):
+            sh = 0
+        pscr = dev_for_dim.get("screen") or {}
+        try:
+            pw = int(pscr.get("width") or 0)
+        except (TypeError, ValueError):
+            pw = 0
+        try:
+            ph = int(pscr.get("height") or 0)
+        except (TypeError, ValueError):
+            ph = 0
+        w = sw or pw or disp_w
+        h = sh or ph or disp_h
 
         try:
             yaml_text, compile_warnings = await hass.async_add_executor_job(

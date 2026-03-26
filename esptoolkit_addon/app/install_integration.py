@@ -75,7 +75,15 @@ def _dir_is_newer_or_missing() -> bool:
         )
         return True
     # Same version: check if any key file differs (e.g. hotfix without version bump)
-    key_files = ("__init__.py", "const.py", "manifest.json", "services.yaml", "panel.py", "storage.py")
+    key_files = (
+        "__init__.py",
+        "const.py",
+        "manifest.json",
+        "services.yaml",
+        "panel.py",
+        "storage.py",
+        "api/views.py",
+    )
     for name in key_files:
         src = SOURCE_DIR / name
         dst = TARGET_DIR / name
