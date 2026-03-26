@@ -1,6 +1,9 @@
+import { arcLabeledVisualOverflowPad } from "./arcLabeledBounds";
+
 /**
  * Resize a container to the axis-aligned bounding box of its direct children,
  * and shift those children so the tight box starts at (0,0). Mutates `widgets`.
+ * arc_labeled widgets use extra margin so scale labels/ticks outside w×h are not clipped by the card.
  */
 export function fitContainerToDirectChildrenBounds(widgets: any[], rootId: string): void {
   const root = widgets.find((w) => w && w.id === rootId && (w.type === "container" || w.type === "obj"));
@@ -16,10 +19,21 @@ export function fitContainerToDirectChildrenBounds(widgets: any[], rootId: strin
     const y = Number(c.y ?? 0);
     const rw = Number(c.w ?? 0);
     const rh = Number(c.h ?? 0);
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + rw);
-    maxY = Math.max(maxY, y + rh);
+    let left = x;
+    let top = y;
+    let right = x + rw;
+    let bottom = y + rh;
+    if (c.type === "arc_labeled") {
+      const pad = arcLabeledVisualOverflowPad(c);
+      left -= pad.left;
+      top -= pad.top;
+      right += pad.right;
+      bottom += pad.bottom;
+    }
+    minX = Math.min(minX, left);
+    minY = Math.min(minY, top);
+    maxX = Math.max(maxX, right);
+    maxY = Math.max(maxY, bottom);
   }
   if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return;
   const bw = Math.max(1, maxX - minX);

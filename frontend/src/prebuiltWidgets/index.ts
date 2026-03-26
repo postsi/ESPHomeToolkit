@@ -1,3 +1,5 @@
+import { fitContainerToDirectChildrenBounds } from "../entityWidgetLayout";
+
 /**
  * Prebuilt widgets: reusable building blocks for the canvas (and for composing entity widgets).
  * Dropped directly onto the canvas (no wizard). Each build() returns { widgets }.
@@ -83,6 +85,7 @@ function wrapInGroup(originX: number, originY: number, widgets: any[]): any[] {
       y: Number(w.y ?? 0) - minY,
     });
   }
+  fitContainerToDirectChildrenBounds(result, rootId);
   return result;
 }
 

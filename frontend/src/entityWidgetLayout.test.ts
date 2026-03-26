@@ -18,6 +18,33 @@ describe("fitContainerToDirectChildrenBounds", () => {
     expect(widgets.find((w) => w.id === "a")).toMatchObject({ x: 0, y: 0 });
     expect(widgets.find((w) => w.id === "b")).toMatchObject({ x: 0, y: 32 });
   });
+
+  it("expands container for arc_labeled visual overflow (labels/ticks outside w×h)", () => {
+    const widgets: any[] = [
+      { id: "r", type: "container", x: 0, y: 0, w: 200, h: 200 },
+      {
+        id: "arc",
+        type: "arc_labeled",
+        parent_id: "r",
+        x: 0,
+        y: 0,
+        w: 120,
+        h: 120,
+        props: {
+          min_value: 0,
+          max_value: 100,
+          start_angle: 135,
+          end_angle: 45,
+          mode: "NORMAL",
+        },
+        style: { tick_length: 0, tick_width: 3, label_font_size: 0 },
+      },
+    ];
+    fitContainerToDirectChildrenBounds(widgets, "r");
+    const r = widgets.find((w) => w.id === "r");
+    expect(r!.w).toBeGreaterThan(120);
+    expect(r!.h).toBeGreaterThan(120);
+  });
 });
 
 describe("normalizeWidgetsForEntityWidgetExport", () => {

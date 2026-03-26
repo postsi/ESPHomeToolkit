@@ -97,6 +97,8 @@ export default function Canvas({
   const trRef = useRef<any>(null);
   /** Konva transform events often omit shiftKey; track Shift for shell-only (inverse-scale) resize. */
   const shiftKeyHeldRef = useRef(false);
+  /** When true, the next resize of a grouped container changes only the outer frame (same as Shift+resize). Toggled with G; cleared with Esc or when selection changes. */
+  const [frameOnlyResize, setFrameOnlyResize] = useState(false);
   /** Inner content group under a container-with-children (inverse scale for Shift shell-only resize). Updated imperatively to avoid React re-renders every transform frame. */
   const containerShellInnerRefs = useRef<Map<string, any>>(new Map());
 
@@ -210,6 +212,46 @@ export default function Canvas({
     }
     return m;
   }, [widgets]);
+
+  const selectedSingleGroupContainer = useMemo(() => {
+    if (selectedIds.length !== 1) return null;
+    const w = widgetById.get(selectedIds[0]);
+    if (!w) return null;
+    const kids = childrenByParent.get(w.id);
+    if (!kids || kids.length === 0) return null;
+    const t = String(w.type || "").toLowerCase();
+    if (t === "container" || t === "obj" || t.includes("container")) return w;
+    return null;
+  }, [selectedIds, widgetById, childrenByParent]);
+
+  React.useEffect(() => {
+    if (!selectedSingleGroupContainer) setFrameOnlyResize(false);
+  }, [selectedSingleGroupContainer]);
+
+  React.useEffect(() => {
+    if (simulationMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.closest("input, textarea, select") || el.isContentEditable)) return;
+      if (e.key === "Escape" && frameOnlyResize) {
+        e.preventDefault();
+        setFrameOnlyResize(false);
+        return;
+      }
+      if (e.key !== "g" && e.key !== "G") return;
+      if (!selectedSingleGroupContainer) return;
+      e.preventDefault();
+      setFrameOnlyResize((v) => !v);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [simulationMode, frameOnlyResize, selectedSingleGroupContainer]);
+
+  /** Shell-only resize: Shift (held), or explicit frame-only mode (G), avoids relying on flaky evt.shiftKey during drag. */
+  const shouldResizeShellOnly = useCallback(
+    (e: { evt?: unknown }) => frameOnlyResize || shellResizeShift(e),
+    [frameOnlyResize, shellResizeShift]
+  );
 
   const parentInfo = (w: Widget) => parentInfoUtil(w, widgetById, width, height);
   const absPos = (w: Widget) => absPosUtil(w, widgetById, width, height);
@@ -454,7 +496,7 @@ export default function Canvas({
         onTransformEnd={(e) => {
           const node = e.target;
           const alt = !!(e.evt as { altKey?: boolean }).altKey; // hold ALT to disable snapping
-          const shiftResizeShellOnly = shellResizeShift(e); // grouped container: resize frame, not children
+          const shiftResizeShellOnly = shouldResizeShellOnly(e); // grouped container: resize frame, not children
           const scaleX = node.scaleX();
           const scaleY = node.scaleY();
           node.scaleX(1);
@@ -677,7 +719,7 @@ export default function Canvas({
               if (simulationMode) return;
               const inner = containerShellInnerRefs.current.get(w.id);
               if (!inner) return;
-              const sk = shellResizeShift(e);
+              const sk = shouldResizeShellOnly(e);
               if (!sk) {
                 inner.scaleX(1);
                 inner.scaleY(1);
@@ -695,7 +737,7 @@ export default function Canvas({
             onTransformEnd={(e) => {
               const node = e.target;
               const alt = !!(e.evt as { altKey?: boolean }).altKey;
-              const shiftResizeShellOnly = shellResizeShift(e);
+              const shiftResizeShellOnly = shouldResizeShellOnly(e);
               const scaleX = node.scaleX();
               const scaleY = node.scaleY();
               node.scaleX(1);
@@ -1808,7 +1850,7 @@ export default function Canvas({
         )}
       </Layer>
     </Stage>
-    {(dragAtLimit || resizeAtLimit) && (
+    {(dragAtLimit || resizeAtLimit || frameOnlyResize) && (
       <div
         style={{
           position: "absolute",
@@ -1823,9 +1865,18 @@ export default function Canvas({
           fontWeight: 600,
           pointerEvents: "none",
           boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          maxWidth: "min(92vw, 520px)",
+          textAlign: "center",
         }}
       >
-        {dragAtLimit ? "At screen edge" : "At max size"}
+        {frameOnlyResize && (
+          <span>
+            Frame-only resize: parent shell only (children stay same size). Press <strong>G</strong> to toggle, <strong>Esc</strong> to exit.
+            {(dragAtLimit || resizeAtLimit) ? " " : ""}
+          </span>
+        )}
+        {dragAtLimit && <span>At screen edge</span>}
+        {resizeAtLimit && !dragAtLimit && <span>At max size</span>}
       </div>
     )}
     </div>
