@@ -3369,7 +3369,7 @@ def _esphome_safe_page_id(pid: str) -> str:
 
 
 def _hex_color_for_yaml(v) -> str | int | None:
-    """Convert #rrggbb or #rgb to 0xRRGGBB integer for LVGL YAML."""
+    """Convert designer color values/tokens to 0xRRGGBB integer for LVGL YAML."""
     if not isinstance(v, str):
         return v
     s = v.strip()
@@ -3378,6 +3378,21 @@ def _hex_color_for_yaml(v) -> str | int | None:
     if s.startswith("#") and re.match(r"^#[0-9A-Fa-f]{3}$", s):
         r, g, b = int(s[1], 16) * 17, int(s[2], 16) * 17, int(s[3], 16) * 17
         return r << 16 | g << 8 | b
+    if s.lower().startswith("0x") and re.match(r"^0x[0-9A-Fa-f]{6}$", s):
+        return int(s[2:], 16)
+    token_colors = {
+        "color.bg": 0x1E293B,
+        "color.text": 0xE2E8F0,
+        "color.border": 0x475569,
+        "color.primary": 0x3B82F6,
+        "color.secondary": 0x64748B,
+        "color.success": 0x10B981,
+        "color.warning": 0xF59E0B,
+        "color.danger": 0xEF4444,
+    }
+    key = s.lower()
+    if key in token_colors:
+        return token_colors[key]
     return v
 
 

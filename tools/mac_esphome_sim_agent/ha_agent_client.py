@@ -127,6 +127,7 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
     except Exception:
         pass
 
+    retry_delay_s = 2
     while True:
         try:
             LOG.info("Connecting to %s", uri)
@@ -138,7 +139,11 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
             ) as ws:
                 await ws.send(json.dumps({"type": "auth", "token": token}))
                 raw = await ws.recv()
-                msg = json.loads(raw)
+                try:
+                    msg = json.loads(raw)
+                except Exception:
+                    LOG.warning("Received non-JSON handshake payload; reconnecting.")
+                    raise ConnectionError("invalid handshake payload")
                 if msg.get("type") == "error":
                     LOG.error("Auth rejected: %s", msg.get("message"))
                     raise SystemExit(1)
@@ -209,10 +214,15 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
                     ping_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await ping_task
-        except (websockets.ConnectionClosed, OSError) as e:
+                # Successful session reset the retry delay.
+                retry_delay_s = 2
+        except SystemExit:
+            raise
+        except (websockets.ConnectionClosed, OSError, TimeoutError, Exception) as e:
             _ssl_mismatch_tip(uri, e)
-            LOG.warning("Disconnected (%s); reconnecting in 5s…", e)
-            await asyncio.sleep(5)
+            LOG.warning("Disconnected (%s); reconnecting in %ss…", e, retry_delay_s)
+            await asyncio.sleep(retry_delay_s)
+            retry_delay_s = min(retry_delay_s * 2, 30)
 
 
 def main() -> None:
