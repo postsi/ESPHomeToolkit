@@ -3883,7 +3883,9 @@ def _emit_spinbox2_yaml(
     mul = float(10**dec) if dec > 0 else 0.0
     step_lit = f"{step:.8f}".rstrip("0").rstrip(".")
     if not step_lit or step_lit == "-":
-        step_lit = "1"
+        step_lit = "1.0"
+    elif "." not in step_lit:
+        step_lit = f"{step_lit}.0"
     fmt_c = "%.0f" if dec == 0 else f"%.{dec}f"
     init_text = f"{value:.{dec}f}" if dec > 0 else str(int(round(value)))
     init_text_j = json.dumps(init_text)
