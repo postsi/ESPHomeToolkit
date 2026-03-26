@@ -2933,14 +2933,27 @@ _ESPHOME_ACTION_KEYS = frozenset({"on_click", "on_press", "on_release", "on_valu
 
 
 def _color_value_for_esphome(key: str, value) -> str | int | None:
-    """Convert CSS hex color (#rrggbb etc.) to integer for ESPHome LVGL (expects integer or 0x hex)."""
+    """Convert designer color values/tokens to integer for ESPHome LVGL."""
     if key != "color" and not (isinstance(key, str) and key.endswith("_color")):
         return value
     if not isinstance(value, str):
         return value
     s = value.strip()
-    if not s.startswith("#"):
-        return value  # CSS name or theme ref, leave as-is
+    token_colors = {
+        "color.bg": 0x1E293B,
+        "color.text": 0xE2E8F0,
+        "color.border": 0x475569,
+        "color.primary": 0x3B82F6,
+        "color.secondary": 0x64748B,
+        "color.success": 0x10B981,
+        "color.warning": 0xF59E0B,
+        "color.danger": 0xEF4444,
+    }
+    tok = s.lower()
+    if tok in token_colors:
+        return token_colors[tok]
+    if re.match(r"^0x[0-9A-Fa-f]{6}$", s):
+        return int(s[2:], 16)
     if re.match(r"^#[0-9A-Fa-f]{6}$", s):
         return int(s[1:7], 16)
     if re.match(r"^#[0-9A-Fa-f]{8}$", s):
