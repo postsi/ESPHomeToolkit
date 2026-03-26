@@ -3928,15 +3928,15 @@ def _emit_spinbox2_yaml(
 
     def _on_click_yaml(sign: int) -> str:
         lam_lines = _lambda_lines(sign)
-        block = [f"{i4}on_click:", f"{i5}then:", f"{i6}- lambda: |-"]
+        block = [f"{i3}on_click:", f"{i4}then:", f"{i5}- lambda: |-"]
         for ll in lam_lines:
-            block.append(f"{i6}    {ll}")
-        block.append(f"{i6}- lvgl.label.update:")
-        block.append(f"{i6}    id: {lbl_id}")
-        block.append(f"{i6}    text: !lambda |-")
-        block.append(f"{i6}      char b[48];")
-        block.append(f"{i6}      snprintf(b, sizeof(b), \"{fmt_c}\", (double) id({g_id}));")
-        block.append(f"{i6}      return std::string(b);")
+            block.append(f"{i5}    {ll}")
+        block.append(f"{i5}- lvgl.label.update:")
+        block.append(f"{i5}    id: {lbl_id}")
+        block.append(f"{i5}    text: !lambda |-")
+        block.append(f"{i5}      char b[48];")
+        block.append(f"{i5}      snprintf(b, sizeof(b), \"{fmt_c}\", (double) id({g_id}));")
+        block.append(f"{i5}      return std::string(b);")
         if ab_on_change:
             if ab_on_change.get("yaml_override"):
                 raw_ha = str(ab_on_change.get("yaml_override") or "").strip()
@@ -3957,7 +3957,7 @@ def _emit_spinbox2_yaml(
                     for ln in ha_lines:
                         d = len(ln) - len(ln.lstrip(" "))
                         rest = ln.lstrip(" ")
-                        block.append(i6 + (" " * max(0, d - lead0)) + rest)
+                        block.append(i5 + (" " * max(0, d - lead0)) + rest)
         return "\n".join(block) + "\n"
 
     parts.append(f"{i2}- button:\n")
