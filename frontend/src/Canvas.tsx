@@ -93,10 +93,38 @@ export default function Canvas({
     [resolvePreviewFontProp]
   );
     const layoutPos = useMemo(() => computeLayoutPositions(widgets), [widgets]);
-const stageRef = useRef<any>(null);
+  const stageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
+  /** Konva transform events often omit shiftKey; track Shift for shell-only (inverse-scale) resize. */
+  const shiftKeyHeldRef = useRef(false);
   /** Inner content group under a container-with-children (inverse scale for Shift shell-only resize). Updated imperatively to avoid React re-renders every transform frame. */
   const containerShellInnerRefs = useRef<Map<string, any>>(new Map());
+
+  React.useEffect(() => {
+    const onDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") shiftKeyHeldRef.current = true;
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") shiftKeyHeldRef.current = false;
+    };
+    const onBlur = () => {
+      shiftKeyHeldRef.current = false;
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
+
+  /** Shift + resize on grouped containers: Konva transform events often omit shiftKey on evt. */
+  const shellResizeShift = useCallback((e: { evt?: unknown }) => {
+    const sk = (e.evt as { shiftKey?: boolean } | undefined)?.shiftKey;
+    return !!sk || shiftKeyHeldRef.current;
+  }, []);
 
   // Remember positions at drag start for multi-drag delta application
   const dragStartRef = useRef<Record<string, { x: number; y: number }>>({});
@@ -426,7 +454,7 @@ const stageRef = useRef<any>(null);
         onTransformEnd={(e) => {
           const node = e.target;
           const alt = !!(e.evt as { altKey?: boolean }).altKey; // hold ALT to disable snapping
-          const shiftResizeShellOnly = !!(e.evt as { shiftKey?: boolean }).shiftKey; // grouped container: resize frame, not children
+          const shiftResizeShellOnly = shellResizeShift(e); // grouped container: resize frame, not children
           const scaleX = node.scaleX();
           const scaleY = node.scaleY();
           node.scaleX(1);
@@ -649,10 +677,11 @@ const stageRef = useRef<any>(null);
               if (simulationMode) return;
               const inner = containerShellInnerRefs.current.get(w.id);
               if (!inner) return;
-              const sk = !!(e.evt as { shiftKey?: boolean })?.shiftKey;
+              const sk = shellResizeShift(e);
               if (!sk) {
                 inner.scaleX(1);
                 inner.scaleY(1);
+                e.target.getLayer()?.batchDraw();
                 return;
               }
               const node = e.target;
@@ -661,11 +690,12 @@ const stageRef = useRef<any>(null);
               if (Math.abs(psx) < 1e-10 || Math.abs(psy) < 1e-10) return;
               inner.scaleX(1 / psx);
               inner.scaleY(1 / psy);
+              node.getLayer()?.batchDraw();
             }}
             onTransformEnd={(e) => {
               const node = e.target;
               const alt = !!(e.evt as { altKey?: boolean }).altKey;
-              const shiftResizeShellOnly = !!(e.evt as { shiftKey?: boolean }).shiftKey;
+              const shiftResizeShellOnly = shellResizeShift(e);
               const scaleX = node.scaleX();
               const scaleY = node.scaleY();
               node.scaleX(1);

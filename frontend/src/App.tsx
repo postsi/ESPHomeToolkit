@@ -13,7 +13,7 @@ import {
   savedEntityWidgetStorageId,
   SAVED_ENTITY_WIDGET_PREFIX,
 } from "./entityWidgetTitles";
-import { normalizeWidgetsForEntityWidgetExport } from "./entityWidgetLayout";
+import { fitContainerToDirectChildrenBounds, normalizeWidgetsForEntityWidgetExport } from "./entityWidgetLayout";
 import { DOMAIN_PRESETS } from "./bindings/domains";
 import {
   getDisplayActionsForType,
@@ -1445,6 +1445,17 @@ if (baseId.startsWith("glance_card")) {
       for (const w of ws) {
         w.x = Number(w.x ?? 0) + insertX;
         w.y = Number(w.y ?? 0) + insertY;
+      }
+    }
+
+    // Entity palette templates use a fixed card size; shrink the root container/obj to the
+    // direct children AABB so the frame matches the content (with a minimal border via padding in the template).
+    if (isEntityBundleTemplate && ws.length > 0) {
+      const idSet = new Set(ws.map((w: any) => w?.id).filter(Boolean));
+      const roots = ws.filter((w: any) => w && (!w.parent_id || !idSet.has(w.parent_id)));
+      if (roots.length === 1 && (roots[0].type === "container" || roots[0].type === "obj")) {
+        const hasKids = ws.some((w: any) => w && w.parent_id === roots[0].id);
+        if (hasKids) fitContainerToDirectChildrenBounds(ws, roots[0].id);
       }
     }
 
