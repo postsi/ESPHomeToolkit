@@ -3898,7 +3898,7 @@ def _emit_spinbox2_yaml(
     tcx = _hex_color_for_yaml(tc)
     lbl_color_line = ""
     if tcx is not None:
-        lbl_color_line = f"{i3}text_color: 0x{int(tcx):06X}\n"
+        lbl_color_line = f"{i4}text_color: 0x{int(tcx):06X}\n"
 
     lbl_id = f"{wid}_v"
     btn_minus = f"{wid}_m"
@@ -3928,15 +3928,15 @@ def _emit_spinbox2_yaml(
 
     def _on_click_yaml(sign: int) -> str:
         lam_lines = _lambda_lines(sign)
-        block = [f"{i3}on_click:", f"{i4}then:", f"{i5}- lambda: |-"]
+        block = [f"{i4}on_click:", f"{i5}then:", f"{i6}- lambda: |-"]
         for ll in lam_lines:
-            block.append(f"{i5}    {ll}")
-        block.append(f"{i5}- lvgl.label.update:")
-        block.append(f"{i5}    id: {lbl_id}")
-        block.append(f"{i5}    text: !lambda |-")
-        block.append(f"{i5}      char b[48];")
-        block.append(f"{i5}      snprintf(b, sizeof(b), \"{fmt_c}\", (double) id({g_id}));")
-        block.append(f"{i5}      return std::string(b);")
+            block.append(f"{i6}    {ll}")
+        block.append(f"{i6}- lvgl.label.update:")
+        block.append(f"{i6}    id: {lbl_id}")
+        block.append(f"{i6}    text: !lambda |-")
+        block.append(f"{i6}      char b[48];")
+        block.append(f"{i6}      snprintf(b, sizeof(b), \"{fmt_c}\", (double) id({g_id}));")
+        block.append(f"{i6}      return std::string(b);")
         if ab_on_change:
             if ab_on_change.get("yaml_override"):
                 raw_ha = str(ab_on_change.get("yaml_override") or "").strip()
@@ -3957,36 +3957,36 @@ def _emit_spinbox2_yaml(
                     for ln in ha_lines:
                         d = len(ln) - len(ln.lstrip(" "))
                         rest = ln.lstrip(" ")
-                        block.append(i5 + (" " * max(0, d - lead0)) + rest)
+                        block.append(i6 + (" " * max(0, d - lead0)) + rest)
         return "\n".join(block) + "\n"
 
     parts.append(f"{i2}- button:\n")
-    parts.append(f"{i3}id: {btn_minus}\n")
-    parts.append(f"{i3}x: 0\n")
-    parts.append(f"{i3}y: 0\n")
-    parts.append(f"{i3}width: {btn_w}\n")
-    parts.append(f"{i3}height: {h_val}\n")
-    parts.append(f"{i3}text: {minus_txt}\n")
+    parts.append(f"{i4}id: {btn_minus}\n")
+    parts.append(f"{i4}x: 0\n")
+    parts.append(f"{i4}y: 0\n")
+    parts.append(f"{i4}width: {btn_w}\n")
+    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}text: {minus_txt}\n")
     parts.append(_on_click_yaml(-1))
 
     parts.append(f"{i2}- label:\n")
-    parts.append(f"{i3}id: {lbl_id}\n")
-    parts.append(f"{i3}x: {btn_w}\n")
-    parts.append(f"{i3}y: 0\n")
-    parts.append(f"{i3}width: {lbl_w}\n")
-    parts.append(f"{i3}height: {h_val}\n")
-    parts.append(f"{i3}text: {init_text_j}\n")
+    parts.append(f"{i4}id: {lbl_id}\n")
+    parts.append(f"{i4}x: {btn_w}\n")
+    parts.append(f"{i4}y: 0\n")
+    parts.append(f"{i4}width: {lbl_w}\n")
+    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}text: {init_text_j}\n")
     if lbl_color_line:
         parts.append(lbl_color_line)
-    parts.append(f"{i3}text_align: CENTER\n")
+    parts.append(f"{i4}text_align: CENTER\n")
 
     parts.append(f"{i2}- button:\n")
-    parts.append(f"{i3}id: {btn_plus}\n")
-    parts.append(f"{i3}x: {btn_w + lbl_w}\n")
-    parts.append(f"{i3}y: 0\n")
-    parts.append(f"{i3}width: {btn_w}\n")
-    parts.append(f"{i3}height: {h_val}\n")
-    parts.append(f"{i3}text: {plus_txt}\n")
+    parts.append(f"{i4}id: {btn_plus}\n")
+    parts.append(f"{i4}x: {btn_w + lbl_w}\n")
+    parts.append(f"{i4}y: 0\n")
+    parts.append(f"{i4}width: {btn_w}\n")
+    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}text: {plus_txt}\n")
     parts.append(_on_click_yaml(1))
 
     return "".join(parts)
