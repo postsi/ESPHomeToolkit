@@ -3809,7 +3809,7 @@ def _compile_spinbox2_globals(project: dict) -> str:
             out.append(f"  - id: {g}\n")
             out.append("    type: float\n")
             out.append("    restore_value: no\n")
-            out.append(f"    initial_value: {val}\n")
+            out.append(f"    initial_value: '{val}'\n")
     return "globals:\n" + "".join(out).rstrip() + "\n" if out else ""
 
 
