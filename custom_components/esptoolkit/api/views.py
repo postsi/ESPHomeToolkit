@@ -4863,9 +4863,11 @@ def _compile_lvgl_pages_schema_driven(
                 container_h = max(h_val, max_y - min_y + 2 * pad)
                 ox = pad - min_x
                 oy = pad - min_y
+                arc_off_x = int(round(ox))
+                arc_off_y = int(round(oy))
                 w_arc = dict(w)
-                w_arc["x"] = int(round(ox))
-                w_arc["y"] = int(round(oy))
+                w_arc["x"] = arc_off_x
+                w_arc["y"] = arc_off_y
                 raw_arc = _emit_widget_from_schema(w_arc, schema, ab_list, parent_w, parent_h, option_maps)
                 ci = indent + "    "
                 ce = indent + "      "
@@ -4873,8 +4875,8 @@ def _compile_lvgl_pages_schema_driven(
                 out_parts = [
                     f"{indent}- container:\n",
                     f"{ci}id: {wid}_ct\n",
-                    f"{ci}x: {x_val}\n",
-                    f"{ci}y: {y_val}\n",
+                    f"{ci}x: {x_val - arc_off_x}\n",
+                    f"{ci}y: {y_val - arc_off_y}\n",
                     f"{ci}width: {container_w}\n",
                     f"{ci}height: {container_h}\n",
                     f"{ci}widgets:\n",
@@ -4897,8 +4899,8 @@ def _compile_lvgl_pages_schema_driven(
                     line_id = f"{wid}_tick_{i}"
                     out_parts.append(f"{ce}- line:\n")
                     out_parts.append(f"{cb_arc}id: {line_id}\n")
-                    out_parts.append(f"{cb_arc}x: {int(round(ox))}\n")
-                    out_parts.append(f"{cb_arc}y: {int(round(oy))}\n")
+                    out_parts.append(f"{cb_arc}x: {arc_off_x}\n")
+                    out_parts.append(f"{cb_arc}y: {arc_off_y}\n")
                     out_parts.append(f"{cb_arc}width: {w_val}\n")
                     out_parts.append(f"{cb_arc}height: {h_val}\n")
                     out_parts.append(f"{cb_arc}points:\n")
@@ -4912,8 +4914,8 @@ def _compile_lvgl_pages_schema_driven(
                     lbl_id = f"{wid}_lbl_{value}"
                     out_parts.append(f"{ce}- label:\n")
                     out_parts.append(f"{cb_arc}id: {lbl_id}\n")
-                    out_parts.append(f"{cb_arc}x: {int(round(ox)) + lx_int}\n")
-                    out_parts.append(f"{cb_arc}y: {int(round(oy)) + ly_int}\n")
+                    out_parts.append(f"{cb_arc}x: {arc_off_x + lx_int}\n")
+                    out_parts.append(f"{cb_arc}y: {arc_off_y + ly_int}\n")
                     out_parts.append(f"{cb_arc}width: {box}\n")
                     out_parts.append(f"{cb_arc}height: {lh}\n")
                     out_parts.append(f"{cb_arc}text: {json.dumps(text)}\n")
