@@ -16,8 +16,18 @@ import {
   widgetsInSelectionRect,
   parentInfo,
   absPos,
+  containerTransformKonvaId,
   type WidgetLike,
 } from "./canvasUtils";
+
+describe("containerTransformKonvaId", () => {
+  it("prefixes and preserves safe ids", () => {
+    expect(containerTransformKonvaId("card_1")).toBe("etd_tr_card_1");
+  });
+  it("sanitizes characters that break CSS selectors", () => {
+    expect(containerTransformKonvaId("w.x.y")).toBe("etd_tr_w_x_y");
+  });
+});
 
 describe("canvasUtils", () => {
   describe("snap", () => {

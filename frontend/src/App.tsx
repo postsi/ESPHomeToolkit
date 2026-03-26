@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import packageJson from "../package.json";
 import Canvas from "./Canvas";
+import { resolveDeviceScreen } from "./deviceScreen";
 import { usePreviewFontResolver } from "./usePreviewFontResolver";
 import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listSavedEntityWidgets, getSavedEntityWidget, saveEntityWidget, deleteSavedEntityWidget, previewWidgetYaml} from "./lib/api";
 import { collectWidgetIds, updateSectionsWidgetRef } from "./projectSections";
@@ -1933,21 +1934,22 @@ if (baseId.startsWith("glance_card")) {
     [project, simOverrides, callService]
   );
 
-  // Derive canvas size: device.screen from project, or extract from hardware_recipe_id (e.g. jc1060p470_esp32p4_1024x600)
-  const screenSize = useMemo(() => {
-    const dev = (project as any)?.device;
-    const sw = dev?.screen?.width;
-    const sh = dev?.screen?.height;
-    if (sw && sh) return { width: sw, height: sh, source: "device.screen" as const };
-    const rid = selectedDeviceObj?.hardware_recipe_id ?? dev?.hardware_recipe_id ?? "";
-    const m = /(\d{3,4})x(\d{3,4})/i.exec(String(rid));
-    if (m) return { width: parseInt(m[1], 10), height: parseInt(m[2], 10), source: "recipe_id" as const };
-    return { width: 800, height: 480, source: "default" as const };
-  }, [project, selectedDeviceObj?.hardware_recipe_id]);
+  /** Physical display size only — from saved project device.screen (API fills from recipe) or WxH in recipe id. No invented defaults. */
+  const screenSize = useMemo(
+    () => resolveDeviceScreen(project, selectedDeviceObj?.hardware_recipe_id ?? null),
+    [project, selectedDeviceObj?.hardware_recipe_id],
+  );
 
   const handleMacSim = useCallback(async () => {
     if (!entryId || !selectedDevice || !project) {
       setToast({ type: "error", msg: "Mac sim: select a device and load a project." });
+      return;
+    }
+    if (!screenSize) {
+      setToast({
+        type: "error",
+        msg: "Mac sim: display size is unknown. Reload the device (project includes size from the hardware recipe) or use a recipe id with resolution (e.g. 1024x600).",
+      });
       return;
     }
     setMacSimBusy(true);
@@ -1976,8 +1978,7 @@ if (baseId.startsWith("glance_card")) {
     selectedDevice,
     project,
     selectedDeviceObj?.hardware_recipe_id,
-    screenSize.width,
-    screenSize.height,
+    screenSize,
   ]);
 
   function _findWidget(id: string) {
@@ -4329,7 +4330,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         </div>
       )}
 
-      {simulationOpen && selectedDevice && project && (
+      {simulationOpen && selectedDevice && project && screenSize && (
         <div className="modalOverlay" onClick={() => setSimulationOpen(false)} style={{ zIndex: 10001 }}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "none", width: "auto", maxHeight: "95vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div className="modalHeader">
@@ -4592,7 +4593,9 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         className="designerLayout"
         style={
           selectedDevice && project
-            ? { gridTemplateColumns: `200px ${12 + 36 + screenSize.width + 12}px minmax(260px, 1fr)`, gap: 20 }
+            ? screenSize
+              ? { gridTemplateColumns: `200px ${12 + 36 + screenSize.width + 12}px minmax(260px, 1fr)`, gap: 20 }
+              : { gridTemplateColumns: "200px minmax(360px, 1fr) minmax(260px, 1fr)", gap: 20 }
             : undefined
         }
       >
@@ -4627,6 +4630,10 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       onDragStart={(e) => { console.log('[ETD DragStart] prebuilt:', pw.id); e.dataTransfer.setData("application/x-esphome-prebuilt-widget", pw.id); e.dataTransfer.effectAllowed = "copy"; }}
                       onClick={() => {
                         if (!project) return;
+                        if (!screenSize) {
+                          setToast({ type: "error", msg: "Display size unknown; reload the device or set a hardware recipe with resolution." });
+                          return;
+                        }
                         const p2 = clone(project);
                         const pg = p2.pages?.[safePageIndex];
                         if (!pg?.widgets) return;
@@ -4824,12 +4831,12 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 <button className="secondary" disabled={!selectedWidgetIds.length} onClick={copySelected}>Copy</button>
                 <button className="secondary" disabled={!selectedWidgetIds.length} onClick={deleteSelected}>Del</button>
               </div>
-              {/* Physical screen dimensions - prominent box above canvas */}
+              {/* Physical screen dimensions - from device / recipe only (no generic defaults) */}
               <div style={{
                 marginBottom: 12,
                 padding: "10px 14px",
-                background: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.4)",
+                background: screenSize ? "rgba(16, 185, 129, 0.12)" : "rgba(245, 158, 11, 0.14)",
+                border: screenSize ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(245, 158, 11, 0.45)",
                 borderRadius: 8,
                 fontSize: 14,
                 fontWeight: 600,
@@ -4840,16 +4847,29 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 flexWrap: "wrap",
                 gap: 8,
               }}>
-                <span>
+                <span style={{ flex: "1 1 220px" }}>
                   <span style={{ marginRight: 8 }}>Physical screen:</span>
-                  <span>{screenSize.width} × {screenSize.height} px</span>
-                  <span className="muted" style={{ marginLeft: 8, fontSize: 12, fontWeight: 400 }}>({screenSize.source})</span>
+                  {screenSize ? (
+                    <>
+                      <span>{screenSize.width} × {screenSize.height} px</span>
+                      <span className="muted" style={{ marginLeft: 8, fontSize: 12, fontWeight: 400 }}>({screenSize.source})</span>
+                    </>
+                  ) : (
+                    <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>
+                      Unknown — open this device again from the list (project loads size from the hardware recipe), or ensure the recipe id includes resolution (e.g. 1024x600).
+                    </span>
+                  )}
                 </span>
                 <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button
                     type="button"
                     className="primary"
-                    onClick={() => { setSimOverrides({}); setSimulationOpen(true); }}
+                    disabled={!screenSize}
+                    onClick={() => {
+                      if (!screenSize) return;
+                      setSimOverrides({});
+                      setSimulationOpen(true);
+                    }}
                     title="Open live interactive simulator"
                   >
                     Simulate
@@ -4857,7 +4877,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   <button
                     type="button"
                     className="secondary"
-                    disabled={!entryId || !selectedDevice || !project || macSimBusy}
+                    disabled={!entryId || !selectedDevice || !project || !screenSize || macSimBusy}
                     onClick={() => void handleMacSim()}
                     title="Compile for host/SDL and send to Mac agent (EspToolkit integration options: Mac sim token; run ha_agent_client.py on the Mac)"
                   >
@@ -4865,6 +4885,12 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   </button>
                 </span>
               </div>
+              {!screenSize ? (
+                <div className="muted" style={{ fontSize: 13, marginBottom: 16, padding: 14, background: "rgba(245, 158, 11, 0.08)", borderRadius: 8, border: "1px solid rgba(245, 158, 11, 0.25)", maxWidth: 560, lineHeight: 1.45 }}>
+                  Canvas is hidden until display width and height are known. That normally comes from <strong>device.screen</strong> on the project (filled when you load a device that has a hardware recipe with resolution metadata) or from a <strong>W×H</strong> pattern in the hardware recipe id.
+                </div>
+              ) : (
+                <>
               {fontPreviewBanner && (
                 <div className="muted" style={{ fontSize: 11, marginBottom: 8, maxWidth: screenSize.width + 48, lineHeight: 1.4 }}>
                   {fontPreviewBanner}
@@ -4919,12 +4945,16 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       const pw = PREBUILT_WIDGETS.find((p) => p.id === prebuiltId);
                       console.log('[ETD onDropCreate] Prebuilt:', prebuiltId, 'found:', !!pw);
                       if (pw && pg) {
+                        if (prebuiltId === "prebuilt_nav_bar" && !screenSize) {
+                          setToast({ type: "error", msg: "Display size unknown; reload the device or set a hardware recipe with resolution." });
+                          return;
+                        }
                         const NAV_BAR_W = 200;
                         const NAV_BAR_H = 44;
-                        const placeX = prebuiltId === "prebuilt_nav_bar"
+                        const placeX = prebuiltId === "prebuilt_nav_bar" && screenSize
                           ? (screenSize.width - NAV_BAR_W) / 2
                           : x;
-                        const placeY = prebuiltId === "prebuilt_nav_bar"
+                        const placeY = prebuiltId === "prebuilt_nav_bar" && screenSize
                           ? screenSize.height - NAV_BAR_H
                           : y;
                         const built = pw.build({ x: placeX, y: placeY });
@@ -5042,6 +5072,8 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   </div>
                 </div>
               </div>
+                </>
+              )}
             </>
           )}
         </div>

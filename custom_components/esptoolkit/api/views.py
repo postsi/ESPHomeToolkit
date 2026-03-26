@@ -4643,6 +4643,7 @@ def _project_display_dimensions(project: dict) -> tuple[int, int]:
     m = re.search(r"(\d{3,4})x(\d{3,4})", recipe_id, re.I) if recipe_id else None
     if m:
         return int(m.group(1)), int(m.group(2))
+    # Corrupt/empty project only (normal devices always have recipe + API-filled device.screen).
     return 480, 320
 
 

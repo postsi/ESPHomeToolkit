@@ -27,6 +27,17 @@ export function layoutInt(n: number): number {
   return Math.round(n);
 }
 
+/**
+ * Konva id for the Transformer proxy on container/obj widgets that have children.
+ * The real node's client rect includes visual overflow (e.g. arc_labeled labels), so the
+ * Transformer would use the wrong box and resize/drag math overshoots; a w×h Rect with
+ * this id is the transform target instead.
+ */
+export function containerTransformKonvaId(widgetId: string): string {
+  const safe = String(widgetId || "w").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `etd_tr_${safe}`;
+}
+
 /** Normalize color to CSS fill (templates use numeric 0xrrggbb). */
 export function toFillColor(val: unknown, fallback: string): string {
   if (typeof val === "number" && val >= 0 && val <= 0xffffff) {

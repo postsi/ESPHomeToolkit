@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import os
 import ssl
 import sys
@@ -35,6 +36,19 @@ import websockets
 from esphome_transform import transform_esphome_yaml_for_host_sdl
 
 LOG = logging.getLogger("ha_mac_sim_agent")
+
+
+def _screen_dims_from_esphome_yaml(yaml_text: str) -> tuple[int | None, int | None]:
+    """Best-effort parse of the first display `dimensions:` width/height from MCU YAML."""
+    idx = yaml_text.find("dimensions:")
+    if idx < 0:
+        return None, None
+    chunk = yaml_text[idx : idx + 500]
+    wm = re.search(r"width:\s*(\d+)", chunk)
+    hm = re.search(r"height:\s*(\d+)", chunk)
+    if wm and hm:
+        return int(wm.group(1)), int(hm.group(1))
+    return None, None
 
 
 def _ws_url_from_ha_url(ha_url: str, path: str = "/api/esptoolkit/mac_sim/agent/ws") -> str:
@@ -179,12 +193,42 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
                             transformed_yaml: str
                             if isinstance(source_yaml, str) and source_yaml.strip():
                                 try:
+                                    sw = data.get("screen_width")
+                                    sh = data.get("screen_height")
+                                    try:
+                                        swi = int(sw) if sw is not None else 0
+                                    except (TypeError, ValueError):
+                                        swi = 0
+                                    try:
+                                        shi = int(sh) if sh is not None else 0
+                                    except (TypeError, ValueError):
+                                        shi = 0
+                                    if swi < 120 or shi < 120:
+                                        yw, yh = _screen_dims_from_esphome_yaml(source_yaml)
+                                        if yw and yh and yw >= 120 and yh >= 120:
+                                            swi, shi = yw, yh
+                                    if swi < 120 or shi < 120:
+                                        LOG.error(
+                                            "Mac sim: screen_width/screen_height missing or invalid (%r×%r) and "
+                                            "could not parse display dimensions from YAML; refusing run.",
+                                            swi,
+                                            shi,
+                                        )
+                                        await ws.send(
+                                            json.dumps(
+                                                {
+                                                    "type": "error",
+                                                    "message": "missing screen dimensions (device size required)",
+                                                }
+                                            )
+                                        )
+                                        continue
                                     host_ip = _get_primary_ip()
                                     host_hostname = socket.gethostname()
                                     transformed_yaml, tw = transform_esphome_yaml_for_host_sdl(
                                         source_yaml,
-                                        int(data.get("screen_width") or 480),
-                                        int(data.get("screen_height") or 320),
+                                        swi,
+                                        shi,
                                         api_encryption_key=None,
                                         esphome_name=None,
                                         host_ip=host_ip,

@@ -15,6 +15,7 @@ import {
   parentInfo as parentInfoUtil,
   absPos as absPosUtil,
   layoutInt,
+  containerTransformKonvaId,
 } from "./canvasUtils";
 import { effectiveLongMode, konvaLongModeTextProps } from "./lvglCanvasParity";
 
@@ -138,13 +139,27 @@ export default function Canvas({
   const BOX_SELECT_THRESHOLD = 5;
 
   React.useEffect(() => {
-    if (!trRef.current) return;
-    const nodes = selectedIds
-      .map((id) => stageRef.current?.findOne(`#${id}`))
-      .filter(Boolean);
-    trRef.current.nodes(nodes);
+    if (!trRef.current || !stageRef.current) return;
+    // Multi-select: resizing applies one shared transform box and drags/jumps all nodes — disable.
+    if (selectedIds.length !== 1) {
+      trRef.current.nodes([]);
+      trRef.current.getLayer()?.batchDraw();
+      return;
+    }
+    const sid = selectedIds[0];
+    const wSel = widgetById.get(sid);
+    const kSel = wSel ? childrenByParent.get(wSel.id) : undefined;
+    const tSel = wSel ? String(wSel.type || "").toLowerCase() : "";
+    const isFramedContainer =
+      !!wSel &&
+      !!kSel &&
+      kSel.length > 0 &&
+      (tSel === "container" || tSel === "obj" || tSel.includes("container"));
+    const konvaId = isFramedContainer ? containerTransformKonvaId(sid) : sid;
+    const node = stageRef.current.findOne(`#${konvaId}`);
+    trRef.current.nodes(node ? [node] : []);
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedIds, frameOnlyResize]);
+  }, [selectedIds, frameOnlyResize, widgetById, childrenByParent]);
 
   // When box-selecting, listen for mouseup globally so we catch release outside the stage
   const finishSelectionBox = useCallback(() => {
@@ -655,14 +670,12 @@ export default function Canvas({
             />
           </>
         );
+        const trProxyId = containerTransformKonvaId(w.id);
         return (
           <Group
             key={w.id}
-            id={w.id}
             x={ax}
             y={ay}
-            width={w.w}
-            height={w.h}
             clipFunc={
               clip
                 ? (ctx, shape) => {
@@ -679,29 +692,35 @@ export default function Canvas({
               return { x: r.x, y: r.y };
             } : undefined}
             onClick={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => {
-              if (e.target !== e.currentTarget && e.target?.attrs?.id !== w.id) return;
+              if (e.target !== e.currentTarget) {
+                const tid = (e.target as { attrs?: { id?: string } })?.attrs?.id;
+                if (tid && tid !== w.id && tid !== trProxyId) return;
+              }
               e.cancelBubble = true;
               onSelect(w.id, !!e.evt.shiftKey);
             }}
             onTap={simulationMode ? (e) => { e.cancelBubble = true; handleSimClick(); } : (e) => {
-              if (e.target !== e.currentTarget && e.target?.attrs?.id !== w.id) return;
+              if (e.target !== e.currentTarget) {
+                const tid = (e.target as { attrs?: { id?: string } })?.attrs?.id;
+                if (tid && tid !== w.id && tid !== trProxyId) return;
+              }
               e.cancelBubble = true;
               onSelect(w.id, !!(e.evt as any).shiftKey);
             }}
             onDragStart={!simulationMode ? () => {
               const snap0: Record<string, { x: number; y: number }> = {};
               for (const id of selectedIds.length ? selectedIds : [w.id]) {
-                const ww = widgetById.get(id);
-                if (ww) snap0[id] = { x: ww.x, y: ww.y };
+                const ww0 = widgetById.get(id);
+                if (ww0) snap0[id] = { x: ww0.x, y: ww0.y };
               }
               dragStartRef.current = snap0;
             } : undefined}
             onDragEnd={(e) => {
               if (simulationMode) return;
-              const node = e.target;
+              const dragNode = e.currentTarget;
               const alt = !!e.evt.altKey;
-              const nx = alt ? node.x() : snap(node.x(), gridSize);
-              const ny = alt ? node.y() : snap(node.y(), gridSize);
+              const nx = alt ? dragNode.x() : snap(dragNode.x(), gridSize);
+              const ny = alt ? dragNode.y() : snap(dragNode.y(), gridSize);
               const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
               const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
               const modelX = nx - parentAbs.ax;
@@ -712,88 +731,101 @@ export default function Canvas({
               const ids = selectedIds.length ? selectedIds : [w.id];
               const patches = ids
                 .map((id) => {
-                  const s = dragStartRef.current[id] || widgetById.get(id);
-                  if (!s) return null;
-                  return { id, patch: { x: (s as any).x + dx, y: (s as any).y + dy } };
+                  const st = dragStartRef.current[id] || widgetById.get(id);
+                  if (!st) return null;
+                  return { id, patch: { x: (st as any).x + dx, y: (st as any).y + dy } };
                 })
                 .filter(Boolean) as { id: string; patch: Partial<Widget> }[];
               onChangeMany(patches, true);
               setDragAtLimit(false);
             }}
-            onTransform={(e) => {
-              if (simulationMode) return;
-              const inner = containerShellInnerRefs.current.get(w.id);
-              if (!inner) return;
-              const sk = shouldResizeShellOnly(e);
-              if (!sk) {
-                inner.scaleX(1);
-                inner.scaleY(1);
-                e.target.getLayer()?.batchDraw();
-                return;
-              }
-              const node = e.target;
-              const psx = node.scaleX();
-              const psy = node.scaleY();
-              if (Math.abs(psx) < 1e-10 || Math.abs(psy) < 1e-10) return;
-              inner.scaleX(1 / psx);
-              inner.scaleY(1 / psy);
-              node.getLayer()?.batchDraw();
-            }}
-            onTransformEnd={(e) => {
-              const node = e.target;
-              const alt = !!(e.evt as { altKey?: boolean }).altKey;
-              const shiftResizeShellOnly = shouldResizeShellOnly(e);
-              const scaleX = node.scaleX();
-              const scaleY = node.scaleY();
-              const baseW = Number(w.w) > 0 ? Number(w.w) : Math.max(1, node.width());
-              const baseH = Number(w.h) > 0 ? Number(w.h) : Math.max(1, node.height());
-              node.scaleX(1);
-              node.scaleY(1);
-              let ww = Math.max(20, baseW * scaleX);
-              let hh = Math.max(20, baseH * scaleY);
-              let xx = node.x();
-              let yy = node.y();
-              if (!alt) {
-                ww = snap(ww, gridSize);
-                hh = snap(hh, gridSize);
-                xx = snap(xx, gridSize);
-                yy = snap(yy, gridSize);
-              }
-              const children = childrenByParent.get(w.id);
-              if (children && children.length > 0 && !shiftResizeShellOnly) {
-                const sx = baseW > 0 ? ww / baseW : 1;
-                const sy = baseH > 0 ? hh / baseH : 1;
-                const patches: { id: string; patch: Partial<Widget> }[] = [
-                  { id: w.id, patch: { w: ww, h: hh } },
-                  ...children.map((c) => ({
-                    id: c.id,
-                    patch: {
-                      x: c.x * sx,
-                      y: c.y * sy,
-                      w: Math.max(4, c.w * sx),
-                      h: Math.max(4, c.h * sy),
-                    },
-                  })),
-                ];
-                onChangeMany(patches, true);
-              } else {
-                const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
-                const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
-                const modelX = xx - parentAbs.ax;
-                const modelY = yy - parentAbs.ay;
-                onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
-              }
-              const innerDone = containerShellInnerRefs.current.get(w.id);
-              innerDone?.scaleX(1);
-              innerDone?.scaleY(1);
-              setResizeAtLimit(false);
-            }}
-            onTransformStart={() => {
-              const inner0 = containerShellInnerRefs.current.get(w.id);
-              inner0?.scaleX(1);
-              inner0?.scaleY(1);
-            }}
           >
+            {/* Exact w×h proxy for Transformer only — Group client rect includes child overflow (arc labels, etc.). */}
+            <Rect
+              id={trProxyId}
+              x={0}
+              y={0}
+              width={w.w}
+              height={w.h}
+              fill="rgba(0,0,0,0.01)"
+              listening={false}
+              onTransform={(e) => {
+                if (simulationMode) return;
+                const inner = containerShellInnerRefs.current.get(w.id);
+                if (!inner) return;
+                const sk = shouldResizeShellOnly(e);
+                if (!sk) {
+                  inner.scaleX(1);
+                  inner.scaleY(1);
+                  e.target.getLayer()?.batchDraw();
+                  return;
+                }
+                const tnode = e.target;
+                const psx = tnode.scaleX();
+                const psy = tnode.scaleY();
+                if (Math.abs(psx) < 1e-10 || Math.abs(psy) < 1e-10) return;
+                inner.scaleX(1 / psx);
+                inner.scaleY(1 / psy);
+                tnode.getLayer()?.batchDraw();
+              }}
+              onTransformEnd={(e) => {
+                const proxy = e.target;
+                const grp = proxy.getParent();
+                const alt = !!(e.evt as { altKey?: boolean }).altKey;
+                const shiftResizeShellOnly = shouldResizeShellOnly(e);
+                const scaleX = proxy.scaleX();
+                const scaleY = proxy.scaleY();
+                const baseW = Number(w.w) > 0 ? Number(w.w) : Math.max(1, proxy.width());
+                const baseH = Number(w.h) > 0 ? Number(w.h) : Math.max(1, proxy.height());
+                proxy.scaleX(1);
+                proxy.scaleY(1);
+                proxy.x(0);
+                proxy.y(0);
+                let ww = Math.max(20, baseW * scaleX);
+                let hh = Math.max(20, baseH * scaleY);
+                let xx = grp ? grp.x() : 0;
+                let yy = grp ? grp.y() : 0;
+                if (!alt) {
+                  ww = snap(ww, gridSize);
+                  hh = snap(hh, gridSize);
+                  xx = snap(xx, gridSize);
+                  yy = snap(yy, gridSize);
+                }
+                const children = childrenByParent.get(w.id);
+                if (children && children.length > 0 && !shiftResizeShellOnly) {
+                  const sx = baseW > 0 ? ww / baseW : 1;
+                  const sy = baseH > 0 ? hh / baseH : 1;
+                  const patches: { id: string; patch: Partial<Widget> }[] = [
+                    { id: w.id, patch: { w: ww, h: hh } },
+                    ...children.map((c) => ({
+                      id: c.id,
+                      patch: {
+                        x: c.x * sx,
+                        y: c.y * sy,
+                        w: Math.max(4, c.w * sx),
+                        h: Math.max(4, c.h * sy),
+                      },
+                    })),
+                  ];
+                  onChangeMany(patches, true);
+                } else {
+                  const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
+                  const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
+                  const modelX = xx - parentAbs.ax;
+                  const modelY = yy - parentAbs.ay;
+                  onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
+                }
+                const innerDone = containerShellInnerRefs.current.get(w.id);
+                innerDone?.scaleX(1);
+                innerDone?.scaleY(1);
+                setResizeAtLimit(false);
+              }}
+              onTransformStart={() => {
+                const inner0 = containerShellInnerRefs.current.get(w.id);
+                inner0?.scaleX(1);
+                inner0?.scaleY(1);
+              }}
+            />
             <Group
               x={0}
               y={0}
