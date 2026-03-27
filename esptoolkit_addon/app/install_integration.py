@@ -29,6 +29,8 @@ if not logging.getLogger().handlers:
 
 SOURCE_DIR = Path("/app/custom_components/esptoolkit")
 TARGET_DIR = Path("/config/custom_components/esptoolkit")
+ASSETS_TARGET_DIR = Path("/config/esptoolkit_assets")
+FONTS_SOURCE_DIR = Path("/app/third_party/fonts")
 INTEGRATION_CONFIG_FILE = Path("/config/.esptoolkit_addon_config.json")
 CORE_CONFIG_ENTRIES_PATH = Path("/config/.storage/core.config_entries")
 CONFIGURATION_YAML = Path("/config/configuration.yaml")
@@ -108,6 +110,34 @@ def _copy_tree() -> None:
             log.info("  Copied %s", rel)
             count += 1
     log.info("Copied %d files to %s", count, TARGET_DIR)
+
+
+def _sync_bundled_fonts_to_assets() -> int:
+    """
+    Copy bundled font files from the add-on image to HA asset storage.
+    Returns number of files copied/updated.
+    """
+    if not FONTS_SOURCE_DIR.is_dir():
+        log.info("No bundled fonts directory at %s; skipping font sync", FONTS_SOURCE_DIR)
+        return 0
+    ASSETS_TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for src in FONTS_SOURCE_DIR.rglob("*"):
+        if not src.is_file():
+            continue
+        if src.suffix.lower() not in (".ttf", ".otf"):
+            continue
+        dst = ASSETS_TARGET_DIR / src.name
+        if dst.is_file() and filecmp.cmp(src, dst, shallow=False):
+            continue
+        shutil.copy2(src, dst)
+        copied += 1
+        log.info("Synced bundled font asset: %s", dst.name)
+    if copied:
+        log.info("Bundled fonts sync complete: %d updated", copied)
+    else:
+        log.info("Bundled fonts already up to date")
+    return copied
 
 
 def _get_host_hostname() -> str | None:
@@ -270,6 +300,7 @@ def install_or_update() -> bool:
     Return True if we copied (and may have triggered restart).
     """
     log.info("=== ESPToolkit integration install/update started ===")
+    _sync_bundled_fonts_to_assets()
     written = _write_integration_config()
     if written:
         log.info("Integration config file written; checking if integration files need update...")

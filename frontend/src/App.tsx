@@ -5283,6 +5283,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                     setProjectDirty={setProjectDirty}
                     safePageIndex={safePageIndex}
                     clone={clone}
+                    assets={assets}
                   />
                 )}
               </div>
@@ -6329,8 +6330,9 @@ function MultiSelectProperties(props: {
   setProjectDirty: (d: boolean) => void;
   safePageIndex: number;
   clone: (x: any) => any;
+  assets: {name:string; size:number}[];
 }) {
-  const { widgetIds, widgets, project, setProject, setProjectDirty, safePageIndex, clone } = props;
+  const { widgetIds, widgets, project, setProject, setProjectDirty, safePageIndex, clone, assets } = props;
   const sel = widgets.filter((w: any) => w && widgetIds.includes(w.id));
   const [schemasByType, setSchemasByType] = useState<Record<string, WidgetSchema>>({});
   const [schemasLoading, setSchemasLoading] = useState(false);
@@ -6439,6 +6441,14 @@ function MultiSelectProperties(props: {
     const firstStyle = first.style || {};
     const val = firstStyle[key] ?? first.props?.[key];
     const title = def?.title ?? key;
+    if (isFontKey(key)) {
+      return (
+        <div key={key} className="field">
+          <div className="fieldLabel">{title}</div>
+          {renderFontSelectorControl(String(val ?? ""), (next) => patchAllStyle(key, next), assets)}
+        </div>
+      );
+    }
     if (def?.type === "color" || key === "bg_color" || key === "text_color" || key === "border_color") {
       const css = styleValueToCss(val);
       const hexForPicker = /^#[0-9a-fA-F]{6}$/.test(css) ? css : "#000000";
@@ -6485,6 +6495,14 @@ function MultiSelectProperties(props: {
     const firstProps = first.props || {};
     const val = firstProps[key];
     const title = def?.title ?? key;
+    if (isFontKey(key)) {
+      return (
+        <div key={key} className="field">
+          <div className="fieldLabel">{title}</div>
+          {renderFontSelectorControl(String(val ?? ""), (next) => patchAllProps(key, next), assets)}
+        </div>
+      );
+    }
     if (def?.type === "number") {
       const n = Number(val ?? def?.default ?? 0);
       return (
@@ -6554,6 +6572,75 @@ function MultiSelectProperties(props: {
 
 // ESPHome LVGL built-in fonts (Montserrat). User can pick these without uploading assets.
 const BUILTIN_LVGL_FONTS = ["montserrat_8","montserrat_10","montserrat_12","montserrat_14","montserrat_16","montserrat_18","montserrat_20","montserrat_22","montserrat_24","montserrat_26","montserrat_28","montserrat_30","montserrat_32","montserrat_34","montserrat_36","montserrat_38","montserrat_40","montserrat_42","montserrat_44","montserrat_46","montserrat_48"];
+const APPROVED_ASSET_FONT_FILES = new Set([
+  "Montserrat[wght].ttf",
+  "Montserrat-Italic[wght].ttf",
+  "Roboto[wdth,wght].ttf",
+  "Inter[opsz,wght].ttf",
+  "OpenSans[wdth,wght].ttf",
+  "NotoSans[wdth,wght].ttf",
+]);
+const APPROVED_ASSET_FONT_SIZES = [10,12,14,16,18,20,24,28,32,36,40];
+
+function isFontKey(key: string): boolean {
+  const k = String(key || "").toLowerCase();
+  return k === "font" || k.endsWith("_font") || k.includes("text_font");
+}
+
+function buildApprovedFontOptions(assets: {name:string; size:number}[]) {
+  const fontFiles = (assets || [])
+    .map((a) => a.name)
+    .filter((n) => /\.(ttf|otf)$/i.test(n))
+    .filter((n) => APPROVED_ASSET_FONT_FILES.has(n));
+  const options = [
+    ...BUILTIN_LVGL_FONTS.map((f) => ({ value: f, label: f.replace("montserrat_", "Montserrat ") + "px", group: "Built-in (Montserrat)" })),
+    ...fontFiles.flatMap((fn) =>
+      APPROVED_ASSET_FONT_SIZES.map((size) => ({
+        value: `asset:${fn}:${size}`,
+        label: `${fn} (${size}px)`,
+        group: "Approved uploaded fonts",
+      })),
+    ),
+  ];
+  return options;
+}
+
+function renderFontSelectorControl(rawValue: string, onChange: (value: string | undefined) => void, assets: {name:string; size:number}[]) {
+  const options = buildApprovedFontOptions(assets);
+  const optionValues = new Set(options.map((o) => o.value));
+  const selected = optionValues.has(rawValue) ? rawValue : "";
+  const grouped = options.reduce<Record<string, {value:string; label:string}[]>>((acc, o) => {
+    if (!acc[o.group]) acc[o.group] = [];
+    acc[o.group].push({ value: o.value, label: o.label });
+    return acc;
+  }, {});
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <select
+        value={selected}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange(v || undefined);
+        }}
+        style={{ width: "100%", maxWidth: 260 }}
+      >
+        <option value="">(default)</option>
+        {Object.entries(grouped).map(([group, items]) => (
+          <optgroup key={group} label={group}>
+            {items.map((it) => (
+              <option key={it.value} value={it.value}>{it.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {rawValue && !selected && (
+        <div className="muted" style={{ fontSize: 11 }}>
+          Current value is not in approved fonts. Pick a listed font to replace it.
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ScreensaverInspector(props: { widget: any; onChange: (section: string, key: string, value: any) => void }) {
   const { widget, onChange } = props;
@@ -6591,8 +6678,6 @@ function ScreensaverInspector(props: { widget: any; onChange: (section: string, 
 
 function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (section: any, key: string, value: any) => void; assets: {name:string; size:number}[]; assetError?: string | null }) {
   const { widget, schema, onChange, assets, assetError } = props;
-  const fontFiles = (assets || []).map(a=>a.name).filter(n=>/\.(ttf|otf)$/i.test(n));
-  const fontSizes = [10,12,14,16,18,20,24,28,32,36,40];
 
   const [fieldFilter, setFieldFilter] = useState<string>("");
   const [modifiedOnly, setModifiedOnly] = useState<boolean>(false);
@@ -6763,137 +6848,11 @@ function Inspector(props: { widget: any; schema: WidgetSchema; onChange: (sectio
         </div>
       );
     }
-    // Font id (style.text_font or style.label_text_font): list of available fonts meaningful to the user.
-    if (key === "text_font" || key === "label_text_font") {
-      const raw = String(value ?? "").trim();
-      const isBuiltin = BUILTIN_LVGL_FONTS.includes(raw);
-      const isAsset = raw.startsWith("asset:");
-      let curFile = "";
-      let curSize = 16;
-      if (isAsset) {
-        try {
-          const rest = raw.slice("asset:".length);
-          const parts = rest.split(":");
-          curFile = parts.slice(0, -1).join(":") || "";
-          curSize = parseInt(parts[parts.length - 1] || "16", 10) || 16;
-        } catch {}
-      }
-      const assetOptions = fontFiles.flatMap((fn) => fontSizes.map((size) => ({ id: `asset:${fn}:${size}`, label: `${fn} (${size}px)` })));
+    if (isFontKey(key)) {
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <select
-            value={isBuiltin ? raw : (isAsset ? raw : "")}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) return onChange(section, key, undefined);
-              onChange(section, key, v);
-            }}
-            style={{ width: "100%", maxWidth: 220 }}
-          >
-            <option value="">(default)</option>
-            <optgroup label="Built-in (Montserrat)">
-              {BUILTIN_LVGL_FONTS.map((f) => (
-                <option key={f} value={f}>{f.replace("montserrat_", "Montserrat ")}px</option>
-              ))}
-            </optgroup>
-            {assetOptions.length > 0 && (
-              <optgroup label="Uploaded assets">
-                {assetOptions.map((o) => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          {!isBuiltin && !isAsset && (
-            <input
-              type="text"
-              value={raw}
-              onChange={(e) => onChange(section, key, e.target.value.trim() || undefined)}
-              placeholder="Or type custom font id (e.g. roboto_16)"
-              style={{ width: "100%", fontSize: 12, boxSizing: "border-box" }}
-            />
-          )}
+          {renderFontSelectorControl(String(value ?? "").trim(), (next) => onChange(section, key, next), assets)}
           <div style={{ display: "flex", gap: 8 }}>{resetBtn}{clearBtn}</div>
-        </div>
-      );
-    }
-    // v0.46: font picker helper (props.font).
-    // Value can be: built-in id (montserrat_16), asset descriptor (asset:file.ttf:24), or custom id.
-    if (key === "font") {
-      const raw = String(value ?? "").trim();
-      const isAsset = raw.startsWith("asset:");
-      const isBuiltin = BUILTIN_LVGL_FONTS.includes(raw);
-      let curFile = "";
-      let curSize = 16;
-      if (isAsset) {
-        try {
-          const rest = raw.slice("asset:".length);
-          const parts = rest.split(":");
-          curFile = parts.slice(0, -1).join(":") || "";
-          curSize = parseInt(parts[parts.length - 1] || "16", 10) || 16;
-        } catch {}
-      } else if (raw.startsWith("montserrat_")) {
-        const m = raw.match(/montserrat_(\d+)$/);
-        curSize = m ? parseInt(m[1], 10) || 16 : 16;
-      }
-      return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <select
-              value={isBuiltin ? raw : (isAsset ? `asset:${curFile}` : "")}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (!v) return onChange(section, key, undefined);
-                if (v.startsWith("asset:")) {
-                  const fn = v.slice(6);
-                  if (fn) onChange(section, key, `asset:${fn}:${curSize}`);
-                } else {
-                  onChange(section, key, v);
-                }
-              }}
-              style={{ minWidth: 140 }}
-            >
-              <option value="">(default)</option>
-              <optgroup label="Built-in (Montserrat)">
-                {BUILTIN_LVGL_FONTS.map((f) => (
-                  <option key={f} value={f}>{f.replace("montserrat_", "")}px</option>
-                ))}
-              </optgroup>
-              {fontFiles.length > 0 && (
-                <optgroup label="Uploaded assets">
-                  {fontFiles.map((fn) => (
-                    <option key={fn} value={`asset:${fn}`}>{fn}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            {isAsset && curFile && (
-              <>
-                <input
-                  type="number"
-                  value={curSize}
-                  min={6}
-                  max={96}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value || "16", 10) || 16;
-                    onChange(section, key, `asset:${curFile}:${n}`);
-                  }}
-                  style={{ width: 60 }}
-                />
-                <span className="muted" style={{ fontSize: 12 }}>px</span>
-              </>
-            )}
-            {resetBtn}{clearBtn}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="text"
-              value={!isBuiltin && !isAsset ? raw : ""}
-              onChange={(e) => onChange(section, key, e.target.value.trim() || undefined)}
-              placeholder="Or type custom font id (e.g. roboto_16)"
-              style={{ flex: 1, fontSize: 12 }}
-            />
-          </div>
         </div>
       );
     }

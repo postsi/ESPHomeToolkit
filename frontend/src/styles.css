@@ -2,7 +2,7 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
-.app{padding:16px;max-width:1400px;margin:0 auto}
+.app{padding:16px;max-width:none;margin:0}
 .header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
 h1{margin:0;font-size:24px} h2{margin:0 0 12px 0;font-size:18px}
 .muted{color:var(--muted);font-size:13px}

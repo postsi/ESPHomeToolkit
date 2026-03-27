@@ -67,6 +67,8 @@ fi
 
 echo "=== Syncing integration (including web/dist) into add-on ==="
 rsync -a --delete "$REPO_ROOT/custom_components/esptoolkit/" "$ADDON/custom_components/esptoolkit/" --exclude='.DS_Store' 2>/dev/null || true
+echo "=== Syncing bundled third_party assets into add-on ==="
+rsync -a --delete "$REPO_ROOT/third_party/" "$ADDON/third_party/" --exclude='.DS_Store' 2>/dev/null || true
 
 if [ "$USE_FAST" = true ]; then
   BASE_TAG=$(grep 'ARG BUILD_BASE_VERSION=' "$DOCKERFILE_FULL" | head -1 | sed 's/.*=//' | tr -d ' ')

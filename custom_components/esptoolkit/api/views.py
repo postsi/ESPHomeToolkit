@@ -692,6 +692,26 @@ def _safe_id(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", s)
 
 
+def _font_px_from_id(font_id: object, default_px: int = 14) -> int:
+    """Best-effort font pixel size from ids like montserrat_14 or asset:Font.ttf:18."""
+    s = str(font_id or "").strip()
+    if not s:
+        return int(default_px)
+    m_asset = re.search(r":(\d{1,3})$", s)
+    if m_asset:
+        try:
+            return max(6, min(96, int(m_asset.group(1))))
+        except (TypeError, ValueError):
+            return int(default_px)
+    m_suffix = re.search(r"_(\d{1,3})$", s)
+    if m_suffix:
+        try:
+            return max(6, min(96, int(m_suffix.group(1))))
+        except (TypeError, ValueError):
+            return int(default_px)
+    return int(default_px)
+
+
 
 def _compile_ha_bindings(project: dict) -> str:
     """Generate ESPHome homeassistant sensors for bound entities + attach live-update triggers.
@@ -3878,8 +3898,14 @@ def _emit_spinbox2_yaml(
     dec = max(0, min(6, dec))
     minus_txt = json.dumps(str(props.get("minus_text", "-") or "-"))
     plus_txt = json.dumps(str(props.get("plus_text", "+") or "+"))
+    text_font = str(style.get("text_font") or props.get("font") or "").strip() or None
+    font_px = _font_px_from_id(text_font, 14)
+    # Enforce a minimum row height from chosen font so glyph descenders don't clip.
+    row_h = max(h_val, font_px + 12)
     btn_w = max(28, min(64, w_val // 4))
     lbl_w = max(20, w_val - 2 * btn_w)
+    lbl_h = max(font_px + 6, row_h - 2)
+    lbl_y = max(0, (row_h - lbl_h) // 2)
     mul = float(10**dec) if dec > 0 else 0.0
     step_lit = f"{step:.8f}".rstrip("0").rstrip(".")
     if not step_lit or step_lit == "-":
@@ -3903,7 +3929,7 @@ def _emit_spinbox2_yaml(
         f"{i1}x: {x_val}\n",
         f"{i1}y: {y_val}\n",
         f"{i1}width: {w_val}\n",
-        f"{i1}height: {h_val}\n",
+        f"{i1}height: {row_h}\n",
     ]
     bc = style.get("bg_color")
     if bc is not None:
@@ -3995,17 +4021,21 @@ def _emit_spinbox2_yaml(
     parts.append(f"{i4}x: 0\n")
     parts.append(f"{i4}y: 0\n")
     parts.append(f"{i4}width: {btn_w}\n")
-    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}height: {row_h}\n")
     parts.append(f"{i4}text: {minus_txt}\n")
+    if text_font:
+        parts.append(f"{i4}text_font: {json.dumps(text_font)}\n")
     parts.append(_on_click_yaml(-1))
 
     parts.append(f"{i2}- label:\n")
     parts.append(f"{i4}id: {lbl_id}\n")
     parts.append(f"{i4}x: {btn_w}\n")
-    parts.append(f"{i4}y: 0\n")
+    parts.append(f"{i4}y: {lbl_y}\n")
     parts.append(f"{i4}width: {lbl_w}\n")
-    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}height: {lbl_h}\n")
     parts.append(f"{i4}text: {init_text_j}\n")
+    if text_font:
+        parts.append(f"{i4}text_font: {json.dumps(text_font)}\n")
     if lbl_color_line:
         parts.append(lbl_color_line)
     parts.append(f"{i4}text_align: CENTER\n")
@@ -4015,8 +4045,10 @@ def _emit_spinbox2_yaml(
     parts.append(f"{i4}x: {btn_w + lbl_w}\n")
     parts.append(f"{i4}y: 0\n")
     parts.append(f"{i4}width: {btn_w}\n")
-    parts.append(f"{i4}height: {h_val}\n")
+    parts.append(f"{i4}height: {row_h}\n")
     parts.append(f"{i4}text: {plus_txt}\n")
+    if text_font:
+        parts.append(f"{i4}text_font: {json.dumps(text_font)}\n")
     parts.append(_on_click_yaml(1))
 
     return "".join(parts)
@@ -4848,7 +4880,7 @@ def _compile_lvgl_pages_schema_driven(
                 if isinstance(tick_color, str):
                     tick_color = _hex_color_for_yaml(tick_color) or 0xFFFFFF
                 tick_color = int(tick_color) & 0xFFFFFF
-                label_font = (style.get("label_text_font") or "").strip() or None
+                label_font = (style.get("label_text_font") or style.get("text_font") or props.get("font") or "").strip() or None
                 cx = w_val / 2.0
                 cy = h_val / 2.0
                 r = min(w_val, h_val) / 2.0
@@ -4862,7 +4894,8 @@ def _compile_lvgl_pages_schema_driven(
                 max_int = int(math.floor(max_val))
                 tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
                 label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
-                label_font_size = max(8, min(24, int(style.get("label_font_size") or 0) or 14))
+                configured_font_px = _font_px_from_id(label_font, 14)
+                label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
                 # Give labels extra glyph room (left bearings/descenders) so device rendering
                 # does not clip numerals on the outer edges of the arc.
                 label_h = label_font_size + 6

@@ -11,4 +11,5 @@ LABEL io.hass.version="${BUILD_VERSION}"
 WORKDIR /app
 COPY app/ ./app/
 COPY custom_components/ ./custom_components/
+COPY third_party/ ./third_party/
 EXPOSE 8098

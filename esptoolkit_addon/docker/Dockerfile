@@ -124,6 +124,7 @@ FROM final AS production
 WORKDIR /app
 COPY app/ ./app/
 COPY custom_components/ ./custom_components/
+COPY third_party/ ./third_party/
 EXPOSE 8098
 # No ENTRYPOINT: use base image entrypoint so s6 starts and runs esphome-api service
 
