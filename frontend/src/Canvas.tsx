@@ -18,6 +18,7 @@ import {
   containerTransformKonvaId,
 } from "./canvasUtils";
 import { effectiveLongMode, konvaLongModeTextProps } from "./lvglCanvasParity";
+import { fontPxFromId } from "./fontMetrics";
 
 type Widget = {
   id: string;
@@ -306,7 +307,6 @@ export default function Canvas({
     const opacityRaw = s.opa ?? p.opacity ?? 100;
     const opacity = typeof opacityRaw === "number" ? opacityRaw / 100 : 1;
     const radiusRaw = Math.min(12, Math.max(0, Number(s.radius ?? s.corner_radius ?? p.radius ?? p.corner_radius ?? 8)));
-    const radius = Math.min(layoutInt(radiusRaw), Math.floor(w.w / 2), Math.floor(w.h / 2));
     const shadowW = Number(s.shadow_width ?? 0);
     const shadowOfsX = Number(s.shadow_ofs_x ?? 0);
     const shadowOfsY = Number(s.shadow_ofs_y ?? 0);
@@ -328,6 +328,15 @@ export default function Canvas({
     const outlinePad = Number(s.outline_pad ?? 0);
     const outlineColor = toFillColor(s.outline_color, "#374151");
     const outlineOpa = Number(s.outline_opa ?? 0) / 100;
+    // Spinbox2: row height must match views.py::_emit_spinbox2_yaml (font id + border default 1), not previewFont() size.
+    const isSpinbox2Widget = String(w.type || "").toLowerCase() === "spinbox2";
+    const sbBorderForRow = Number(s.border_width ?? p.border_width ?? 1);
+    const sbEdgeForRow = Math.max(0, sbBorderForRow, outlineW);
+    const sbFontPxForRow = fontPxFromId(fontId, 14);
+    const spinbox2LayoutH = isSpinbox2Widget ? Math.max(w.h, sbFontPxForRow + 16 + 2 * sbEdgeForRow) : w.h;
+    const layoutW = w.w;
+    const layoutH = isSpinbox2Widget ? spinbox2LayoutH : w.h;
+    const radius = Math.min(layoutInt(radiusRaw), Math.floor(layoutW / 2), Math.floor(layoutH / 2));
     const transformAngle = Number(s.transform_angle ?? 0);
     const transformZoom = Number(s.transform_zoom ?? 100) / 100;
     const isSliderOrArcOrBar = w.type === "slider" || w.type === "arc" || w.type === "arc_labeled" || w.type === "bar";
@@ -425,19 +434,19 @@ export default function Canvas({
     const base = (
       <>
         {isSel && (
-          <Rect x={ax - 3} y={ay - 3} width={w.w + 6} height={w.h + 6} stroke="#06b6d4" strokeWidth={2} dash={[8, 4]} cornerRadius={radius + 3} fillEnabled={false} listening={false} />
+          <Rect x={ax - 3} y={ay - 3} width={layoutW + 6} height={layoutH + 6} stroke="#06b6d4" strokeWidth={2} dash={[8, 4]} cornerRadius={radius + 3} fillEnabled={false} listening={false} />
         )}
         {outlineW > 0 && (
-          <Rect x={ax - outlinePad - outlineW} y={ay - outlinePad - outlineW} width={w.w + 2 * (outlinePad + outlineW)} height={w.h + 2 * (outlinePad + outlineW)} stroke={outlineColor} strokeWidth={outlineW} cornerRadius={radius + outlinePad + outlineW} fillEnabled={false} opacity={outlineOpa} listening={false} />
+          <Rect x={ax - outlinePad - outlineW} y={ay - outlinePad - outlineW} width={layoutW + 2 * (outlinePad + outlineW)} height={layoutH + 2 * (outlinePad + outlineW)} stroke={outlineColor} strokeWidth={outlineW} cornerRadius={radius + outlinePad + outlineW} fillEnabled={false} opacity={outlineOpa} listening={false} />
         )}
         <Rect
           id={w.id}
-          x={transformAngle !== 0 || transformZoom !== 1 ? ax + w.w / 2 : ax}
-          y={transformAngle !== 0 || transformZoom !== 1 ? ay + w.h / 2 : ay}
-          width={w.w}
-          height={w.h}
-          offsetX={transformAngle !== 0 || transformZoom !== 1 ? w.w / 2 : 0}
-          offsetY={transformAngle !== 0 || transformZoom !== 1 ? w.h / 2 : 0}
+          x={transformAngle !== 0 || transformZoom !== 1 ? ax + layoutW / 2 : ax}
+          y={transformAngle !== 0 || transformZoom !== 1 ? ay + layoutH / 2 : ay}
+          width={layoutW}
+          height={layoutH}
+          offsetX={transformAngle !== 0 || transformZoom !== 1 ? layoutW / 2 : 0}
+          offsetY={transformAngle !== 0 || transformZoom !== 1 ? layoutH / 2 : 0}
           rotation={transformAngle}
           scaleX={transformZoom}
           scaleY={transformZoom}
@@ -456,12 +465,12 @@ export default function Canvas({
           (!simulationMode || !isSliderOrArcOrBar) || (simulationMode && isSliderOrArcOrBar && !w.parent_id)
         }
         dragBoundFunc={simulationMode
-          ? (simDraggable ? (pos) => ({ x: (transformAngle !== 0 || transformZoom !== 1 ? ax + w.w / 2 : ax), y: (transformAngle !== 0 || transformZoom !== 1 ? ay + w.h / 2 : ay) }) : undefined)
+          ? (simDraggable ? (pos) => ({ x: (transformAngle !== 0 || transformZoom !== 1 ? ax + layoutW / 2 : ax), y: (transformAngle !== 0 || transformZoom !== 1 ? ay + layoutH / 2 : ay) }) : undefined)
           : (pos) => {
               const isCentered = transformAngle !== 0 || transformZoom !== 1;
               const r = isCentered
-                ? clampDragPositionCentered(pos.x, pos.y, w.w, w.h, width, height)
-                : clampDragPosition(pos.x, pos.y, w.w, w.h, width, height);
+                ? clampDragPositionCentered(pos.x, pos.y, layoutW, layoutH, width, height)
+                : clampDragPosition(pos.x, pos.y, layoutW, layoutH, width, height);
               setDragAtLimit(r.atLimit);
               return { x: r.x, y: r.y };
             }}
@@ -519,8 +528,8 @@ export default function Canvas({
           const scaleX = node.scaleX();
           const scaleY = node.scaleY();
           // Bake scale from model w/h, not node.width(): Group client rect can include overflow (e.g. arc_labeled) and overshoots.
-          const baseW = Number(w.w) > 0 ? Number(w.w) : Math.max(1, node.width());
-          const baseH = Number(w.h) > 0 ? Number(w.h) : Math.max(1, node.height());
+          const baseW = Number(layoutW) > 0 ? Number(layoutW) : Math.max(1, node.width());
+          const baseH = Number(layoutH) > 0 ? Number(layoutH) : Math.max(1, node.height());
           node.scaleX(1);
           node.scaleY(1);
 
@@ -1375,16 +1384,13 @@ export default function Canvas({
           : dec >= 1
             ? rawVal.toFixed(dec)
             : String(Math.round(rawVal));
-      const btnW = Math.max(28, Math.min(64, Math.floor(w.w / 4)));
-      const lblW = Math.max(20, w.w - 2 * btnW);
-      const radius = Math.min(24, Math.max(0, Number(s.radius ?? 6)));
+      const btnW = Math.max(28, Math.min(64, Math.floor(layoutW / 4)));
+      const lblW = Math.max(20, layoutW - 2 * btnW);
+      const sbRadius = Math.min(24, Math.max(0, Number(s.radius ?? 6)));
       const bg = toFillColor(s.bg_color, "#1e293b");
       const border = toFillColor(s.border_color, "#475569");
-      const bw = Number(s.border_width ?? 1);
-      const spinOutline = Math.max(0, Number(s.outline_width ?? 0));
-      const edge = Math.max(0, bw, spinOutline);
-      // Match views.py _emit_spinbox2_yaml row_h so preview matches device vertical padding.
-      const rowH = Math.max(w.h, fontSize + 16 + 2 * edge);
+      const bw = sbBorderForRow;
+      const rowH = layoutH;
       const btnFill = "#0f172a";
       const minusLabel = String(p.minus_text ?? "-");
       const plusLabel = String(p.plus_text ?? "+");
@@ -1400,7 +1406,7 @@ export default function Canvas({
       return (
         <Group key={w.id}>
           {base}
-          <Rect x={ax} y={ay} width={w.w} height={rowH} fill={bg} stroke={border} strokeWidth={bw} cornerRadius={radius} listening={false} />
+          <Rect x={ax} y={ay} width={layoutW} height={rowH} fill={bg} stroke={border} strokeWidth={bw} cornerRadius={sbRadius} listening={false} />
           <Rect
             x={ax}
             y={ay}
@@ -1409,7 +1415,7 @@ export default function Canvas({
             fill={btnFill}
             stroke={border}
             strokeWidth={bw > 0 ? 1 : 0}
-            cornerRadius={radius}
+            cornerRadius={sbRadius}
             opacity={0.95}
             listening={!!simulationMode}
             onClick={(e) => {
@@ -1457,7 +1463,7 @@ export default function Canvas({
             fill={btnFill}
             stroke={border}
             strokeWidth={bw > 0 ? 1 : 0}
-            cornerRadius={radius}
+            cornerRadius={sbRadius}
             opacity={0.95}
             listening={!!simulationMode}
             onClick={(e) => {

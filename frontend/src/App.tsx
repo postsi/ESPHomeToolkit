@@ -4909,11 +4909,11 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 <div style={{
                   display: "grid",
                   gridTemplateColumns: "36px " + screenSize.width + "px",
-                  gridTemplateRows: screenSize.height + "px 24px",
+                  gridTemplateRows: screenSize.height + "px 28px",
                   alignItems: "stretch",
                   justifyItems: "stretch",
                 }}>
-                  <div className="canvasAxisY" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", paddingTop: 4, paddingBottom: 4, paddingRight: 6, fontSize: 11, color: "var(--muted)", textAlign: "right" }}>
+                  <div className="canvasAxisY" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", paddingTop: 10, paddingBottom: 10, paddingRight: 6, fontSize: 11, lineHeight: 1.2, color: "var(--muted)", textAlign: "right", overflow: "visible", minHeight: 0 }}>
                     {(() => {
                       const ticks: number[] = [];
                       for (let v = 0; v <= screenSize.height; v += 100) ticks.push(v);
@@ -5080,7 +5080,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                 />
                   </div>
                   <div />
-                  <div className="canvasAxisX" style={{ display: "flex", justifyContent: "space-between", alignSelf: "start", width: screenSize.width, fontSize: 11, color: "var(--muted)", direction: "ltr" }}>
+                  <div className="canvasAxisX" style={{ display: "flex", justifyContent: "space-between", alignSelf: "start", width: screenSize.width, paddingLeft: 6, paddingRight: 6, boxSizing: "border-box", fontSize: 11, lineHeight: 1.2, color: "var(--muted)", direction: "ltr", overflow: "visible" }}>
                     {(() => {
                       const ticks: number[] = [];
                       for (let v = 0; v <= screenSize.width; v += 100) ticks.push(v);
