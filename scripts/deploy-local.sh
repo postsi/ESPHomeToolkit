@@ -146,6 +146,7 @@ git status -s
 git commit -m "Release v$VERSION: $MSG [skip build]"
 
 echo "=== Pushing to origin main ==="
-git push origin main && echo "=== Git push done ==="
+# Large packs (e.g. bundled fonts) can exceed the default 1 MiB buffer and fail with HTTP 400 / send-pack disconnect.
+git -c http.postBuffer=524288000 push origin main && echo "=== Git push done ==="
 
 echo "=== Done. Image ${IMAGE_NAME}:${VERSION} pushed (arch: ${ARCH}). Home Assistant can pick up v$VERSION from the repo. ==="
