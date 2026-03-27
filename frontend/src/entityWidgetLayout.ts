@@ -75,6 +75,28 @@ export function fitContainerTreeToDescendantBounds(widgets: any[], rootId: strin
 }
 
 /**
+ * Re-fit only descendant container/obj nodes under a root (leave root size unchanged).
+ * Useful for "frame-only resize": user changes outer card shell, while stale inner clipping
+ * containers are normalized to their own children so labels are not cut off.
+ */
+export function fitDescendantContainerTrees(widgets: any[], rootId: string): void {
+  const byParent = new Map<string, any[]>();
+  for (const w of widgets || []) {
+    const pid = String(w?.parent_id || "");
+    if (!pid) continue;
+    const arr = byParent.get(pid) || [];
+    arr.push(w);
+    byParent.set(pid, arr);
+  }
+  const topKids = byParent.get(String(rootId || "")) || [];
+  for (const k of topKids) {
+    if (_isContainerLike(k?.type) && k?.id) {
+      fitContainerTreeToDescendantBounds(widgets, String(k.id));
+    }
+  }
+}
+
+/**
  * Normalize widgets when saving a page as a user-defined entity widget:
  * multiple top-level roots are wrapped in one container with relative child coords.
  * A single existing tree (one root container) gets its root sized to child bounds.

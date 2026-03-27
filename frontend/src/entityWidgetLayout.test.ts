@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fitDescendantContainerTrees,
   fitContainerToDirectChildrenBounds,
   fitContainerTreeToDescendantBounds,
   normalizeWidgetsForEntityWidgetExport,
@@ -60,6 +61,21 @@ describe("fitContainerTreeToDescendantBounds", () => {
     const root = widgets.find((w) => w.id === "root");
     expect(inner).toMatchObject({ x: 0, y: 0, w: 60, h: 20 });
     expect(root).toMatchObject({ w: 60, h: 20 });
+  });
+});
+
+describe("fitDescendantContainerTrees", () => {
+  it("fits nested descendants but leaves selected root shell untouched", () => {
+    const widgets: any[] = [
+      { id: "root", type: "container", x: 0, y: 0, w: 220, h: 220 },
+      { id: "inner", type: "container", parent_id: "root", x: 20, y: 20, w: 40, h: 40 },
+      { id: "lbl", type: "label", parent_id: "inner", x: 70, y: 10, w: 60, h: 20 },
+    ];
+    fitDescendantContainerTrees(widgets, "root");
+    const root = widgets.find((w) => w.id === "root");
+    const inner = widgets.find((w) => w.id === "inner");
+    expect(root).toMatchObject({ w: 220, h: 220 });
+    expect(inner).toMatchObject({ w: 60, h: 20 });
   });
 });
 

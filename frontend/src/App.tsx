@@ -15,6 +15,7 @@ import {
   SAVED_ENTITY_WIDGET_PREFIX,
 } from "./entityWidgetTitles";
 import {
+  fitDescendantContainerTrees,
   fitContainerToDirectChildrenBounds,
   fitContainerTreeToDescendantBounds,
   normalizeWidgetsForEntityWidgetExport,
@@ -5055,10 +5056,22 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                     const p2 = clone(project);
                     const pg = (p2 as any).pages?.[safePageIndex];
                     if (!pg?.widgets) return;
+                    const byId = new Map<string, any>((pg.widgets || []).filter((w: any) => w && w.id).map((w: any) => [String(w.id), w]));
                     for (const { id, patch } of patches) {
                       const w = pg.widgets.find((x: any) => x && x.id === id);
                       if (!w) continue;
                       Object.assign(w, patch);
+                    }
+                    // Frame-only resize updates a single container shell; keep descendant clipping
+                    // containers (common in saved entity widgets) fit to their own children.
+                    if (patches.length === 1) {
+                      const p0 = patches[0];
+                      const w0 = byId.get(String(p0.id));
+                      const t0 = String(w0?.type || "").toLowerCase();
+                      const resized = !!p0.patch && (Object.prototype.hasOwnProperty.call(p0.patch, "w") || Object.prototype.hasOwnProperty.call(p0.patch, "h"));
+                      if (resized && (t0 === "container" || t0 === "obj")) {
+                        fitDescendantContainerTrees(pg.widgets, String(p0.id));
+                      }
                     }
                     setProject(p2, commit ?? true);
                     setProjectDirty(true);
