@@ -46,6 +46,34 @@ export function fitContainerToDirectChildrenBounds(widgets: any[], rootId: strin
   root.h = bh;
 }
 
+function _isContainerLike(t: unknown): boolean {
+  const s = String(t || "").toLowerCase();
+  return s === "container" || s === "obj";
+}
+
+/**
+ * Bottom-up fit for nested entity widgets: resize every container/obj in a tree
+ * to direct-children bounds, starting from deepest descendants.
+ */
+export function fitContainerTreeToDescendantBounds(widgets: any[], rootId: string): void {
+  const byParent = new Map<string, any[]>();
+  for (const w of widgets || []) {
+    const pid = String(w?.parent_id || "");
+    if (!pid) continue;
+    const arr = byParent.get(pid) || [];
+    arr.push(w);
+    byParent.set(pid, arr);
+  }
+  const visit = (id: string) => {
+    const kids = byParent.get(id) || [];
+    for (const k of kids) {
+      if (_isContainerLike(k?.type) && k?.id) visit(String(k.id));
+    }
+    fitContainerToDirectChildrenBounds(widgets, id);
+  };
+  visit(String(rootId || ""));
+}
+
 /**
  * Normalize widgets when saving a page as a user-defined entity widget:
  * multiple top-level roots are wrapped in one container with relative child coords.
@@ -59,8 +87,8 @@ export function normalizeWidgetsForEntityWidgetExport(widgets: any[]): any[] {
   const roots = clone.filter((w) => w && (!w.parent_id || !ids.has(w.parent_id)));
   if (roots.length === 1) {
     const r = roots[0];
-    if (r.type === "container" || r.type === "obj") {
-      fitContainerToDirectChildrenBounds(clone, r.id);
+    if (_isContainerLike(r.type)) {
+      fitContainerTreeToDescendantBounds(clone, r.id);
     }
     return clone;
   }
@@ -104,6 +132,6 @@ export function normalizeWidgetsForEntityWidgetExport(widgets: any[]): any[] {
   }));
   const rest = clone.filter((w) => !topIds.has(w.id));
   const merged = [root, ...reparented, ...rest];
-  fitContainerToDirectChildrenBounds(merged, rootId);
+  fitContainerTreeToDescendantBounds(merged, rootId);
   return merged;
 }

@@ -5021,14 +5021,30 @@ def _compile_lvgl_pages_schema_driven(
                     ]
                 )
 
-        # Children: nest under `widgets:`. ESPHome LVGL supports this for containers and many widgets.
+        # Children: only some widgets support nested `widgets:` in ESPHome LVGL.
+        # If data gets mis-parented under a non-container (e.g. label), keep YAML valid by
+        # emitting those children as siblings at the current level instead of nesting.
         wid = str(w.get("id") or "")
         child_list = kids.get(wid) or []
         pw, ph = int(w.get("w", 100)), int(w.get("h", 50))
+        container_like = {
+            "container",
+            "obj",
+            "tileview",
+            "tabview",
+            "msgboxes",
+            "keyboard",
+            "buttonmatrix",
+            "canvas",
+        }
         if child_list:
-            out += f"{indent}    widgets:\n"
-            for c in child_list:
-                out += emit_widget(c, indent + "      ", kids, pw, ph)  # 6 spaces: list item 2 under "widgets:"
+            if str(wtype) in container_like:
+                out += f"{indent}    widgets:\n"
+                for c in child_list:
+                    out += emit_widget(c, indent + "      ", kids, pw, ph)  # list item under nested widgets
+            else:
+                for c in child_list:
+                    out += emit_widget(c, indent, kids, parent_w, parent_h)  # flatten to sibling level
         elif wtype == "container":
             # Empty container: emit explicit list so structure is valid
             out += f"{indent}    widgets: []\n"

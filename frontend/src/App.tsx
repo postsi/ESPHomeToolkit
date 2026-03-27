@@ -14,7 +14,11 @@ import {
   savedEntityWidgetStorageId,
   SAVED_ENTITY_WIDGET_PREFIX,
 } from "./entityWidgetTitles";
-import { fitContainerToDirectChildrenBounds, normalizeWidgetsForEntityWidgetExport } from "./entityWidgetLayout";
+import {
+  fitContainerToDirectChildrenBounds,
+  fitContainerTreeToDescendantBounds,
+  normalizeWidgetsForEntityWidgetExport,
+} from "./entityWidgetLayout";
 import { DOMAIN_PRESETS } from "./bindings/domains";
 import {
   getDisplayActionsForType,
@@ -1449,14 +1453,14 @@ if (baseId.startsWith("glance_card")) {
       }
     }
 
-    // Entity palette templates use a fixed card size; shrink the root container/obj to the
-    // direct children AABB so the frame matches the content (with a minimal border via padding in the template).
+    // Entity palette templates use a fixed card size; shrink container trees to descendant bounds
+    // so nested clipping containers do not keep stale sizes.
     if (isEntityBundleTemplate && ws.length > 0) {
       const idSet = new Set(ws.map((w: any) => w?.id).filter(Boolean));
       const roots = ws.filter((w: any) => w && (!w.parent_id || !idSet.has(w.parent_id)));
       if (roots.length === 1 && (roots[0].type === "container" || roots[0].type === "obj")) {
         const hasKids = ws.some((w: any) => w && w.parent_id === roots[0].id);
-        if (hasKids) fitContainerToDirectChildrenBounds(ws, roots[0].id);
+        if (hasKids) fitContainerTreeToDescendantBounds(ws, roots[0].id);
       }
     }
 

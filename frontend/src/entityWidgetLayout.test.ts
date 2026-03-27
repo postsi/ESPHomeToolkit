@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitContainerToDirectChildrenBounds,
+  fitContainerTreeToDescendantBounds,
   normalizeWidgetsForEntityWidgetExport,
 } from "./entityWidgetLayout";
 
@@ -47,6 +48,21 @@ describe("fitContainerToDirectChildrenBounds", () => {
   });
 });
 
+describe("fitContainerTreeToDescendantBounds", () => {
+  it("fits nested containers bottom-up so inner clipping bounds grow first", () => {
+    const widgets: any[] = [
+      { id: "root", type: "container", x: 0, y: 0, w: 300, h: 300 },
+      { id: "inner", type: "container", parent_id: "root", x: 20, y: 20, w: 80, h: 80 },
+      { id: "lbl", type: "label", parent_id: "inner", x: 70, y: 10, w: 60, h: 20 },
+    ];
+    fitContainerTreeToDescendantBounds(widgets, "root");
+    const inner = widgets.find((w) => w.id === "inner");
+    const root = widgets.find((w) => w.id === "root");
+    expect(inner).toMatchObject({ x: 0, y: 0, w: 60, h: 20 });
+    expect(root).toMatchObject({ w: 60, h: 20 });
+  });
+});
+
 describe("normalizeWidgetsForEntityWidgetExport", () => {
   it("tightens a single root container to its direct children", () => {
     const widgets = [
@@ -73,5 +89,18 @@ describe("normalizeWidgetsForEntityWidgetExport", () => {
     expect(root.h).toBe(20);
     expect(out[1]).toMatchObject({ id: "a", parent_id: root.id, x: 0, y: 0 });
     expect(out[2]).toMatchObject({ id: "b", parent_id: root.id, x: 40, y: 0 });
+  });
+
+  it("recursively tightens nested container trees", () => {
+    const widgets = [
+      { id: "root", type: "container", x: 0, y: 0, w: 200, h: 200 },
+      { id: "inner", type: "container", parent_id: "root", x: 20, y: 20, w: 40, h: 40 },
+      { id: "lbl", type: "label", parent_id: "inner", x: 70, y: 10, w: 60, h: 20 },
+    ];
+    const out = normalizeWidgetsForEntityWidgetExport(widgets);
+    const root = out.find((w: any) => w.id === "root");
+    const inner = out.find((w: any) => w.id === "inner");
+    expect(inner).toMatchObject({ w: 60, h: 20 });
+    expect(root).toMatchObject({ w: 60, h: 20 });
   });
 });
