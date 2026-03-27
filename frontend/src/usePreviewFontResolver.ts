@@ -7,8 +7,14 @@ export function cssFontFamilyForAssetFile(filename: string): string {
   return `EtdAsset_${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 }
 
+type WidgetFontNode = {
+  props?: Record<string, unknown>;
+  style?: Record<string, unknown>;
+  widgets?: unknown;
+};
+
 function collectAssetFontFiles(
-  widgets: Array<{ props?: Record<string, unknown>; style?: Record<string, unknown> }> | undefined,
+  widgets: Array<WidgetFontNode> | undefined,
   assetSet: Set<string>
 ): string[] {
   const out = new Set<string>();
@@ -22,12 +28,18 @@ function collectAssetFontFiles(
     if (!/\.(ttf|otf)$/i.test(file)) return;
     out.add(file);
   };
-  for (const w of widgets || []) {
-    consider(w.style?.text_font);
-    consider(w.props?.text_font);
-    consider(w.style?.label_text_font);
-    consider(w.props?.label_text_font);
-  }
+  const walk = (list: Array<WidgetFontNode> | undefined) => {
+    for (const w of list || []) {
+      if (!w || typeof w !== "object") continue;
+      consider(w.style?.text_font);
+      consider(w.props?.text_font);
+      consider(w.style?.label_text_font);
+      consider(w.props?.label_text_font);
+      const kids = w.widgets;
+      if (Array.isArray(kids)) walk(kids as WidgetFontNode[]);
+    }
+  };
+  walk(widgets);
   return [...out];
 }
 
@@ -89,13 +101,20 @@ export function usePreviewFontResolver(
 
   const fontPreviewBanner = useMemo(() => {
     if (!widgets?.length) return null;
-    for (const w of widgets) {
-      const ids = [w.style?.text_font, w.props?.text_font, w.style?.label_text_font, w.props?.label_text_font];
-      for (const fid of ids) {
-        if (resolvePreviewFont(fid).approximate) {
-          return "Preview uses fallback fonts for some widgets (missing TTF/OTF asset or unknown font id). The device uses fonts from your YAML.";
+    const visit = (list: Array<WidgetFontNode> | undefined): boolean => {
+      for (const w of list || []) {
+        if (!w || typeof w !== "object") continue;
+        const ids = [w.style?.text_font, w.props?.text_font, w.style?.label_text_font, w.props?.label_text_font];
+        for (const fid of ids) {
+          if (resolvePreviewFont(fid).approximate) return true;
         }
+        const kids = w.widgets;
+        if (Array.isArray(kids) && visit(kids as WidgetFontNode[])) return true;
       }
+      return false;
+    };
+    if (visit(widgets)) {
+      return "Preview uses fallback fonts for some widgets (missing TTF/OTF asset or unknown font id). The device uses fonts from your YAML.";
     }
     return null;
   }, [widgets, resolvePreviewFont]);

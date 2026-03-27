@@ -1180,16 +1180,18 @@ export default function Canvas({
                   const lx = cx + labelR * Math.cos(angleRad);
                   const ly = cy + labelR * Math.sin(angleRad);
                   const text = String(value);
-                  const pad = 6;
-                  const box = Math.max(20, text.length * labelFontSize * 0.6 + pad);
+                  // Match api/views.py arc_labeled emitter: extra vertical + wider box for LVGL glyph bearings.
+                  const labelH = labelFontSize + Math.max(10, Math.ceil(labelFontSize * 0.5));
+                  const pad = 12;
+                  const box = Math.max(28, Math.ceil(text.length * labelFontSize * 0.78) + pad);
                   const half = box / 2;
                   return (
                     <Text
                       key={`label-${value}`}
                       x={lx - half}
-                      y={ly - labelFontSize / 2}
+                      y={ly - labelH / 2}
                       width={box}
-                      height={labelFontSize + 2}
+                      height={labelH}
                       text={text}
                       fontSize={labelFontSize}
                       fontFamily={labelFontFamily}
@@ -1379,6 +1381,10 @@ export default function Canvas({
       const bg = toFillColor(s.bg_color, "#1e293b");
       const border = toFillColor(s.border_color, "#475569");
       const bw = Number(s.border_width ?? 1);
+      const spinOutline = Math.max(0, Number(s.outline_width ?? 0));
+      const edge = Math.max(0, bw, spinOutline);
+      // Match views.py _emit_spinbox2_yaml row_h so preview matches device vertical padding.
+      const rowH = Math.max(w.h, fontSize + 16 + 2 * edge);
       const btnFill = "#0f172a";
       const minusLabel = String(p.minus_text ?? "-");
       const plusLabel = String(p.plus_text ?? "+");
@@ -1394,12 +1400,12 @@ export default function Canvas({
       return (
         <Group key={w.id}>
           {base}
-          <Rect x={ax} y={ay} width={w.w} height={w.h} fill={bg} stroke={border} strokeWidth={bw} cornerRadius={radius} listening={false} />
+          <Rect x={ax} y={ay} width={w.w} height={rowH} fill={bg} stroke={border} strokeWidth={bw} cornerRadius={radius} listening={false} />
           <Rect
             x={ax}
             y={ay}
             width={btnW}
-            height={w.h}
+            height={rowH}
             fill={btnFill}
             stroke={border}
             strokeWidth={bw > 0 ? 1 : 0}
@@ -1420,7 +1426,7 @@ export default function Canvas({
             x={ax}
             y={ay}
             width={btnW}
-            height={w.h}
+            height={rowH}
             align="center"
             verticalAlign="middle"
             fontSize={Math.min(20, fontSize + 4)}
@@ -1434,7 +1440,7 @@ export default function Canvas({
             x={ax + btnW}
             y={ay}
             width={lblW}
-            height={w.h}
+            height={rowH}
             align="center"
             verticalAlign="middle"
             fontSize={fontSize}
@@ -1447,7 +1453,7 @@ export default function Canvas({
             x={ax + btnW + lblW}
             y={ay}
             width={btnW}
-            height={w.h}
+            height={rowH}
             fill={btnFill}
             stroke={border}
             strokeWidth={bw > 0 ? 1 : 0}
@@ -1468,7 +1474,7 @@ export default function Canvas({
             x={ax + btnW + lblW}
             y={ay}
             width={btnW}
-            height={w.h}
+            height={rowH}
             align="center"
             verticalAlign="middle"
             fontSize={Math.min(20, fontSize + 4)}

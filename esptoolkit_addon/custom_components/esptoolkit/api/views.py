@@ -3900,8 +3900,11 @@ def _emit_spinbox2_yaml(
     plus_txt = json.dumps(str(props.get("plus_text", "+") or "+"))
     text_font = str(style.get("text_font") or props.get("font") or "").strip() or None
     font_px = _font_px_from_id(text_font, 14)
-    # Enforce a minimum row height from chosen font so glyph descenders don't clip.
-    row_h = max(h_val, font_px + 12)
+    border_w = int(style.get("border_width", 1) or 0)
+    outline_w = int(style.get("outline_width", 0) or 0)
+    edge = max(0, border_w, outline_w)
+    # Row height: font line box + room for borders/outlines so +/- buttons are not clipped at bottom/top.
+    row_h = max(h_val, font_px + 16 + 2 * edge)
     btn_w = max(28, min(64, w_val // 4))
     lbl_w = max(20, w_val - 2 * btn_w)
     lbl_h = max(font_px + 6, row_h - 2)
@@ -3936,7 +3939,7 @@ def _emit_spinbox2_yaml(
         hx = _hex_color_for_yaml(bc)
         if hx is not None:
             parts.append(f"{i1}bg_color: 0x{int(hx):06X}\n")
-    bw = int(style.get("border_width", 1) or 0)
+    bw = border_w
     if bw > 0:
         parts.append(f"{i1}border_width: {bw}\n")
         brc = style.get("border_color")
@@ -4896,9 +4899,9 @@ def _compile_lvgl_pages_schema_driven(
                 label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
                 configured_font_px = _font_px_from_id(label_font, 14)
                 label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
-                # Give labels extra glyph room (left bearings/descenders) so device rendering
-                # does not clip numerals on the outer edges of the arc.
-                label_h = label_font_size + 6
+                # Extra line height + width for LVGL font bearings (esp. top-of-arc numerals).
+                extra_v = max(10, int(math.ceil(label_font_size * 0.5)))
+                label_h = label_font_size + extra_v
                 # Compute label positions and bounding box so container can be expanded to avoid clipping
                 label_boxes = []
                 for i, value in enumerate(label_values):
@@ -4907,12 +4910,12 @@ def _compile_lvgl_pages_schema_driven(
                     lx = cx + label_r * math.cos(angle_rad)
                     ly = cy + label_r * math.sin(angle_rad)
                     text = str(value)
-                    box = max(24, int(math.ceil(len(text) * label_font_size * 0.7)) + 10)
+                    box = max(28, int(math.ceil(len(text) * label_font_size * 0.78)) + 12)
                     half = box / 2
                     lx_int = int(round(lx - half))
                     ly_int = int(round(ly - label_h / 2))
                     label_boxes.append((lx_int, ly_int, box, label_h))
-                pad = 8
+                pad = 14
                 min_x = 0
                 max_x = w_val
                 min_y = 0

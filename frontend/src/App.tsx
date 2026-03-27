@@ -505,7 +505,7 @@ async function onUploadAssetFile(file: File) {
   }
 }
 
-const [lintOpen, setLintOpen] = useState<boolean>(false);
+  const [lintOpen, setLintOpen] = useState<boolean>(false);
   const [paletteTab, setPaletteTab] = useState<"basic" | "prebuilt" | "entity">("basic");
   const [inspectorTab, setInspectorTab] = useState<"properties" | "bindings" | "builder" | "yaml" | "importlog">("properties");
   const [editingWidgetId, setEditingWidgetId] = useState<string>("");
@@ -706,6 +706,7 @@ const [lintOpen, setLintOpen] = useState<boolean>(false);
   }, []);
 
   useEffect(() => {
+    void refreshAssets();
     refreshRecipes();
     (async () => {
       let ctx = await getContext();
@@ -1774,8 +1775,6 @@ if (baseId.startsWith("glance_card")) {
     [pages, safePageIndex]
   );
 
-  const { resolvePreviewFont, fontPreviewBanner } = usePreviewFontResolver(widgets, assets);
-
   // Persist a local draft so navigating away from the HA sidebar doesn't lose work.
   useEffect(() => {
     if (!selectedDevice || !project) return;
@@ -1803,6 +1802,8 @@ if (baseId.startsWith("glance_card")) {
     collect(pages?.[safePageIndex]?.widgets ?? []);
     return out.length ? out : widgets;
   }, [pages, safePageIndex, widgets]);
+
+  const { resolvePreviewFont, fontPreviewBanner } = usePreviewFontResolver(widgetsFlat, assets);
 
   // Live overrides for canvas: from links + liveEntityStates, compute per-widget display values.
   const liveOverrides = useMemo(() => {
@@ -6572,14 +6573,15 @@ function MultiSelectProperties(props: {
 
 // ESPHome LVGL built-in fonts (Montserrat). User can pick these without uploading assets.
 const BUILTIN_LVGL_FONTS = ["montserrat_8","montserrat_10","montserrat_12","montserrat_14","montserrat_16","montserrat_18","montserrat_20","montserrat_22","montserrat_24","montserrat_26","montserrat_28","montserrat_30","montserrat_32","montserrat_34","montserrat_36","montserrat_38","montserrat_40","montserrat_42","montserrat_44","montserrat_46","montserrat_48"];
-const APPROVED_ASSET_FONT_FILES = new Set([
+/** Vendored variable fonts (synced to `/config/esptoolkit_assets` on add-on start). Always listed in the UI; filenames must match those files. */
+const APPROVED_ASSET_FONT_FILES_LIST = [
   "Montserrat[wght].ttf",
   "Montserrat-Italic[wght].ttf",
   "Roboto[wdth,wght].ttf",
   "Inter[opsz,wght].ttf",
   "OpenSans[wdth,wght].ttf",
   "NotoSans[wdth,wght].ttf",
-]);
+] as const;
 const APPROVED_ASSET_FONT_SIZES = [10,12,14,16,18,20,24,28,32,36,40];
 
 function isFontKey(key: string): boolean {
@@ -6588,17 +6590,14 @@ function isFontKey(key: string): boolean {
 }
 
 function buildApprovedFontOptions(assets: {name:string; size:number}[]) {
-  const fontFiles = (assets || [])
-    .map((a) => a.name)
-    .filter((n) => /\.(ttf|otf)$/i.test(n))
-    .filter((n) => APPROVED_ASSET_FONT_FILES.has(n));
+  const onServer = new Set((assets || []).map((a) => a.name));
   const options = [
     ...BUILTIN_LVGL_FONTS.map((f) => ({ value: f, label: f.replace("montserrat_", "Montserrat ") + "px", group: "Built-in (Montserrat)" })),
-    ...fontFiles.flatMap((fn) =>
+    ...APPROVED_ASSET_FONT_FILES_LIST.flatMap((fn) =>
       APPROVED_ASSET_FONT_SIZES.map((size) => ({
         value: `asset:${fn}:${size}`,
-        label: `${fn} (${size}px)`,
-        group: "Approved uploaded fonts",
+        label: `${fn} (${size}px)` + (onServer.has(fn) ? "" : " — missing on server"),
+        group: "Bundled font files (TTF in esptoolkit_assets)",
       })),
     ),
   ];

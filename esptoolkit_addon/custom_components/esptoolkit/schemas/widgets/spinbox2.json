@@ -22,7 +22,8 @@
     "border_width": { "type": "number", "title": "Border width", "min": 0, "max": 20, "default": 1 },
     "border_color": { "type": "color", "title": "Border color", "default": "0x475569" },
     "radius": { "type": "number", "title": "Corner radius", "min": 0, "max": 60, "default": 6 },
-    "text_color": { "type": "color", "title": "Value text colour", "default": "0xe2e8f0" }
+    "text_color": { "type": "color", "title": "Value text colour", "default": "0xe2e8f0" },
+    "text_font": { "type": "string", "title": "Font id", "default": "", "description": "Font for value and ± buttons (e.g. montserrat_14 or asset:Roboto.ttf:16)" }
   },
   "events": {
     "on_change": { "type": "yaml_block", "title": "on_change", "default": "" }
@@ -38,7 +39,7 @@
     },
     "Style": {
       "section": "style",
-      "keys": ["bg_color", "border_width", "border_color", "radius", "text_color"]
+      "keys": ["bg_color", "border_width", "border_color", "radius", "text_color", "text_font"]
     },
     "Events": { "section": "events", "keys": ["on_change"] }
   }
