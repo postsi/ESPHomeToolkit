@@ -23,6 +23,22 @@ export function fitContainerToDirectChildrenBounds(widgets: any[], rootId: strin
     let top = y;
     let right = x + rw;
     let bottom = y + rh;
+    // Generic visual overflow: borders/outlines/shadows can render outside w×h.
+    const style = (c && typeof c === "object" ? c.style : null) || {};
+    const borderW = Math.max(0, Number(style.border_width ?? 0));
+    const outlineW = Math.max(0, Number(style.outline_width ?? 0));
+    const outlinePad = Math.max(0, Number(style.outline_pad ?? 0));
+    const shadowW = Math.max(0, Number(style.shadow_width ?? 0));
+    const shadowX = Number(style.shadow_ofs_x ?? 0);
+    const shadowY = Number(style.shadow_ofs_y ?? 0);
+    const leftOver = borderW + outlineW + outlinePad + shadowW + Math.max(0, -shadowX);
+    const rightOver = borderW + outlineW + outlinePad + shadowW + Math.max(0, shadowX);
+    const topOver = borderW + outlineW + outlinePad + shadowW + Math.max(0, -shadowY);
+    const bottomOver = borderW + outlineW + outlinePad + shadowW + Math.max(0, shadowY);
+    left -= leftOver;
+    right += rightOver;
+    top -= topOver;
+    bottom += bottomOver;
     if (c.type === "arc_labeled") {
       const pad = arcLabeledVisualOverflowPad(c);
       left -= pad.left;

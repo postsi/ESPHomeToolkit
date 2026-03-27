@@ -4863,6 +4863,9 @@ def _compile_lvgl_pages_schema_driven(
                 tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
                 label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
                 label_font_size = max(8, min(24, int(style.get("label_font_size") or 0) or 14))
+                # Give labels extra glyph room (left bearings/descenders) so device rendering
+                # does not clip numerals on the outer edges of the arc.
+                label_h = label_font_size + 6
                 # Compute label positions and bounding box so container can be expanded to avoid clipping
                 label_boxes = []
                 for i, value in enumerate(label_values):
@@ -4871,12 +4874,12 @@ def _compile_lvgl_pages_schema_driven(
                     lx = cx + label_r * math.cos(angle_rad)
                     ly = cy + label_r * math.sin(angle_rad)
                     text = str(value)
-                    box = max(20, int(len(text) * label_font_size * 0.6) + 6)
+                    box = max(24, int(math.ceil(len(text) * label_font_size * 0.7)) + 10)
                     half = box / 2
                     lx_int = int(round(lx - half))
-                    ly_int = int(round(ly - label_font_size / 2))
-                    label_boxes.append((lx_int, ly_int, box, label_font_size + 2))
-                pad = 4
+                    ly_int = int(round(ly - label_h / 2))
+                    label_boxes.append((lx_int, ly_int, box, label_h))
+                pad = 8
                 min_x = 0
                 max_x = w_val
                 min_y = 0
@@ -4946,6 +4949,7 @@ def _compile_lvgl_pages_schema_driven(
                     out_parts.append(f"{cb_arc}width: {box}\n")
                     out_parts.append(f"{cb_arc}height: {lh}\n")
                     out_parts.append(f"{cb_arc}text: {json.dumps(text)}\n")
+                    out_parts.append(f"{cb_arc}text_align: CENTER\n")
                     out_parts.append(f"{cb_arc}text_color: 0x{label_color:06X}\n")
                     if label_font:
                         out_parts.append(f"{cb_arc}text_font: {json.dumps(label_font)}\n")
