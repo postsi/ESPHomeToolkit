@@ -14,6 +14,8 @@ import {
   widgetsInSelectionRect,
   parentInfo as parentInfoUtil,
   absPos as absPosUtil,
+  parentContentOriginScreen as parentContentOriginScreenUtil,
+  padFromStyle,
   layoutInt,
   containerTransformKonvaId,
 } from "./canvasUtils";
@@ -274,9 +276,17 @@ export default function Canvas({
 
   const parentInfo = (w: Widget) => parentInfoUtil(w, widgetById, width, height);
   const absPos = (w: Widget) => absPosUtil(w, widgetById, width, height);
+  const parentContentOrigin = (w: Widget) => parentContentOriginScreenUtil(w, widgetById, width, height);
 
-  const renderWidget = (w: Widget, isSel: boolean, opts?: { localPosition?: boolean }) => {
-    const { ax, ay } = opts?.localPosition ? { ax: w.x, ay: w.y } : absPos(w);
+  const renderWidget = (
+    w: Widget,
+    isSel: boolean,
+    opts?: { localPosition?: boolean; contentPad?: { x: number; y: number } }
+  ) => {
+    const padOff = opts?.contentPad ?? { x: 0, y: 0 };
+    const { ax, ay } = opts?.localPosition
+      ? { ax: w.x + padOff.x, ay: w.y + padOff.y }
+      : absPos(w);
     const override = simulationMode ? { ...liveOverrides[w.id], ...simOverrides?.[w.id] } : liveOverrides[w.id];
     // Preview targets LVGL parity via lvglCanvasParity + shared font resolver (Montserrat / uploaded TTF).
     const p = w.props || {};
@@ -499,11 +509,10 @@ export default function Canvas({
           const nx = alt ? node.x() : snap(node.x(), gridSize);
           const ny = alt ? node.y() : snap(node.y(), gridSize);
 
-          // For parented widgets, node.x/node.y are absolute; store relative in model.
-          const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
-          const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
-          const modelX = nx - parentAbs.ax;
-          const modelY = ny - parentAbs.ay;
+          // For parented widgets, node.x/node.y are absolute; store coords relative to parent's content box (LVGL).
+          const pco = parentContentOrigin(w);
+          const modelX = nx - pco.ax;
+          const modelY = ny - pco.ay;
 
           const start = dragStartRef.current[w.id] || { x: w.x, y: w.y };
           const dx = modelX - start.x;
@@ -563,10 +572,9 @@ export default function Canvas({
             ];
             onChangeMany(patches, true);
           } else {
-            const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
-            const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
-            const modelX = xx - parentAbs.ax;
-            const modelY = yy - parentAbs.ay;
+            const pco = parentContentOrigin(w);
+            const modelX = xx - pco.ax;
+            const modelY = yy - pco.ay;
             onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
           }
           setResizeAtLimit(false);
@@ -730,10 +738,9 @@ export default function Canvas({
               const alt = !!e.evt.altKey;
               const nx = alt ? dragNode.x() : snap(dragNode.x(), gridSize);
               const ny = alt ? dragNode.y() : snap(dragNode.y(), gridSize);
-              const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
-              const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
-              const modelX = nx - parentAbs.ax;
-              const modelY = ny - parentAbs.ay;
+              const pco = parentContentOrigin(w);
+              const modelX = nx - pco.ax;
+              const modelY = ny - pco.ay;
               const start = dragStartRef.current[w.id] || { x: w.x, y: w.y };
               const dx = modelX - start.x;
               const dy = modelY - start.y;
@@ -818,10 +825,9 @@ export default function Canvas({
                   ];
                   onChangeMany(patches, true);
                 } else {
-                  const parent = w.parent_id ? widgetById.get(w.parent_id) : undefined;
-                  const parentAbs = parent ? absPos(parent) : { ax: 0, ay: 0 };
-                  const modelX = xx - parentAbs.ax;
-                  const modelY = yy - parentAbs.ay;
+                  const pco = parentContentOrigin(w);
+                  const modelX = xx - pco.ax;
+                  const modelY = yy - pco.ay;
                   onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
                 }
                 const innerDone = containerShellInnerRefs.current.get(w.id);
@@ -846,7 +852,15 @@ export default function Canvas({
               {/* Catch pointer events in "holes" (non-listening decoration rects) so hits don't fall through to the stage and start box-select; children still draw on top. */}
               <Rect x={0} y={0} width={w.w} height={w.h} fill="rgba(0,0,0,0.01)" listening={true} />
               {baseLocal}
-              {kids.map((k) => renderWidget(k, selectedSet.has(k.id), { localPosition: true }))}
+              {(() => {
+                const { pl, pt } = padFromStyle(s as Record<string, unknown>);
+                return kids.map((k) =>
+                  renderWidget(k, selectedSet.has(k.id), {
+                    localPosition: true,
+                    contentPad: { x: pl, y: pt },
+                  })
+                );
+              })()}
             </Group>
           </Group>
         );

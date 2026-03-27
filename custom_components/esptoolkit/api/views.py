@@ -3904,7 +3904,7 @@ def _emit_spinbox2_yaml(
     outline_w = int(style.get("outline_width", 0) or 0)
     edge = max(0, border_w, outline_w)
     # Row height: font line box + room for borders/outlines so +/- buttons are not clipped at bottom/top.
-    row_h = max(h_val, font_px + 16 + 2 * edge)
+    row_h = max(h_val, font_px + 22 + 2 * edge)
     btn_w = max(28, min(64, w_val // 4))
     lbl_w = max(20, w_val - 2 * btn_w)
     lbl_h = max(font_px + 6, row_h - 2)
@@ -4867,6 +4867,29 @@ def _compile_lvgl_pages_schema_driven(
                 h_val = int(w.get("h", 50))
                 props = w.get("props") or {}
                 style = w.get("style") or {}
+                align = str(props.get("align", "TOP_LEFT") or "TOP_LEFT").strip().upper()
+                if align and align != "TOP_LEFT" and parent_w is not None and parent_h is not None:
+                    pw2, ph2 = parent_w // 2, parent_h // 2
+                    if align == "CENTER":
+                        x_val = x_val + w_val // 2 - pw2
+                        y_val = y_val + h_val // 2 - ph2
+                    elif align == "TOP_MID":
+                        x_val = x_val + w_val // 2 - pw2
+                    elif align == "TOP_RIGHT":
+                        x_val = x_val + w_val - parent_w
+                    elif align == "LEFT_MID":
+                        y_val = y_val + h_val // 2 - ph2
+                    elif align == "RIGHT_MID":
+                        x_val = x_val + w_val - parent_w
+                        y_val = y_val + h_val // 2 - ph2
+                    elif align == "BOTTOM_LEFT":
+                        y_val = y_val + h_val - parent_h
+                    elif align == "BOTTOM_MID":
+                        x_val = x_val + w_val // 2 - pw2
+                        y_val = y_val + h_val - parent_h
+                    elif align == "BOTTOM_RIGHT":
+                        x_val = x_val + w_val - parent_w
+                        y_val = y_val + h_val - parent_h
                 rot = float(props.get("rotation", 0))
                 start_angle = float(props.get("start_angle", 135))
                 end_angle = float(props.get("end_angle", 45))
@@ -4900,7 +4923,7 @@ def _compile_lvgl_pages_schema_driven(
                 configured_font_px = _font_px_from_id(label_font, 14)
                 label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
                 # Extra line height + width for LVGL font bearings (esp. top-of-arc numerals).
-                extra_v = max(10, int(math.ceil(label_font_size * 0.5)))
+                extra_v = max(12, int(math.ceil(label_font_size * 0.65)))
                 label_h = label_font_size + extra_v
                 # Compute label positions and bounding box so container can be expanded to avoid clipping
                 label_boxes = []
@@ -4915,7 +4938,6 @@ def _compile_lvgl_pages_schema_driven(
                     lx_int = int(round(lx - half))
                     ly_int = int(round(ly - label_h / 2))
                     label_boxes.append((lx_int, ly_int, box, label_h))
-                pad = 14
                 min_x = 0
                 max_x = w_val
                 min_y = 0
@@ -4925,6 +4947,26 @@ def _compile_lvgl_pages_schema_driven(
                     max_x = max(max_x, lx_int + box)
                     min_y = min(min_y, ly_int)
                     max_y = max(max_y, ly_int + lh)
+                tw2 = max(1, (tick_width + 1) // 2)
+                for value in tick_values:
+                    angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
+                    angle_rad = math.radians(angle_deg)
+                    c = math.cos(angle_rad)
+                    s_m = math.sin(angle_rad)
+                    x1 = cx + (r - tick_len) * c
+                    y1 = cy + (r - tick_len) * s_m
+                    x2 = cx + r * c
+                    y2 = cy + r * s_m
+                    for px, py in ((x1, y1), (x2, y2)):
+                        ix0 = int(math.floor(px - tw2))
+                        iy0 = int(math.floor(py - tw2))
+                        ix1 = int(math.ceil(px + tw2))
+                        iy1 = int(math.ceil(py + tw2))
+                        min_x = min(min_x, ix0)
+                        max_x = max(max_x, ix1)
+                        min_y = min(min_y, iy0)
+                        max_y = max(max_y, iy1)
+                pad = 22
                 container_w = max(w_val, max_x - min_x + 2 * pad)
                 container_h = max(h_val, max_y - min_y + 2 * pad)
                 ox = pad - min_x

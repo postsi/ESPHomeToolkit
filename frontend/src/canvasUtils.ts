@@ -215,6 +215,41 @@ export function widgetsInSelectionRect(
   return ids;
 }
 
+/** LVGL-style padding from widget style (pad_all applies when side-specific missing). */
+export function padFromStyle(style: Record<string, unknown> | undefined): {
+  pl: number;
+  pr: number;
+  pt: number;
+  pb: number;
+} {
+  const s = style || {};
+  const pa = Number(s.pad_all ?? 0);
+  return {
+    pl: Number(s.pad_left ?? pa) || 0,
+    pr: Number(s.pad_right ?? pa) || 0,
+    pt: Number(s.pad_top ?? pa) || 0,
+    pb: Number(s.pad_bottom ?? pa) || 0,
+  };
+}
+
+/**
+ * Screen-space top-left of the direct parent's content area (inside padding).
+ * Model x/y for children are relative to this origin on device (LVGL).
+ */
+export function parentContentOriginScreen(
+  w: WidgetLike,
+  widgetById: Map<string, WidgetLike>,
+  width: number,
+  height: number
+): { ax: number; ay: number } {
+  if (!w.parent_id) return { ax: 0, ay: 0 };
+  const p = widgetById.get(w.parent_id);
+  if (!p) return { ax: 0, ay: 0 };
+  const outer = absPos(p, widgetById, width, height);
+  const { pl, pt } = padFromStyle(p.style as Record<string, unknown> | undefined);
+  return { ax: outer.ax + pl, ay: outer.ay + pt };
+}
+
 /** Parent absolute position and size (for alignment). */
 export function parentInfo(
   w: WidgetLike,
@@ -262,34 +297,48 @@ export function absPos(
   height: number
 ): { ax: number; ay: number } {
   const { ax: pax, ay: pay, pw, ph } = parentInfo(w, widgetById, width, height);
+  let baseAx = pax;
+  let baseAy = pay;
+  let effPw = pw;
+  let effPh = ph;
+  if (w.parent_id) {
+    const par = widgetById.get(w.parent_id);
+    if (par) {
+      const { pl, pr, pt, pb } = padFromStyle(par.style as Record<string, unknown> | undefined);
+      baseAx = pax + pl;
+      baseAy = pay + pt;
+      effPw = Math.max(0, pw - pl - pr);
+      effPh = Math.max(0, ph - pt - pb);
+    }
+  }
   const align = String((w.props || {}).align ?? "TOP_LEFT").toUpperCase();
   const x = w.x;
   const y = w.y;
   const ww = w.w || 100;
   const hh = w.h || 50;
-  if (align === "TOP_LEFT" || !align) return { ax: pax + x, ay: pay + y };
-  const pw2 = pw / 2;
-  const ph2 = ph / 2;
+  if (align === "TOP_LEFT" || !align) return { ax: baseAx + x, ay: baseAy + y };
+  const pw2 = effPw / 2;
+  const ph2 = effPh / 2;
   let ox = 0;
   let oy = 0;
   if (align === "CENTER") {
     ox = x + ww / 2 - pw2;
     oy = y + hh / 2 - ph2;
   } else if (align === "TOP_MID") ox = x + ww / 2 - pw2;
-  else if (align === "TOP_RIGHT") ox = x + ww - pw;
+  else if (align === "TOP_RIGHT") ox = x + ww - effPw;
   else if (align === "LEFT_MID") oy = y + hh / 2 - ph2;
   else if (align === "RIGHT_MID") {
-    ox = x + ww - pw;
+    ox = x + ww - effPw;
     oy = y + hh / 2 - ph2;
-  } else if (align === "BOTTOM_LEFT") oy = y + hh - ph;
+  } else if (align === "BOTTOM_LEFT") oy = y + hh - effPh;
   else if (align === "BOTTOM_MID") {
     ox = x + ww / 2 - pw2;
-    oy = y + hh - ph;
+    oy = y + hh - effPh;
   } else if (align === "BOTTOM_RIGHT") {
-    ox = x + ww - pw;
-    oy = y + hh - ph;
+    ox = x + ww - effPw;
+    oy = y + hh - effPh;
   }
-  const centerX = pax + pw2 + ox;
-  const centerY = pay + ph2 + oy;
+  const centerX = baseAx + pw2 + ox;
+  const centerY = baseAy + ph2 + oy;
   return { ax: centerX - ww / 2, ay: centerY - hh / 2 };
 }

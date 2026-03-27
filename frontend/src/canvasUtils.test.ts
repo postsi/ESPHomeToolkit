@@ -315,6 +315,22 @@ describe("canvasUtils", () => {
       expect(pos).toEqual({ ax: 10, ay: 20 });
     });
 
+    it("TOP_LEFT child adds parent content padding (LVGL parity)", () => {
+      const root: WidgetLike = {
+        id: "r",
+        x: 0,
+        y: 0,
+        w: 200,
+        h: 100,
+        style: { pad_left: 12, pad_top: 8 },
+      };
+      const child: WidgetLike = { id: "c", x: 10, y: 20, w: 50, h: 30, parent_id: "r" };
+      byId.set("r", root);
+      byId.set("c", child);
+      const pos = absPos(child, byId, w, h);
+      expect(pos).toEqual({ ax: 22, ay: 28 });
+    });
+
     it("CENTER align uses parent position and child size for placement", () => {
       const root: WidgetLike = { id: "r", x: 100, y: 100, w: 200, h: 100 };
       const child: WidgetLike = { id: "c", x: 0, y: 0, w: 80, h: 40, parent_id: "r", props: { align: "CENTER" } };
