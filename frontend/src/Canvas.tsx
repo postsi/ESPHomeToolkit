@@ -138,29 +138,6 @@ export default function Canvas({
   const boxSelectStartRef = useRef<{ x: number; y: number } | null>(null);
   const BOX_SELECT_THRESHOLD = 5;
 
-  React.useEffect(() => {
-    if (!trRef.current || !stageRef.current) return;
-    // Multi-select: resizing applies one shared transform box and drags/jumps all nodes — disable.
-    if (selectedIds.length !== 1) {
-      trRef.current.nodes([]);
-      trRef.current.getLayer()?.batchDraw();
-      return;
-    }
-    const sid = selectedIds[0];
-    const wSel = widgetById.get(sid);
-    const kSel = wSel ? childrenByParent.get(wSel.id) : undefined;
-    const tSel = wSel ? String(wSel.type || "").toLowerCase() : "";
-    const isFramedContainer =
-      !!wSel &&
-      !!kSel &&
-      kSel.length > 0 &&
-      (tSel === "container" || tSel === "obj" || tSel.includes("container"));
-    const konvaId = isFramedContainer ? containerTransformKonvaId(sid) : sid;
-    const node = stageRef.current.findOne(`#${konvaId}`);
-    trRef.current.nodes(node ? [node] : []);
-    trRef.current.getLayer()?.batchDraw();
-  }, [selectedIds, frameOnlyResize, widgetById, childrenByParent]);
-
   // When box-selecting, listen for mouseup globally so we catch release outside the stage
   const finishSelectionBox = useCallback(() => {
     if (!selectionBox) return;
@@ -227,6 +204,29 @@ export default function Canvas({
     }
     return m;
   }, [widgets]);
+
+  React.useEffect(() => {
+    if (!trRef.current || !stageRef.current) return;
+    // Multi-select: resizing applies one shared transform box and drags/jumps all nodes — disable.
+    if (selectedIds.length !== 1) {
+      trRef.current.nodes([]);
+      trRef.current.getLayer()?.batchDraw();
+      return;
+    }
+    const sid = selectedIds[0];
+    const wSel = widgetById.get(sid);
+    const kSel = wSel ? childrenByParent.get(wSel.id) : undefined;
+    const tSel = wSel ? String(wSel.type || "").toLowerCase() : "";
+    const isFramedContainer =
+      !!wSel &&
+      !!kSel &&
+      kSel.length > 0 &&
+      (tSel === "container" || tSel === "obj" || tSel.includes("container"));
+    const konvaId = isFramedContainer ? containerTransformKonvaId(sid) : sid;
+    const node = stageRef.current.findOne(`#${konvaId}`);
+    trRef.current.nodes(node ? [node] : []);
+    trRef.current.getLayer()?.batchDraw();
+  }, [selectedIds, frameOnlyResize, widgetById, childrenByParent]);
 
   const selectedSingleGroupContainer = useMemo(() => {
     if (selectedIds.length !== 1) return null;
