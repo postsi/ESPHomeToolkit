@@ -30,6 +30,52 @@ function parityFixtureNames(): readonly string[] {
 
 const PARITY_OUT = path.join(__dirname, "../test-results/parity");
 
+/** 2×2 grid: TL designer, TR sim, BL per-channel sum (clamped), BR abs RGB diff ×6 (grayscale) — makes bg tint drift obvious. */
+function buildParityCompositePng(designer: PNG, sim: PNG): PNG {
+  const W = designer.width;
+  const H = designer.height;
+  const out = new PNG({ width: W * 2, height: H * 2 });
+  const stride = W * 2;
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const si = (W * y + x) << 2;
+      const dr = designer.data[si];
+      const dg = designer.data[si + 1];
+      const db = designer.data[si + 2];
+      const da = designer.data[si + 3];
+      const sr = sim.data[si];
+      const sg = sim.data[si + 1];
+      const sb = sim.data[si + 2];
+      const sa = sim.data[si + 3];
+
+      const write = (ox: number, oy: number, r: number, g: number, b: number, a: number) => {
+        const oi = (stride * oy + ox) << 2;
+        out.data[oi] = r;
+        out.data[oi + 1] = g;
+        out.data[oi + 2] = b;
+        out.data[oi + 3] = a;
+      };
+
+      write(x, y, dr, dg, db, da);
+      write(W + x, y, sr, sg, sb, sa);
+
+      const sumR = Math.min(255, dr + sr);
+      const sumG = Math.min(255, dg + sg);
+      const sumB = Math.min(255, db + sb);
+      write(x, H + y, sumR, sumG, sumB, 255);
+
+      const er = Math.abs(dr - sr);
+      const eg = Math.abs(dg - sg);
+      const eb = Math.abs(db - sb);
+      const m = Math.max(er, eg, eb);
+      const amp = Math.min(255, m * 6);
+      write(W + x, H + y, amp, amp, amp, 255);
+    }
+  }
+  return out;
+}
+
 function parseDataUrlPng(dataUrl: string): Buffer {
   const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl);
   if (!m) throw new Error("expected data:image/png;base64,…");
@@ -66,6 +112,8 @@ function writeParityResult(
     fs.writeFileSync(`${base}-diff.png`, Buffer.from(PNG.sync.write(diff)));
     fs.writeFileSync(`${base}-designer.png`, Buffer.from(PNG.sync.write(designer)));
     fs.writeFileSync(`${base}-sim.png`, Buffer.from(PNG.sync.write(simPng)));
+    const composite = buildParityCompositePng(designer, simPng);
+    fs.writeFileSync(`${base}-composite.png`, Buffer.from(PNG.sync.write(composite)));
   }
   fs.writeFileSync(
     `${base}-result.json`,
@@ -78,9 +126,15 @@ function writeParityResult(
         threshold: tol,
         width: designer.width,
         height: designer.height,
+        compositeLayout: `${designer.width * 2}×${designer.height * 2}: TL designer, TR sim, BL per-channel sum (clamped), BR max(|ΔR|,|ΔG|,|ΔB|)×6 grayscale`,
         artifactsOnFailure: passed
           ? []
-          : [rel(`${fixture}-diff.png`), rel(`${fixture}-designer.png`), rel(`${fixture}-sim.png`)],
+          : [
+              rel(`${fixture}-diff.png`),
+              rel(`${fixture}-designer.png`),
+              rel(`${fixture}-sim.png`),
+              rel(`${fixture}-composite.png`),
+            ],
         playwrightJson: rel("playwright-report.json"),
         nextStep:
           "Edit Canvas/compiler (or capture/crop); rerun: cd frontend && npm run parity:mac (or npm run test:parity if snapshots already exist).",
