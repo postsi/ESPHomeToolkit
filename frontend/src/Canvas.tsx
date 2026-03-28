@@ -1447,7 +1447,8 @@ export default function Canvas({
       const sbRadius = Math.min(24, Math.max(0, Number(s.radius ?? 6)));
       const bg = toFillColor(s.bg_color, "#1e293b");
       const border = toFillColor(s.border_color, "#475569");
-      const bw = sbBorderForRow;
+      // Match views.py::_emit_spinbox2_yaml border_w (default 1).
+      const bw = Math.max(0, Math.floor(Number(s.border_width ?? 1) || 0));
       const rowH = layoutH;
       const btnFill = "#0f172a";
       const minusLabel = String(p.minus_text ?? "-");
