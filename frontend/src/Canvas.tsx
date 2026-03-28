@@ -17,6 +17,7 @@ import {
   parentContentOriginScreen as parentContentOriginScreenUtil,
   padFromStyle,
   layoutInt,
+  modelInt,
   containerTransformKonvaId,
   lvglEmittedOriginInParent,
   modelTopLeftFromEmittedOrigin,
@@ -67,6 +68,8 @@ type Props = {
   onOpenTextarea?: (widgetId: string, currentText: string) => void;
   /** Map LVGL font ids to browser font-family + size (see usePreviewFontResolver). */
   resolvePreviewFont?: (fontId: unknown) => { fontFamily: string; fontSize: number; approximate: boolean };
+  /** Parity / E2E: register canvas PNG export and set data-etd-parity-ready on the document root. */
+  parityCaptureMode?: boolean;
 };
 
 export default function Canvas({
@@ -90,6 +93,7 @@ export default function Canvas({
   onDropCreate,
   onChangeMany,
   resolvePreviewFont: resolvePreviewFontProp,
+  parityCaptureMode = false,
 }: Props) {
   const widgets = useMemo(() => safeWidgets(rawWidgets) as Widget[], [rawWidgets]);
   const previewFont = useCallback(
@@ -233,6 +237,32 @@ export default function Canvas({
     trRef.current.getLayer()?.batchDraw();
   }, [selectedIds, frameOnlyResize, widgetById, childrenByParent]);
 
+  React.useEffect(() => {
+    if (!parityCaptureMode) return;
+    const g = globalThis as unknown as { __ETD_EXPORT_CANVAS_PNG__?: () => string | undefined };
+    g.__ETD_EXPORT_CANVAS_PNG__ = () => {
+      const stage = stageRef.current;
+      if (!stage) return undefined;
+      return stage.toDataURL({ pixelRatio: 1, mimeType: "image/png", quality: 1 });
+    };
+    let cancelled = false;
+    const arm = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          stageRef.current?.batchDraw?.();
+          document.documentElement.setAttribute("data-etd-parity-ready", "1");
+        });
+      });
+    };
+    arm();
+    return () => {
+      cancelled = true;
+      document.documentElement.removeAttribute("data-etd-parity-ready");
+      delete g.__ETD_EXPORT_CANVAS_PNG__;
+    };
+  }, [parityCaptureMode, widgets, width, height]);
+
   const selectedSingleGroupContainer = useMemo(() => {
     if (selectedIds.length !== 1) return null;
     const w = widgetById.get(selectedIds[0]);
@@ -290,14 +320,16 @@ export default function Canvas({
     const p = w.props || {};
     const s = w.style || {};
     const alignStr = String(p.align ?? "TOP_LEFT").toUpperCase();
-    const ww0 = w.w || 100;
-    const hh0 = w.h || 50;
+    const ww0 = modelInt(w.w ?? 100);
+    const hh0 = modelInt(w.h ?? 50);
     const padOff = opts?.contentPad ?? { x: 0, y: 0 };
+    /** Page-absolute YAML rect — same as compiler / device (canvasUtils.yamlRectPageForWidget). */
+    const pageEmit = !opts?.localPosition ? widgetFootprintForSelection(w, widgetById, width, height) : null;
     let ax: number;
     let ay: number;
     if (opts?.localPosition) {
       if (arcYamlMetrics) {
-        const em = lvglEmittedOriginInParent(w.x, w.y, ww0, hh0, alignStr, pinf0.pw, pinf0.ph);
+        const em = lvglEmittedOriginInParent(modelInt(w.x ?? 0), modelInt(w.y ?? 0), ww0, hh0, alignStr, pinf0.pw, pinf0.ph);
         ax = padOff.x + em.x - arcYamlMetrics.arc_off_x;
         ay = padOff.y + em.y - arcYamlMetrics.arc_off_y;
       } else {
@@ -305,14 +337,8 @@ export default function Canvas({
         ay = w.y + padOff.y;
       }
     } else {
-      const ap = absPos(w);
-      ax = ap.ax;
-      ay = ap.ay;
-      if (arcYamlMetrics) {
-        const pco = parentContentOriginScreenUtil(w, widgetById, width, height);
-        ax = pco.ax + arcYamlMetrics.x_val - arcYamlMetrics.arc_off_x;
-        ay = pco.ay + arcYamlMetrics.y_val - arcYamlMetrics.arc_off_y;
-      }
+      ax = pageEmit!.ax;
+      ay = pageEmit!.ay;
     }
     const arcInnerOffX = arcYamlMetrics?.arc_off_x ?? 0;
     const arcInnerOffY = arcYamlMetrics?.arc_off_y ?? 0;
@@ -320,8 +346,8 @@ export default function Canvas({
     const modelXYFromScreenTL = (nx: number, ny: number) => {
       const pco = parentContentOrigin(w);
       const alignM = String((w.props || {}).align ?? "TOP_LEFT").toUpperCase();
-      const wwM = w.w || 100;
-      const hhM = w.h || 50;
+      const wwM = modelInt(w.w ?? 100);
+      const hhM = modelInt(w.h ?? 50);
       let lvx = nx - pco.ax;
       let lvy = ny - pco.ay;
       if (w.type === "arc_labeled" && arcYamlMetrics) {
@@ -381,8 +407,18 @@ export default function Canvas({
     const outlineOpa = Number(s.outline_opa ?? 0) / 100;
     const isSpinbox2Widget = String(w.type || "").toLowerCase() === "spinbox2";
     const spinbox2LayoutH = isSpinbox2Widget ? spinbox2EmittedRowHeight(w) : w.h;
-    const layoutW = arcYamlMetrics ? arcYamlMetrics.container_w : w.w;
-    const layoutH = arcYamlMetrics ? arcYamlMetrics.container_h : isSpinbox2Widget ? spinbox2LayoutH : w.h;
+    const layoutW = opts?.localPosition
+      ? arcYamlMetrics
+        ? arcYamlMetrics.container_w
+        : modelInt(w.w ?? 100)
+      : pageEmit!.w;
+    const layoutH = opts?.localPosition
+      ? arcYamlMetrics
+        ? arcYamlMetrics.container_h
+        : isSpinbox2Widget
+          ? spinbox2LayoutH
+          : modelInt(w.h ?? 50)
+      : pageEmit!.h;
     const radius = Math.min(layoutInt(radiusRaw), Math.floor(layoutW / 2), Math.floor(layoutH / 2));
     const transformAngle = Number(s.transform_angle ?? 0);
     const transformZoom = Number(s.transform_zoom ?? 100) / 100;
@@ -1876,7 +1912,11 @@ export default function Canvas({
       width={width}
       height={height}
       ref={stageRef}
-      style={{ background: /^#[0-9a-fA-F]{6}$/.test(dispBgColor || "") ? dispBgColor : "#0b0f14", borderRadius: 12, overflow: "hidden" }}
+      style={{
+        background: /^#[0-9a-fA-F]{6}$/.test(dispBgColor || "") ? dispBgColor : "#0b0f14",
+        borderRadius: parityCaptureMode ? 0 : 12,
+        overflow: "hidden",
+      }}
       onMouseDown={(e) => {
         if (simulationMode) return;
         const clickedOnEmpty = e.target === e.target.getStage();

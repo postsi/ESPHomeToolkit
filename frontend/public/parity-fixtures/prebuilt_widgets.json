@@ -1,0 +1,1109 @@
+{
+  "model_version": 1,
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "prebuilt_group_1d5be8",
+          "type": "container",
+          "x": 10,
+          "y": 12,
+          "w": 84,
+          "h": 24,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8,
+            "bg_opa": 0
+          }
+        },
+        {
+          "id": "battery_body_0f6fd2",
+          "type": "container",
+          "x": 0,
+          "y": 2,
+          "w": 44,
+          "h": 20,
+          "props": {},
+          "style": {
+            "bg_color": 3355443,
+            "radius": 4
+          },
+          "parent_id": "prebuilt_group_1d5be8"
+        },
+        {
+          "id": "battery_tip_c7e090",
+          "type": "container",
+          "x": 44,
+          "y": 6,
+          "w": 6,
+          "h": 8,
+          "props": {},
+          "style": {
+            "bg_color": 3355443,
+            "radius": 2
+          },
+          "parent_id": "prebuilt_group_1d5be8"
+        },
+        {
+          "id": "battery_fill_c207c6",
+          "type": "bar",
+          "x": 4,
+          "y": 6,
+          "w": 36,
+          "h": 12,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 75
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 3
+          },
+          "parent_id": "prebuilt_group_1d5be8"
+        },
+        {
+          "id": "battery_lbl_bd823b",
+          "type": "label",
+          "x": 56,
+          "y": 0,
+          "w": 28,
+          "h": 24,
+          "props": {
+            "text": "75%"
+          },
+          "style": {
+            "text_color": 8947848
+          },
+          "parent_id": "prebuilt_group_1d5be8"
+        },
+        {
+          "id": "prebuilt_group_be8837",
+          "type": "container",
+          "x": 344,
+          "y": 12,
+          "w": 42,
+          "h": 26,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "wifi_bar_8ed40c",
+          "type": "bar",
+          "x": 0,
+          "y": 18,
+          "w": 6,
+          "h": 8,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 2
+          },
+          "parent_id": "prebuilt_group_be8837"
+        },
+        {
+          "id": "wifi_bar_b7bc96",
+          "type": "bar",
+          "x": 12,
+          "y": 12,
+          "w": 6,
+          "h": 14,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 2
+          },
+          "parent_id": "prebuilt_group_be8837"
+        },
+        {
+          "id": "wifi_bar_fa8b03",
+          "type": "bar",
+          "x": 24,
+          "y": 6,
+          "w": 6,
+          "h": 20,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 2
+          },
+          "parent_id": "prebuilt_group_be8837"
+        },
+        {
+          "id": "wifi_bar_84bdb7",
+          "type": "bar",
+          "x": 36,
+          "y": 0,
+          "w": 6,
+          "h": 26,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 2
+          },
+          "parent_id": "prebuilt_group_be8837"
+        },
+        {
+          "id": "prebuilt_group_976bf9",
+          "type": "container",
+          "x": 678,
+          "y": 12,
+          "w": 48,
+          "h": 48,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "wifi_fan_arc_1a182a",
+          "type": "arc",
+          "x": 16,
+          "y": 16,
+          "w": 16,
+          "h": 16,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100,
+            "start_angle": 225,
+            "end_angle": 315,
+            "adjustable": false,
+            "arc_width": 3
+          },
+          "style": {
+            "bg_color": 1973790
+          },
+          "parent_id": "prebuilt_group_976bf9"
+        },
+        {
+          "id": "wifi_fan_arc_d3e062",
+          "type": "arc",
+          "x": 12,
+          "y": 12,
+          "w": 24,
+          "h": 24,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100,
+            "start_angle": 225,
+            "end_angle": 315,
+            "adjustable": false,
+            "arc_width": 3
+          },
+          "style": {
+            "bg_color": 1973790
+          },
+          "parent_id": "prebuilt_group_976bf9"
+        },
+        {
+          "id": "wifi_fan_arc_1d83e3",
+          "type": "arc",
+          "x": 8,
+          "y": 8,
+          "w": 32,
+          "h": 32,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100,
+            "start_angle": 225,
+            "end_angle": 315,
+            "adjustable": false,
+            "arc_width": 3
+          },
+          "style": {
+            "bg_color": 1973790
+          },
+          "parent_id": "prebuilt_group_976bf9"
+        },
+        {
+          "id": "wifi_fan_arc_8bcca4",
+          "type": "arc",
+          "x": 4,
+          "y": 4,
+          "w": 40,
+          "h": 40,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100,
+            "start_angle": 225,
+            "end_angle": 315,
+            "adjustable": false,
+            "arc_width": 3
+          },
+          "style": {
+            "bg_color": 1973790
+          },
+          "parent_id": "prebuilt_group_976bf9"
+        },
+        {
+          "id": "wifi_fan_arc_8cacdc",
+          "type": "arc",
+          "x": 0,
+          "y": 0,
+          "w": 48,
+          "h": 48,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 100,
+            "start_angle": 225,
+            "end_angle": 315,
+            "adjustable": false,
+            "arc_width": 3
+          },
+          "style": {
+            "bg_color": 1973790
+          },
+          "parent_id": "prebuilt_group_976bf9"
+        },
+        {
+          "id": "color_picker_9c8eb1",
+          "type": "color_picker",
+          "x": 10,
+          "y": 44,
+          "w": 80,
+          "h": 36,
+          "props": {
+            "value": 4227327
+          },
+          "style": {
+            "bg_color": 4227327,
+            "radius": 8
+          }
+        },
+        {
+          "id": "white_picker_6eeafe",
+          "type": "white_picker",
+          "x": 344,
+          "y": 46,
+          "w": 80,
+          "h": 36,
+          "props": {
+            "value": 326
+          },
+          "style": {
+            "bg_color": 16767420,
+            "radius": 8
+          }
+        },
+        {
+          "id": "spinbox2_bbe938",
+          "type": "spinbox2",
+          "x": 678,
+          "y": 68,
+          "w": 200,
+          "h": 48,
+          "props": {
+            "value": 15,
+            "min_value": 5,
+            "max_value": 30,
+            "step": 1,
+            "decimal_places": 1,
+            "minus_text": "-",
+            "plus_text": "+"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6,
+            "text_color": 14870768
+          },
+          "events": {}
+        },
+        {
+          "id": "ip_459b8b",
+          "type": "label",
+          "x": 10,
+          "y": 88,
+          "w": 160,
+          "h": 24,
+          "props": {
+            "text": "..."
+          },
+          "style": {
+            "text_color": 8947848,
+            "text_font": "montserrat_16"
+          }
+        },
+        {
+          "id": "hostname_90bc72",
+          "type": "label",
+          "x": 344,
+          "y": 90,
+          "w": 160,
+          "h": 24,
+          "props": {
+            "text": "..."
+          },
+          "style": {
+            "text_color": 8947848,
+            "text_font": "montserrat_16"
+          }
+        },
+        {
+          "id": "prebuilt_group_74685e",
+          "type": "container",
+          "x": 10,
+          "y": 120,
+          "w": 140,
+          "h": 32,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "ha_conn_e45f7b",
+          "type": "container",
+          "x": 0,
+          "y": 0,
+          "w": 140,
+          "h": 32,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_74685e"
+        },
+        {
+          "id": "ha_conn_led_fc7d96",
+          "type": "led",
+          "x": 8,
+          "y": 8,
+          "w": 16,
+          "h": 16,
+          "props": {
+            "color": 8947848
+          },
+          "parent_id": "prebuilt_group_74685e"
+        },
+        {
+          "id": "ha_conn_lbl_d54e6f",
+          "type": "label",
+          "x": 28,
+          "y": 6,
+          "w": 104,
+          "h": 20,
+          "props": {
+            "text": "..."
+          },
+          "style": {
+            "text_color": 8947848
+          },
+          "parent_id": "prebuilt_group_74685e"
+        },
+        {
+          "id": "clock_418067",
+          "type": "label",
+          "x": 344,
+          "y": 122,
+          "w": 100,
+          "h": 28,
+          "props": {
+            "text": "--:--"
+          },
+          "style": {
+            "text_color": 11184810,
+            "text_font": "montserrat_24"
+          }
+        },
+        {
+          "id": "prebuilt_group_31fb5e",
+          "type": "container",
+          "x": 678,
+          "y": 124,
+          "w": 140,
+          "h": 48,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "date_272784",
+          "type": "label",
+          "x": 0,
+          "y": 0,
+          "w": 140,
+          "h": 22,
+          "props": {
+            "text": "..."
+          },
+          "style": {
+            "text_color": 8947848,
+            "text_font": "montserrat_14"
+          },
+          "parent_id": "prebuilt_group_31fb5e"
+        },
+        {
+          "id": "time_7e417a",
+          "type": "label",
+          "x": 0,
+          "y": 24,
+          "w": 140,
+          "h": 24,
+          "props": {
+            "text": "--:--"
+          },
+          "style": {
+            "text_color": 11184810,
+            "text_font": "montserrat_24"
+          },
+          "parent_id": "prebuilt_group_31fb5e"
+        },
+        {
+          "id": "prebuilt_group_063b56",
+          "type": "container",
+          "x": 344,
+          "y": 158,
+          "w": 180,
+          "h": 44,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "ct_label_490b82",
+          "type": "label",
+          "x": 0,
+          "y": 0,
+          "w": 180,
+          "h": 18,
+          "props": {
+            "text": "Cool ←  —  → Warm"
+          },
+          "style": {
+            "text_color": 8947848
+          },
+          "parent_id": "prebuilt_group_063b56"
+        },
+        {
+          "id": "ct_slider_64fab0",
+          "type": "slider",
+          "x": 0,
+          "y": 20,
+          "w": 180,
+          "h": 24,
+          "props": {
+            "min_value": 153,
+            "max_value": 500,
+            "value": 250
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 4
+          },
+          "parent_id": "prebuilt_group_063b56"
+        },
+        {
+          "id": "section_5af01c",
+          "type": "label",
+          "x": 10,
+          "y": 160,
+          "w": 200,
+          "h": 26,
+          "props": {
+            "text": "Section"
+          },
+          "style": {
+            "text_color": 11184810
+          }
+        },
+        {
+          "id": "divider_d07e8b",
+          "type": "container",
+          "x": 678,
+          "y": 180,
+          "w": 200,
+          "h": 2,
+          "props": {},
+          "style": {
+            "bg_color": 3355443,
+            "radius": 0
+          }
+        },
+        {
+          "id": "prebuilt_group_5b0791",
+          "type": "container",
+          "x": 678,
+          "y": 190,
+          "w": 204,
+          "h": 24,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "progress_bar_6071e1",
+          "type": "bar",
+          "x": 0,
+          "y": 0,
+          "w": 160,
+          "h": 24,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 50
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 4
+          },
+          "parent_id": "prebuilt_group_5b0791"
+        },
+        {
+          "id": "progress_lbl_e7c4a6",
+          "type": "label",
+          "x": 164,
+          "y": 0,
+          "w": 40,
+          "h": 24,
+          "props": {
+            "text": "50%"
+          },
+          "style": {
+            "text_color": 8947848
+          },
+          "parent_id": "prebuilt_group_5b0791"
+        },
+        {
+          "id": "arc_labeled_890002",
+          "type": "arc_labeled",
+          "x": 10,
+          "y": 194,
+          "w": 120,
+          "h": 120,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 50,
+            "start_angle": 135,
+            "end_angle": 45,
+            "rotation": 0,
+            "mode": "NORMAL",
+            "adjustable": true
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 4,
+            "tick_color": 11184810,
+            "tick_width": 3,
+            "tick_length": 0,
+            "label_text_color": 11184810,
+            "label_text_font": "",
+            "label_font_size": 0
+          }
+        },
+        {
+          "id": "led_f3ff38",
+          "type": "led",
+          "x": 344,
+          "y": 210,
+          "w": 24,
+          "h": 24,
+          "props": {}
+        },
+        {
+          "id": "back_btn_f777d3",
+          "type": "button",
+          "x": 678,
+          "y": 222,
+          "w": 80,
+          "h": 36,
+          "props": {
+            "text": "< Back"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          }
+        },
+        {
+          "id": "prebuilt_group_70bd94",
+          "type": "container",
+          "x": 344,
+          "y": 242,
+          "w": 140,
+          "h": 28,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "screensaver_ecee8d",
+          "type": "container",
+          "x": 0,
+          "y": 0,
+          "w": 140,
+          "h": 28,
+          "props": {
+            "timeout_seconds": 60,
+            "backlight_id": "display_backlight"
+          },
+          "style": {
+            "bg_color": 1973790,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_70bd94"
+        },
+        {
+          "id": "screensaver_lbl_91963d",
+          "type": "label",
+          "parent_id": "prebuilt_group_70bd94",
+          "x": 8,
+          "y": 4,
+          "w": 120,
+          "h": 20,
+          "props": {
+            "text": "Screen saver (60s)"
+          },
+          "style": {
+            "text_color": 8947848,
+            "text_font": "montserrat_14"
+          }
+        },
+        {
+          "id": "page_ind_9ec4be",
+          "type": "label",
+          "x": 678,
+          "y": 266,
+          "w": 48,
+          "h": 24,
+          "props": {
+            "text": "1/3"
+          },
+          "style": {
+            "text_color": 8947848
+          }
+        },
+        {
+          "id": "prebuilt_group_463935",
+          "type": "container",
+          "x": 344,
+          "y": 278,
+          "w": 200,
+          "h": 44,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "nav_bg_38531e",
+          "type": "container",
+          "x": 0,
+          "y": 0,
+          "w": 200,
+          "h": 44,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          },
+          "parent_id": "prebuilt_group_463935"
+        },
+        {
+          "id": "nav_prev_883dc8",
+          "type": "button",
+          "x": 8,
+          "y": 6,
+          "w": 56,
+          "h": 32,
+          "props": {
+            "text": "<"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_463935"
+        },
+        {
+          "id": "nav_home_b5232d",
+          "type": "button",
+          "x": 72,
+          "y": 6,
+          "w": 56,
+          "h": 32,
+          "props": {
+            "text": "H"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_463935"
+        },
+        {
+          "id": "nav_next_d03311",
+          "type": "button",
+          "x": 136,
+          "y": 6,
+          "w": 56,
+          "h": 32,
+          "props": {
+            "text": ">"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_463935"
+        },
+        {
+          "id": "countdown_50791c",
+          "type": "label",
+          "x": 678,
+          "y": 298,
+          "w": 80,
+          "h": 28,
+          "props": {
+            "text": "5:00"
+          },
+          "style": {
+            "text_color": 11184810
+          }
+        },
+        {
+          "id": "badge_14ddca",
+          "type": "label",
+          "x": 10,
+          "y": 322,
+          "w": 60,
+          "h": 28,
+          "props": {
+            "text": "OK"
+          },
+          "style": {
+            "bg_color": 2278750,
+            "radius": 6,
+            "text_color": 16777215
+          }
+        },
+        {
+          "id": "spacer_7e52ee",
+          "type": "container",
+          "x": 344,
+          "y": 330,
+          "w": 24,
+          "h": 24,
+          "props": {},
+          "style": {
+            "bg_opa": 0
+          }
+        },
+        {
+          "id": "icon_25c334",
+          "type": "label",
+          "x": 678,
+          "y": 334,
+          "w": 40,
+          "h": 40,
+          "props": {
+            "text": "Sun"
+          },
+          "style": {
+            "text_color": 11184810
+          }
+        },
+        {
+          "id": "scroll_txt_3e14a4",
+          "type": "label",
+          "x": 10,
+          "y": 358,
+          "w": 200,
+          "h": 24,
+          "props": {
+            "text": "Scrolling text…"
+          },
+          "style": {
+            "text_color": 8947848
+          }
+        },
+        {
+          "id": "prebuilt_group_3214b8",
+          "type": "container",
+          "x": 344,
+          "y": 362,
+          "w": 150,
+          "h": 184,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "keypad_9f7b13",
+          "type": "container",
+          "x": 0,
+          "y": 0,
+          "w": 144,
+          "h": 178,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_0_dba50c",
+          "type": "button",
+          "x": 6,
+          "y": 6,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "1"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_1_71c410",
+          "type": "button",
+          "x": 56,
+          "y": 6,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "2"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_2_2f8021",
+          "type": "button",
+          "x": 106,
+          "y": 6,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "3"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_3_d21ccd",
+          "type": "button",
+          "x": 6,
+          "y": 52,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "4"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_4_9b604a",
+          "type": "button",
+          "x": 56,
+          "y": 52,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "5"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_5_4101f2",
+          "type": "button",
+          "x": 106,
+          "y": 52,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "6"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_6_0c375d",
+          "type": "button",
+          "x": 6,
+          "y": 98,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "7"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_7_003232",
+          "type": "button",
+          "x": 56,
+          "y": 98,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "8"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_8_3259ed",
+          "type": "button",
+          "x": 106,
+          "y": 98,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "9"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_9_387a7c",
+          "type": "button",
+          "x": 6,
+          "y": 144,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "C"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_10_4cd29e",
+          "type": "button",
+          "x": 56,
+          "y": 144,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "0"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "kp_11_349602",
+          "type": "button",
+          "x": 106,
+          "y": 144,
+          "w": 44,
+          "h": 40,
+          "props": {
+            "text": "Del"
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          },
+          "parent_id": "prebuilt_group_3214b8"
+        },
+        {
+          "id": "list_menu_69303a",
+          "type": "dropdown",
+          "x": 678,
+          "y": 382,
+          "w": 180,
+          "h": 40,
+          "props": {
+            "options": [
+              "Option A",
+              "Option B",
+              "Option C"
+            ]
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 6
+          }
+        }
+      ]
+    }
+  ]
+}

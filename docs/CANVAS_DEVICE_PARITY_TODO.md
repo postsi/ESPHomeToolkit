@@ -56,8 +56,8 @@ Ordered roughly by impact vs effort. Check items off as you complete them.
 
 ### Automation and process
 
-11. **Golden fixtures in repo** — Commit 1–3 small JSON projects under `docs/` or `tests/fixtures/` dedicated to parity checks.
-12. **Optional screenshot diff** — Script: render canvas headlessly (or export) vs device photo/capture with tolerance; run in CI only if stable enough.
+11. **Parity fixtures** — JSON under `frontend/public/parity-fixtures/`; compare designer export to Mac LVGL PNG (`docs/PARITY_PIPELINE.md`), not to committed browser goldens.
+12. **Screenshot diff** — Playwright + `pixelmatch` vs sim snapshot URL; tolerance env vars when fonts/OS differ slightly.
 13. **Round-trip guard** — After import-from-YAML (if applicable), assert geometry and key props match expected for fixtures (extends ideas in `ROUND_TRIP_TESTING.md`).
 
 ### Product / docs

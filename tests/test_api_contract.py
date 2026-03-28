@@ -94,3 +94,24 @@ def test_project_get_shape(ha_api, api_path, entry_id, device_id):
         proj = data["project"]
         assert isinstance(proj, dict)
         assert "pages" in proj or "esphome_yaml" in proj or proj == {}
+
+
+def test_mac_sim_last_report_shape(ha_api, entry_id):
+    """GET mac_sim/last_report returns has_report + optional report (after Mac agent runs a job)."""
+    if not entry_id:
+        pytest.skip("ESPTOOLKIT_ENTRY_ID not set")
+    from urllib.parse import quote
+
+    status, data = ha_api.get_json(
+        "/api/esptoolkit/mac_sim/last_report?entry_id=" + quote(entry_id, safe="")
+    )
+    assert status in (200, 404)
+    if status == 200:
+        assert isinstance(data, dict)
+        assert data.get("ok") is True
+        assert "has_report" in data
+        if data.get("has_report") and data.get("report"):
+            rep = data["report"]
+            assert "ok" in rep
+            assert "phase" in rep
+            assert "received_at" in rep

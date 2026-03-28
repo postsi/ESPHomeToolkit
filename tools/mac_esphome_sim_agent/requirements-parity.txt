@@ -1,0 +1,4 @@
+# Optional: designer ↔ Mac LVGL parity (window capture). Install on the Mac that runs SDL.
+#   pip install -r tools/mac_esphome_sim_agent/requirements-parity.txt
+pyobjc-framework-Quartz>=10.3
+Pillow>=10.0

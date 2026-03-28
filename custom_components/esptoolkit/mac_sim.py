@@ -71,10 +71,16 @@ _MAC_SIM_DROP_SECTION_KEYS: frozenset[str] = frozenset(
 
 
 def ensure_mac_sim_hub(hass: HomeAssistant) -> dict[str, Any]:
-    """Singleton hub: one outbound agent session + outbound job queue."""
+    """Singleton hub: one outbound agent session + outbound job queue + last agent job_report."""
     root = hass.data.setdefault(DOMAIN, {})
     if "mac_sim_hub" not in root:
-        root["mac_sim_hub"] = {"lock": asyncio.Lock(), "session": None}
+        root["mac_sim_hub"] = {
+            "lock": asyncio.Lock(),
+            "session": None,
+            "last_report_by_entry": {},
+        }
+    else:
+        root["mac_sim_hub"].setdefault("last_report_by_entry", {})
     return root["mac_sim_hub"]
 
 

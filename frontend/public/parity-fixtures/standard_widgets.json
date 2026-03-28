@@ -1,0 +1,564 @@
+{
+  "model_version": 1,
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "std_animimg",
+          "type": "animimg",
+          "x": 12,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_arc",
+          "type": "arc",
+          "x": 178,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 40,
+            "start_angle": 135,
+            "end_angle": 45,
+            "mode": "NORMAL",
+            "rotation": 0
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_arc_labeled",
+          "type": "arc_labeled",
+          "x": 344,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 25,
+            "start_angle": 135,
+            "end_angle": 45,
+            "rotation": 0,
+            "mode": "NORMAL",
+            "adjustable": false
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6,
+            "tick_color": "#e2e8f0",
+            "tick_width": 2,
+            "label_text_color": "#e2e8f0"
+          }
+        },
+        {
+          "id": "std_bar",
+          "type": "bar",
+          "x": 510,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 55,
+            "mode": "NORMAL"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_button",
+          "type": "button",
+          "x": 676,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "text": "Btn"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_buttonmatrix",
+          "type": "buttonmatrix",
+          "x": 842,
+          "y": 12,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "map": [
+              "1 2",
+              "3 4"
+            ]
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_canvas",
+          "type": "canvas",
+          "x": 12,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "transparent": false
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_checkbox",
+          "type": "checkbox",
+          "x": 178,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "state": true
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_color_picker",
+          "type": "color_picker",
+          "x": 344,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "value": 16744512
+          },
+          "style": {
+            "bg_color": 16744512,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_container",
+          "type": "container",
+          "x": 510,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_dropdown",
+          "type": "dropdown",
+          "x": 676,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "options": "A\nB\nC"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_image",
+          "type": "image",
+          "x": 842,
+          "y": 122,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_keyboard",
+          "type": "keyboard",
+          "x": 12,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_label",
+          "type": "label",
+          "x": 178,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "text": "Lbl"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_led",
+          "type": "led",
+          "x": 344,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "color": 2278750,
+            "brightness": 100
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_line",
+          "type": "line",
+          "x": 510,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "line_width": 2,
+            "line_rounded": true
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_meter",
+          "type": "meter",
+          "x": 676,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 40,
+            "start_angle": 135,
+            "end_angle": 45,
+            "mode": "NORMAL",
+            "rotation": 0
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_msgboxes",
+          "type": "msgboxes",
+          "x": 842,
+          "y": 232,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_obj",
+          "type": "obj",
+          "x": 12,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_qrcode",
+          "type": "qrcode",
+          "x": 178,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "text": "ETD"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_roller",
+          "type": "roller",
+          "x": 344,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "options": [
+              "One",
+              "Two",
+              "Three"
+            ],
+            "visible_row_count": 3
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_slider",
+          "type": "slider",
+          "x": 510,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 35,
+            "mode": "NORMAL"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_spinbox",
+          "type": "spinbox",
+          "x": 676,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "value": 42,
+            "range_from": 0,
+            "range_to": 99,
+            "decimal_places": 0
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_spinbox2",
+          "type": "spinbox2",
+          "x": 842,
+          "y": 342,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "value": 12,
+            "min_value": 0,
+            "max_value": 99,
+            "step": 1,
+            "decimal_places": 0,
+            "minus_text": "-",
+            "plus_text": "+"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          },
+          "events": {}
+        },
+        {
+          "id": "std_spinner",
+          "type": "spinner",
+          "x": 12,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {},
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_switch",
+          "type": "switch",
+          "x": 178,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "checked": true
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_tabview",
+          "type": "tabview",
+          "x": 344,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "tabs": [
+              "A",
+              "B"
+            ]
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_textarea",
+          "type": "textarea",
+          "x": 510,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "text": "Hi"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_tileview",
+          "type": "tileview",
+          "x": 676,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "tiles": [
+              "0,0",
+              "1,0"
+            ]
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        },
+        {
+          "id": "std_white_picker",
+          "type": "white_picker",
+          "x": 842,
+          "y": 452,
+          "w": 146,
+          "h": 96,
+          "props": {
+            "value": 300
+          },
+          "style": {
+            "bg_color": 15260872,
+            "radius": 6
+          }
+        }
+      ]
+    }
+  ]
+}

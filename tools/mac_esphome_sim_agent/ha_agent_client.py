@@ -3,6 +3,10 @@
 Connect outbound from Mac to Home Assistant WebSocket, authenticate with mac_sim_token,
 receive run jobs, execute esphome run (SDL).
 
+The WebSocket receive loop stays active while ESPHome runs: HA can enqueue further jobs
+without blocking on send, and a new `run` message preempts the current `esphome run` (SIGINT)
+so the next job starts without waiting for the user to close SDL.
+
 Usage (after install-macos.sh):
   source .venv/bin/activate
   # Use http:// if your browser uses http:// for HA (typical on LAN); use https:// only when HA serves TLS.
@@ -23,6 +27,7 @@ import json
 import logging
 import re
 import os
+import signal
 import ssl
 import sys
 import tempfile
@@ -36,6 +41,35 @@ import websockets
 from esphome_transform import transform_esphome_yaml_for_host_sdl
 
 LOG = logging.getLogger("ha_mac_sim_agent")
+
+_LOG_TAIL_MAX = 32000
+_DETAIL_MAX = 4000
+
+
+async def _send_job_report(
+    ws,
+    *,
+    ok: bool,
+    phase: str,
+    exit_code: int | None,
+    detail: str,
+    log_tail: str,
+) -> None:
+    """Notify Home Assistant (integration stores for GET .../mac_sim/last_report)."""
+    tail = log_tail[-_LOG_TAIL_MAX:] if len(log_tail) > _LOG_TAIL_MAX else log_tail
+    det = (detail or "")[:_DETAIL_MAX]
+    payload = {
+        "type": "job_report",
+        "ok": ok,
+        "phase": phase,
+        "exit_code": exit_code,
+        "detail": det,
+        "log_tail": tail,
+    }
+    try:
+        await ws.send(json.dumps(payload))
+    except Exception as exc:
+        LOG.warning("job_report send failed: %s", exc)
 
 
 def _screen_dims_from_esphome_yaml(yaml_text: str) -> tuple[int | None, int | None]:
@@ -59,7 +93,32 @@ def _ws_url_from_ha_url(ha_url: str, path: str = "/api/esptoolkit/mac_sim/agent/
     return f"{scheme}://{p.netloc}{path}"
 
 
-async def _run_esphome(yaml_text: str) -> int:
+async def _interrupt_esphome(proc_holder: dict) -> None:
+    """Stop the current `esphome run` child so a new job can start (preemption / parity)."""
+    proc = proc_holder.get("proc")
+    if proc is None or proc.returncode is not None:
+        return
+    try:
+        proc.send_signal(signal.SIGINT)
+    except ProcessLookupError:
+        proc_holder["proc"] = None
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=20.0)
+    except asyncio.TimeoutError:
+        LOG.warning("esphome did not exit after SIGINT; sending SIGKILL")
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        with contextlib.suppress(ProcessLookupError):
+            await proc.wait()
+    if proc_holder.get("proc") is proc:
+        proc_holder["proc"] = None
+
+
+async def _run_esphome(yaml_text: str, proc_holder: dict) -> tuple[int, str]:
+    """Run ESPHome SDL in a subprocess; return (exit_code, combined stdout/stderr tail for HA)."""
+    await _interrupt_esphome(proc_holder)
+
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".yaml",
@@ -68,6 +127,7 @@ async def _run_esphome(yaml_text: str) -> int:
     ) as tmp:
         tmp.write(yaml_text)
         path = tmp.name
+    out_chunks: list[str] = []
     try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -79,13 +139,24 @@ async def _run_esphome(yaml_text: str) -> int:
             stderr=asyncio.subprocess.STDOUT,
             env=os.environ.copy(),
         )
+        proc_holder["proc"] = proc
         assert proc.stdout
-        while True:
-            line = await proc.stdout.readline()
-            if not line:
-                break
-            LOG.info("%s", line.decode(errors="replace").rstrip())
-        return int(await proc.wait() or 0)
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                s = line.decode(errors="replace").rstrip()
+                LOG.info("%s", s)
+                out_chunks.append(s + "\n")
+            rc = int(await proc.wait() or 0)
+            combined = "".join(out_chunks)
+            if len(combined) > _LOG_TAIL_MAX:
+                combined = combined[-_LOG_TAIL_MAX:]
+            return rc, combined
+        finally:
+            if proc_holder.get("proc") is proc:
+                proc_holder["proc"] = None
     finally:
         Path(path).unlink(missing_ok=True)
 
@@ -122,6 +193,50 @@ def _get_primary_ip() -> str | None:
         return ip
     except Exception:
         return None
+
+
+def _transform_run_payload(data: dict) -> tuple[str | None, str | None]:
+    """Build host/SDL YAML from a HA `run` WebSocket message. Returns (yaml, error_detail)."""
+    source_yaml = data.get("source_yaml")
+    if isinstance(source_yaml, str) and source_yaml.strip():
+        try:
+            sw = data.get("screen_width")
+            sh = data.get("screen_height")
+            try:
+                swi = int(sw) if sw is not None else 0
+            except (TypeError, ValueError):
+                swi = 0
+            try:
+                shi = int(sh) if sh is not None else 0
+            except (TypeError, ValueError):
+                shi = 0
+            if swi < 120 or shi < 120:
+                yw, yh = _screen_dims_from_esphome_yaml(source_yaml)
+                if yw and yh and yw >= 120 and yh >= 120:
+                    swi, shi = yw, yh
+            if swi < 120 or shi < 120:
+                return None, "missing screen dimensions (device size required)"
+            host_ip = _get_primary_ip()
+            host_hostname = socket.gethostname()
+            transformed_yaml, tw = transform_esphome_yaml_for_host_sdl(
+                source_yaml,
+                swi,
+                shi,
+                api_encryption_key=None,
+                esphome_name=None,
+                host_ip=host_ip,
+                host_hostname=host_hostname,
+            )
+            for warn in tw:
+                LOG.warning("transform warning: %s", warn)
+            return transformed_yaml, None
+        except Exception as exc:
+            LOG.error("Mac-side transform failed: %s", exc)
+            return None, str(exc)
+    y = data.get("yaml")
+    if isinstance(y, str) and y.strip():
+        return y, None
+    return None, "empty yaml in run message"
 
 
 async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: bool) -> None:
@@ -177,84 +292,97 @@ async def _client_loop(uri: str, token: str, insecure_tls: bool, *, dump_yaml: b
                         pass
 
                 ping_task = asyncio.create_task(ping_keepalive())
-                try:
-                    async for raw2 in ws:
-                        if isinstance(raw2, bytes):
-                            raw2 = raw2.decode("utf-8", errors="replace")
-                        try:
-                            data = json.loads(raw2)
-                        except json.JSONDecodeError:
-                            continue
-                        mtype = data.get("type")
-                        if mtype == "pong":
-                            continue
-                        if mtype == "run":
-                            source_yaml = data.get("source_yaml")
-                            transformed_yaml: str
-                            if isinstance(source_yaml, str) and source_yaml.strip():
+                # Match HA mac_sim hub queue depth so enqueue rarely blocks on send.
+                job_q: asyncio.Queue[dict] = asyncio.Queue(maxsize=8)
+                proc_holder: dict = {"proc": None}
+
+                async def recv_loop() -> None:
+                    """Keep reading the WebSocket while ESPHome runs (pings + new run jobs)."""
+                    try:
+                        async for raw2 in ws:
+                            if isinstance(raw2, bytes):
+                                raw2 = raw2.decode("utf-8", errors="replace")
+                            try:
+                                data = json.loads(raw2)
+                            except json.JSONDecodeError:
+                                continue
+                            mtype = data.get("type")
+                            if mtype == "pong":
+                                continue
+                            if mtype == "run":
+                                # Preempt current SDL so the executor can pick this job up without wedging HA's sender.
+                                await _interrupt_esphome(proc_holder)
                                 try:
-                                    sw = data.get("screen_width")
-                                    sh = data.get("screen_height")
-                                    try:
-                                        swi = int(sw) if sw is not None else 0
-                                    except (TypeError, ValueError):
-                                        swi = 0
-                                    try:
-                                        shi = int(sh) if sh is not None else 0
-                                    except (TypeError, ValueError):
-                                        shi = 0
-                                    if swi < 120 or shi < 120:
-                                        yw, yh = _screen_dims_from_esphome_yaml(source_yaml)
-                                        if yw and yh and yw >= 120 and yh >= 120:
-                                            swi, shi = yw, yh
-                                    if swi < 120 or shi < 120:
-                                        LOG.error(
-                                            "Mac sim: screen_width/screen_height missing or invalid (%r×%r) and "
-                                            "could not parse display dimensions from YAML; refusing run.",
-                                            swi,
-                                            shi,
-                                        )
-                                        await ws.send(
-                                            json.dumps(
-                                                {
-                                                    "type": "error",
-                                                    "message": "missing screen dimensions (device size required)",
-                                                }
-                                            )
-                                        )
-                                        continue
-                                    host_ip = _get_primary_ip()
-                                    host_hostname = socket.gethostname()
-                                    transformed_yaml, tw = transform_esphome_yaml_for_host_sdl(
-                                        source_yaml,
-                                        swi,
-                                        shi,
-                                        api_encryption_key=None,
-                                        esphome_name=None,
-                                        host_ip=host_ip,
-                                        host_hostname=host_hostname,
+                                    job_q.put_nowait(data)
+                                except asyncio.QueueFull:
+                                    LOG.error(
+                                        "Mac sim job queue full (max %d); enqueue another after jobs drain",
+                                        job_q.maxsize,
                                     )
-                                    for w in tw:
-                                        LOG.warning("transform warning: %s", w)
-                                except Exception as exc:
-                                    LOG.error("Mac-side transform failed: %s", exc)
-                                    continue
-                            else:
-                                # Backward compatibility with older HA payloads.
-                                y = data.get("yaml")
-                                if not isinstance(y, str) or not y.strip():
-                                    LOG.error("Empty yaml in run message")
-                                    continue
-                                transformed_yaml = y
-                            LOG.info("Received run job (%d bytes YAML)", len(transformed_yaml))
-                            LOG.info("ESPHome run starting (streaming logs)…")
-                            if dump_yaml:
-                                _dump_yaml_to_terminal(transformed_yaml)
-                            rc = await _run_esphome(transformed_yaml)
-                            LOG.info("esphome run finished with code %s", rc)
-                        else:
+                                continue
                             LOG.debug("Message: %s", data)
+                    finally:
+                        with contextlib.suppress(Exception):
+                            await job_q.put({"type": "_shutdown"})
+
+                async def exec_loop() -> None:
+                    while True:
+                        data = await job_q.get()
+                        if data.get("type") == "_shutdown":
+                            break
+                        if data.get("type") != "run":
+                            continue
+                        ty, err = _transform_run_payload(data)
+                        if err or not ty:
+                            if err == "missing screen dimensions (device size required)":
+                                LOG.error(
+                                    "Mac sim: screen_width/screen_height missing or invalid and "
+                                    "could not parse display dimensions from YAML; refusing run."
+                                )
+                            detail = err or "transform failed"
+                            await _send_job_report(
+                                ws,
+                                ok=False,
+                                phase="transform",
+                                exit_code=None,
+                                detail=detail,
+                                log_tail="",
+                            )
+                            continue
+                        transformed_yaml = ty
+                        LOG.info("Received run job (%d bytes YAML)", len(transformed_yaml))
+                        LOG.info("ESPHome run starting (streaming logs)…")
+                        if dump_yaml:
+                            _dump_yaml_to_terminal(transformed_yaml)
+                        try:
+                            rc, log_tail = await _run_esphome(transformed_yaml, proc_holder)
+                        except Exception as exc:
+                            LOG.exception("esphome run failed: %s", exc)
+                            await _send_job_report(
+                                ws,
+                                ok=False,
+                                phase="esphome_run",
+                                exit_code=None,
+                                detail=str(exc),
+                                log_tail="",
+                            )
+                            continue
+                        LOG.info("esphome run finished with code %s", rc)
+                        await _send_job_report(
+                            ws,
+                            ok=(rc == 0),
+                            phase="esphome_run",
+                            exit_code=rc,
+                            detail="" if rc == 0 else f"esphome exited with code {rc}",
+                            log_tail=log_tail,
+                        )
+
+                exec_task = asyncio.create_task(exec_loop())
+                try:
+                    await recv_loop()
                 finally:
+                    await _interrupt_esphome(proc_holder)
+                    await exec_task
                     ping_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await ping_task

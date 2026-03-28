@@ -9,21 +9,31 @@
     "react-konva": "^18.2.10"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@types/pixelmatch": "^5.2.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "jsdom": "^25.0.1",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.19.3",
     "typescript": "^5.5.4",
     "vite": "^5.4.2",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "yaml": "^2.8.3"
   },
   "name": "esphome-touch-designer-frontend",
   "private": true,
   "scripts": {
     "build": "npm run test && vite build",
+    "build:vite": "vite build",
     "dev": "vite",
     "preview": "vite preview",
     "test": "vitest run",
+    "generate:parity-fixtures": "tsx scripts/generate-parity-fixtures.ts",
+    "test:parity": "playwright test e2e/parity-pipeline.spec.ts",
+    "parity:mac": "bash ../scripts/run-designer-mac-parity.sh",
     "test:watch": "vitest"
   },
   "type": "module",

@@ -1,0 +1,2 @@
+# Local Mac LVGL captures for canvas-vs-sim tests (see parity_snapshot_server.py)
+*.png

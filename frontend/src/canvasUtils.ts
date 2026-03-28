@@ -13,6 +13,7 @@ export type WidgetLike = {
   w?: number;
   h?: number;
   parent_id?: string;
+  type?: string;
   props?: Record<string, unknown>;
   style?: Record<string, unknown>;
 };
@@ -28,6 +29,72 @@ export function snap(n: number, grid: number): number {
  */
 export function layoutInt(n: number): number {
   return Math.round(n);
+}
+
+/** Match Python int() on model geometry (truncates toward zero; compiler uses int(w.get('x'), etc.). */
+export function modelInt(n: number): number {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.trunc(v) : 0;
+}
+
+/** views.py::_project_display_dimensions — logical canvas = device.screen. */
+export function projectDisplayDimensions(project: Record<string, unknown>): { w: number; h: number } {
+  const dev = (project.device as Record<string, unknown> | undefined) || {};
+  const scr = (dev.screen as Record<string, unknown> | undefined) || {};
+  const sw = modelInt(Number(scr.width ?? 0));
+  const sh = modelInt(Number(scr.height ?? 0));
+  if (sw > 0 && sh > 0) return { w: sw, h: sh };
+  const recipeId = String(
+    ((project.hardware as Record<string, unknown> | undefined)?.recipe_id as string) ||
+      (dev.hardware_recipe_id as string) ||
+      ""
+  );
+  const m = /(\d{3,4})x(\d{3,4})/i.exec(recipeId);
+  if (m) return { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
+  return { w: 480, h: 320 };
+}
+
+/** views.py::_style_pad_lvgl — use for emit parity (not only padFromStyle Number paths). */
+export function stylePadLvgl(style: Record<string, unknown> | null | undefined): { pl: number; pr: number; pt: number; pb: number } {
+  const s = style || {};
+  const pa = modelInt(Number(s.pad_all ?? 0));
+  const one = (key: string): number => {
+    const v = s[key];
+    if (v === undefined || v === null) return pa;
+    return modelInt(Number(v));
+  };
+  return { pl: one("pad_left"), pr: one("pad_right"), pt: one("pad_top"), pb: one("pad_bottom") };
+}
+
+/** views.py::_apply_align_lvgl — emitted origin in parent content space (integer //). */
+export function applyAlignLvglEmit(
+  xVal: number,
+  yVal: number,
+  wVal: number,
+  hVal: number,
+  align: string,
+  parentW: number | null,
+  parentH: number | null
+): { x: number; y: number } {
+  const a = String(align || "TOP_LEFT").trim().toUpperCase();
+  if (!a || a === "TOP_LEFT" || parentW == null || parentH == null) return { x: xVal, y: yVal };
+  const pw = Math.floor(parentW);
+  const ph = Math.floor(parentH);
+  const pw2 = Math.floor(pw / 2);
+  const ph2 = Math.floor(ph / 2);
+  const wv = Math.floor(wVal);
+  const hv = Math.floor(hVal);
+  const w2 = Math.floor(wVal / 2);
+  const h2 = Math.floor(hVal / 2);
+  if (a === "CENTER") return { x: xVal + w2 - pw2, y: yVal + h2 - ph2 };
+  if (a === "TOP_MID") return { x: xVal + w2 - pw2, y: yVal };
+  if (a === "TOP_RIGHT") return { x: xVal + wv - pw, y: yVal };
+  if (a === "LEFT_MID") return { x: xVal, y: yVal + h2 - ph2 };
+  if (a === "RIGHT_MID") return { x: xVal + wv - pw, y: yVal + h2 - ph2 };
+  if (a === "BOTTOM_LEFT") return { x: xVal, y: yVal + hv - ph };
+  if (a === "BOTTOM_MID") return { x: xVal + w2 - pw2, y: yVal + hv - ph };
+  if (a === "BOTTOM_RIGHT") return { x: xVal + wv - pw, y: yVal + hv - ph };
+  return { x: xVal, y: yVal };
 }
 
 /**
@@ -249,7 +316,7 @@ export function parentContentOriginScreen(
   const p = widgetById.get(w.parent_id);
   if (!p) return { ax: 0, ay: 0 };
   const outer = absPos(p, widgetById, width, height);
-  const { pl, pt } = padFromStyle(p.style as Record<string, unknown> | undefined);
+  const { pl, pt } = stylePadLvgl(p.style as Record<string, unknown> | undefined);
   return { ax: outer.ax + pl, ay: outer.ay + pt };
 }
 
@@ -265,10 +332,10 @@ export function parentInfo(
   if (!p) return { ax: 0, ay: 0, pw: width, ph: height };
   const grand = parentInfo(p, widgetById, width, height);
   const align = String((p.props || {}).align ?? "TOP_LEFT").toUpperCase();
-  const px = p.x;
-  const py = p.y;
-  const pw = p.w || 100;
-  const ph = p.h || 50;
+  const px = modelInt(p.x ?? 0);
+  const py = modelInt(p.y ?? 0);
+  const pw = modelInt(p.w ?? 100);
+  const ph = modelInt(p.h ?? 50);
   if (align === "TOP_LEFT" || !align) return { ax: grand.ax + px, ay: grand.ay + py, pw, ph };
   let pax = grand.ax;
   let pay = grand.ay;
@@ -305,25 +372,15 @@ export function lvglEmittedOriginInParent(
   parentOw: number | null,
   parentOh: number | null
 ): { x: number; y: number } {
-  const a = String(align || "TOP_LEFT").trim().toUpperCase();
-  if (!a || a === "TOP_LEFT" || parentOw == null || parentOh == null) return { x, y };
-  const pw = Math.floor(parentOw);
-  const ph = Math.floor(parentOh);
-  const pw2 = Math.floor(pw / 2);
-  const ph2 = Math.floor(ph / 2);
-  const wv = Math.floor(wVal);
-  const hv = Math.floor(hVal);
-  const w2 = Math.floor(wVal / 2);
-  const h2 = Math.floor(hVal / 2);
-  if (a === "CENTER") return { x: x + w2 - pw2, y: y + h2 - ph2 };
-  if (a === "TOP_MID") return { x: x + w2 - pw2, y };
-  if (a === "TOP_RIGHT") return { x: x + wv - pw, y };
-  if (a === "LEFT_MID") return { x, y: y + h2 - ph2 };
-  if (a === "RIGHT_MID") return { x: x + wv - pw, y: y + h2 - ph2 };
-  if (a === "BOTTOM_LEFT") return { x, y: y + hv - ph };
-  if (a === "BOTTOM_MID") return { x: x + w2 - pw2, y: y + hv - ph };
-  if (a === "BOTTOM_RIGHT") return { x: x + wv - pw, y: y + hv - ph };
-  return { x, y };
+  return applyAlignLvglEmit(
+    modelInt(x ?? 0),
+    modelInt(y ?? 0),
+    modelInt(wVal ?? 100),
+    modelInt(hVal ?? 50),
+    align,
+    parentOw,
+    parentOh
+  );
 }
 
 /** Inverse of lvglEmittedOriginInParent: screen-emitted TL in parent content → model top-left x,y. */
@@ -357,30 +414,102 @@ export function modelTopLeftFromEmittedOrigin(
   return { x: lvx, y: lvy };
 }
 
-/** Box select / overlap: preview size matches YAML for composites. */
+/** Single widget: page-absolute YAML rect + walk state (views.py layout_audit walk step). */
+export type YamlPageEmit = {
+  yaml_rect_page: { x: number; y: number; w: number; h: number };
+  outer_x: number;
+  outer_y: number;
+  model_rect: { x: number; y: number; w: number; h: number };
+  note: string | null;
+};
+
+/**
+ * One compiler layout-audit step: child `w` inside parent whose YAML outer top-left is (parentOuterPageX,Y).
+ * `pfullW/H` = parent model outer size (int). Canvas, box-select, and layout_audit must use this only.
+ */
+export function yamlRectPageForChild(
+  w: WidgetLike,
+  parentOuterPageX: number,
+  parentOuterPageY: number,
+  parent: WidgetLike | null,
+  pfullW: number,
+  pfullH: number
+): YamlPageEmit {
+  const pad = parent ? stylePadLvgl(parent.style as Record<string, unknown> | undefined) : { pl: 0, pr: 0, pt: 0, pb: 0 };
+  const contentOx = parentOuterPageX + pad.pl;
+  const contentOy = parentOuterPageY + pad.pt;
+  const x0 = modelInt(w.x ?? 0);
+  const y0 = modelInt(w.y ?? 0);
+  const ww = modelInt(w.w ?? 100);
+  const hh = modelInt(w.h ?? 50);
+  const props = w.props || {};
+  const align = String(props.align ?? "TOP_LEFT").trim().toUpperCase();
+  const { x: xa, y: ya } = applyAlignLvglEmit(x0, y0, ww, hh, align, pfullW, pfullH);
+  const t = String(w.type || "");
+
+  if (t === "arc_labeled") {
+    const met = arcLabeledYamlMetrics(w, pfullW, pfullH);
+    const ox = contentOx + met.x_val - met.arc_off_x;
+    const oy = contentOy + met.y_val - met.arc_off_y;
+    const yaml = { x: ox, y: oy, w: met.container_w, h: met.container_h };
+    const note = `YAML wrapper ${met.container_w}×${met.container_h} vs model ${ww}×${hh}; place siblings using expanded footprint or extra gap`;
+    return {
+      yaml_rect_page: yaml,
+      outer_x: ox,
+      outer_y: oy,
+      model_rect: { x: x0, y: y0, w: ww, h: hh },
+      note,
+    };
+  }
+  if (t.toLowerCase() === "spinbox2") {
+    const rowH = spinbox2EmittedRowHeight(w);
+    const ox = contentOx + xa;
+    const oy = contentOy + ya;
+    const note = rowH !== hh ? `YAML height ${rowH}px (model h ${hh}px)` : null;
+    return {
+      yaml_rect_page: { x: ox, y: oy, w: ww, h: rowH },
+      outer_x: ox,
+      outer_y: oy,
+      model_rect: { x: x0, y: y0, w: ww, h: hh },
+      note,
+    };
+  }
+  const ox = contentOx + xa;
+  const oy = contentOy + ya;
+  return {
+    yaml_rect_page: { x: ox, y: oy, w: ww, h: hh },
+    outer_x: ox,
+    outer_y: oy,
+    model_rect: { x: x0, y: y0, w: ww, h: hh },
+    note: null,
+  };
+}
+
+/** Full page coordinates for `w` (recursive parent chain). Same as walking layout_audit from root. */
+export function yamlRectPageForWidget(w: WidgetLike, widgetById: Map<string, WidgetLike>, dispW: number, dispH: number): YamlPageEmit {
+  if (!w.parent_id) {
+    return yamlRectPageForChild(w, 0, 0, null, dispW, dispH);
+  }
+  const p = widgetById.get(w.parent_id);
+  if (!p) {
+    return yamlRectPageForChild(w, 0, 0, null, dispW, dispH);
+  }
+  const parentEmit = yamlRectPageForWidget(p, widgetById, dispW, dispH);
+  const pfullW = modelInt(p.w ?? 100);
+  const pfullH = modelInt(p.h ?? 50);
+  return yamlRectPageForChild(w, parentEmit.outer_x, parentEmit.outer_y, p, pfullW, pfullH);
+}
+
+/** Box select / Canvas page placement: alias for yaml_rect_page (device = compiler). */
 export function widgetFootprintForSelection(
   w: WidgetLike,
   widgetById: Map<string, WidgetLike>,
   width: number,
   height: number
 ): { ax: number; ay: number; w: number; h: number } {
-  if (w.type === "arc_labeled") {
-    const pinf = parentInfo(w, widgetById, width, height);
-    const m = arcLabeledYamlMetrics(w, pinf.pw, pinf.ph);
-    const pco = parentContentOriginScreen(w, widgetById, width, height);
-    return {
-      ax: pco.ax + m.x_val - m.arc_off_x,
-      ay: pco.ay + m.y_val - m.arc_off_y,
-      w: m.container_w,
-      h: m.container_h,
-    };
-  }
-  if (String(w.type || "").toLowerCase() === "spinbox2") {
-    const { ax, ay } = absPos(w, widgetById, width, height);
-    return { ax, ay, w: w.w || 100, h: spinbox2EmittedRowHeight(w) };
-  }
-  const { ax, ay } = absPos(w, widgetById, width, height);
-  return { ax, ay, w: w.w || 100, h: w.h || 50 };
+  const e = yamlRectPageForWidget(w, widgetById, width, height);
+  const r = e.yaml_rect_page;
+  return { ax: r.x, ay: r.y, w: r.w, h: r.h };
 }
 
 /** Widget top-left in canvas coords (for rendering and hit-test). */
@@ -396,14 +525,14 @@ export function absPos(
   if (w.parent_id) {
     const par = widgetById.get(w.parent_id);
     if (par) {
-      const { pl, pt } = padFromStyle(par.style as Record<string, unknown> | undefined);
+      const { pl, pt } = stylePadLvgl(par.style as Record<string, unknown> | undefined);
       baseAx = pax + pl;
       baseAy = pay + pt;
     }
   }
   const align = String((w.props || {}).align ?? "TOP_LEFT").toUpperCase();
-  const ww = w.w || 100;
-  const hh = w.h || 50;
-  const em = lvglEmittedOriginInParent(w.x, w.y, ww, hh, align, pw, ph);
+  const ww = modelInt(w.w ?? 100);
+  const hh = modelInt(w.h ?? 50);
+  const em = applyAlignLvglEmit(modelInt(w.x ?? 0), modelInt(w.y ?? 0), ww, hh, align, pw, ph);
   return { ax: baseAx + em.x, ay: baseAy + em.y };
 }

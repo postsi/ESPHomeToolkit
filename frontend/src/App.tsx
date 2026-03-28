@@ -294,15 +294,17 @@ function useHistory<T>(initial: T) {
   const [past, setPast] = useState<T[]>([]);
   const [future, setFuture] = useState<T[]>([]);
 
-  const set = (next: T, commit = true) => {
+  const set = useCallback((next: T, commit = true) => {
     if (!commit) {
       setPresent(next);
       return;
     }
-    setPast((p) => [...p, present]);
-    setPresent(next);
-    setFuture([]);
-  };
+    setPresent((prev) => {
+      setPast((p) => [...p, prev]);
+      setFuture([]);
+      return next;
+    });
+  }, []);
 
   const undo = () => {
     setPast((p) => {
@@ -394,6 +396,9 @@ export default function App() {
     };
   }, [project]);
   const [projectDirty, setProjectDirty] = useState(false);
+  /** URL-driven parity mode (?etd_parity=1&etd_fixture=name) for PNG compare vs simulator. */
+  const [parityMode, setParityMode] = useState(false);
+  const [parityError, setParityError] = useState<string | null>(null);
 
   const [schemaIndex, setSchemaIndex] = useState<WidgetSchemaIndexItem[]>([]);
   const [newWidgetType, setNewWidgetType] = useState("label");
@@ -408,6 +413,29 @@ export default function App() {
   // Derived before any hooks that reference them (avoids TDZ: "Cannot access 'safePageIndex' before initialization").
   const pages = project?.pages ?? [];
   const safePageIndex = Math.max(0, Math.min(currentPageIndex, Math.max(0, pages.length - 1)));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("etd_parity") !== "1") return;
+    const name = (p.get("etd_fixture") || "").trim();
+    if (!/^[a-z0-9_-]+$/i.test(name)) {
+      setParityError("Invalid etd_fixture (use letters, digits, underscore, hyphen).");
+      return;
+    }
+    const base = import.meta.env.BASE_URL || "/";
+    fetch(`${base}parity-fixtures/${name}.json`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`fixture HTTP ${r.status}`);
+        return r.json() as Promise<ProjectModel>;
+      })
+      .then((data) => {
+        setProject(data, false);
+        setParityMode(true);
+        setCurrentPageIndex(0);
+      })
+      .catch((e) => setParityError(String((e as Error)?.message ?? e)));
+  }, [setProject]);
 
   // Clipboard for copy/paste (v0.19). Stored as raw widget JSON fragments.
   const [clipboard, setClipboard] = useState<any[] | null>(null);
@@ -2897,7 +2925,44 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     }
   }
 
+  const parityScreen = parityMode && project ? resolveDeviceScreen(project, null) : null;
+  const parityWidgets =
+    parityMode && project
+      ? ((project.pages?.[0]?.widgets ?? []).filter((w: any) => w && typeof w === "object" && w.id != null) as any[])
+      : [];
+
+  const parityView =
+    parityError != null ? (
+      <div className="app" data-etd-parity-root="1">
+        <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }} data-etd-parity-error="1">
+          {parityError}
+        </div>
+      </div>
+    ) : parityMode && project && parityScreen ? (
+      <div
+        className="app"
+        data-etd-parity-root="1"
+        style={{ margin: 0, padding: 0, overflow: "hidden", width: parityScreen.width, height: parityScreen.height }}
+      >
+        <Canvas
+          widgets={parityWidgets}
+          selectedIds={[]}
+          width={parityScreen.width}
+          height={parityScreen.height}
+          gridSize={8}
+          showGrid={false}
+          dispBgColor="#000000"
+          liveOverrides={{}}
+          onSelect={() => {}}
+          onSelectNone={() => {}}
+          onChangeMany={() => {}}
+          parityCaptureMode
+        />
+      </div>
+    ) : null;
+
   return (
+    parityView ?? (
     <div className="app">
       <header className="header">
         <div>
@@ -6398,6 +6463,7 @@ function nudgeSelected(dx: number, dy: number, step: number) {
         </aside>
       </main>
     </div>
+    )
   );
 }
 

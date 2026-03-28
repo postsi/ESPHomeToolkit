@@ -1,0 +1,120 @@
+{
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "container_19d2e042",
+          "type": "container",
+          "x": 362.6666666666667,
+          "y": 87.5,
+          "w": 340.6429177244145,
+          "h": 223.75,
+          "props": {},
+          "style": {
+            "bg_color": 1973790,
+            "radius": 8
+          }
+        },
+        {
+          "id": "grimwood_all_thermostats_temperature",
+          "type": "arc_labeled",
+          "x": 40.8281255288739,
+          "y": 22.5,
+          "w": 256,
+          "h": 150,
+          "props": {
+            "min_value": 5,
+            "max_value": 25,
+            "value": 7,
+            "start_angle": 135,
+            "end_angle": 45,
+            "rotation": 0,
+            "mode": "NORMAL",
+            "adjustable": true
+          },
+          "style": {
+            "bg_color": 3355443,
+            "radius": 4,
+            "tick_color": "#ffffff",
+            "tick_width": 3,
+            "tick_length": 0,
+            "label_text_color": "#ffffff",
+            "label_text_font": "",
+            "label_font_size": 0,
+            "border_color": "#ffffff",
+            "border_width": 0
+          },
+          "parent_id": "container_19d2e042"
+        },
+        {
+          "id": "grimwood_all_thermostats_temperature_2",
+          "type": "spinbox2",
+          "x": 51.49479219554056,
+          "y": 172.5,
+          "w": 234.66666666666666,
+          "h": 50,
+          "props": {
+            "value": 15,
+            "min_value": 5,
+            "max_value": 30,
+            "step": 1,
+            "decimal_places": 1,
+            "minus_text": "-",
+            "plus_text": "+"
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": "#ffffff",
+            "radius": 6,
+            "text_color": 14870768
+          },
+          "events": {},
+          "parent_id": "container_19d2e042"
+        },
+        {
+          "id": "label_b855f78c",
+          "type": "label",
+          "x": 83.49479219554057,
+          "y": 85,
+          "w": 128,
+          "h": 25,
+          "props": {
+            "text": "Act:"
+          },
+          "style": {
+            "text_color": 16777215,
+            "border_color": "color.border"
+          },
+          "events": {},
+          "parent_id": "container_19d2e042"
+        },
+        {
+          "id": "grimwood_all_thermostats_current_temperature",
+          "type": "label",
+          "x": 153.89479219554056,
+          "y": 85,
+          "w": 106.66666666666667,
+          "h": 25,
+          "props": {},
+          "style": {
+            "text_color": 16777215,
+            "border_color": "color.border"
+          },
+          "events": {},
+          "parent_id": "container_19d2e042"
+        }
+      ]
+    }
+  ],
+  "model_version": 1
+}

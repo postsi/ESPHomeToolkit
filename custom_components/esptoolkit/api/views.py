@@ -7218,6 +7218,25 @@ class MacSimAgentWebSocketView(HomeAssistantView):
                     continue
                 if data.get("type") == "ping":
                     await ws.send_str(json.dumps({"type": "pong"}))
+                    continue
+                if data.get("type") == "job_report":
+                    from homeassistant.util import dt as dt_util
+
+                    tail = str(data.get("log_tail") or "")
+                    if len(tail) > 32000:
+                        tail = tail[-32000:]
+                    detail = str(data.get("detail") or "")[:8000]
+                    rep = {
+                        "ok": bool(data.get("ok")),
+                        "phase": str(data.get("phase") or "unknown"),
+                        "exit_code": data.get("exit_code"),
+                        "detail": detail,
+                        "log_tail": tail,
+                        "received_at": dt_util.utcnow().isoformat(),
+                    }
+                    async with hub["lock"]:
+                        hub.setdefault("last_report_by_entry", {})[entry_id] = rep
+                    continue
         finally:
             if out_task is not None:
                 out_task.cancel()
@@ -7380,6 +7399,27 @@ class MacSimEnqueueView(HomeAssistantView):
         return self.json(payload)
 
 
+class MacSimLastReportView(HomeAssistantView):
+    """Latest Mac agent job_report (compile/SDL outcome) for automation and MCP local_http."""
+
+    url = f"/api/{DOMAIN}/mac_sim/last_report"
+    name = f"api:{DOMAIN}:mac_sim_last_report"
+    requires_auth = False
+
+    async def get(self, request):
+        from ..mac_sim import ensure_mac_sim_hub
+
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id") or _active_entry_id(hass)
+        if not entry_id:
+            return self.json({"ok": False, "error": "no_active_entry"}, status_code=404)
+        hub = ensure_mac_sim_hub(hass)
+        rep = (hub.get("last_report_by_entry") or {}).get(entry_id)
+        if not rep:
+            return self.json({"ok": True, "has_report": False, "report": None})
+        return self.json({"ok": True, "has_report": True, "report": rep})
+
+
 def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Register all HTTP API views for the integration."""
     # ContextView is registered in panel so /api/context is always available
@@ -7441,6 +7481,7 @@ def register_api_views(hass: HomeAssistant, entry: ConfigEntry) -> None:
     hass.http.register_view(DeviceNativeLogsWebSocketView)
     hass.http.register_view(MacSimAgentWebSocketView)
     hass.http.register_view(MacSimEnqueueView)
+    hass.http.register_view(MacSimLastReportView)
     hass.http.register_view(EntityCapabilitiesView)
 
     # Plugins
