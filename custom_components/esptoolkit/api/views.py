@@ -4018,6 +4018,8 @@ def _emit_spinbox2_yaml(
                         block.append(i6 + (" " * max(0, d - lead0)) + rest)
         return "\n".join(block) + "\n"
 
+    row_btn_bg = _hex_color_for_yaml(bc) if bc is not None else None
+
     parts.append(f"{i2}- button:\n")
     parts.append(f"{i4}id: {btn_minus}\n")
     parts.append(f"{i4}x: 0\n")
@@ -4027,6 +4029,9 @@ def _emit_spinbox2_yaml(
     parts.append(f"{i4}text: {minus_txt}\n")
     if text_font:
         parts.append(f"{i4}text_font: {json.dumps(text_font)}\n")
+    if row_btn_bg is not None:
+        parts.append(f"{i4}bg_color: 0x{int(row_btn_bg):06X}\n")
+    parts.append(f"{i4}border_width: 0\n")
     parts.append(_on_click_yaml(-1))
 
     parts.append(f"{i2}- label:\n")
@@ -4051,6 +4056,9 @@ def _emit_spinbox2_yaml(
     parts.append(f"{i4}text: {plus_txt}\n")
     if text_font:
         parts.append(f"{i4}text_font: {json.dumps(text_font)}\n")
+    if row_btn_bg is not None:
+        parts.append(f"{i4}bg_color: 0x{int(row_btn_bg):06X}\n")
+    parts.append(f"{i4}border_width: 0\n")
     parts.append(_on_click_yaml(1))
 
     return "".join(parts)
@@ -4765,21 +4773,27 @@ def _arc_labeled_layout_metrics(w: dict, parent_w: int | None, parent_h: int | N
     label_font = (style.get("label_text_font") or style.get("text_font") or props.get("font") or "").strip() or None
     cx = w_val / 2.0
     cy = h_val / 2.0
-    r = min(w_val, h_val) / 2.0
+    # Match Canvas.tsx arc track: center radius r_mid, outer edge outer_r (ticks/labels sit on outer ring).
+    arc_width_prop = int(props.get("arc_width") or 0)
+    track_w = max(1, min(16, arc_width_prop)) if arc_width_prop > 0 else max(4, min(16, min(w_val, h_val) // 8))
+    half = min(w_val, h_val) / 2.0
+    r_mid = max(track_w / 2 + 1, half - track_w / 2 - 2)
+    outer_r = r_mid + track_w / 2.0
+    r = outer_r  # tick geometry uses outer ring (same key as emit loop)
     tick_len_auto = max(2, min(6, min(w_val, h_val) / 40.0))
     tick_length_style = max(0, int(style.get("tick_length") or 0))
     tick_len = max(2, min(48, tick_length_style)) if tick_length_style > 0 else tick_len_auto
     tick_width = max(1, min(16, int(style.get("tick_width") or 0) or 3))
     label_offset = max(4, min(20, min(w_val, h_val) / 10.0))
-    label_r = r + label_offset
+    label_r = outer_r + label_offset
     min_int = int(math.ceil(min_val))
     max_int = int(math.floor(max_val))
     tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
     label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
     configured_font_px = _font_px_from_id(label_font, 14)
     label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
-    extra_v = max(12, int(math.ceil(label_font_size * 0.65)))
-    label_h = label_font_size + extra_v
+    # Match Canvas.tsx arc_labeled Text: labelFontSize + max(10, ceil(labelFontSize * 0.5))
+    label_h = label_font_size + max(10, int(math.ceil(label_font_size * 0.5)))
     label_boxes: list[tuple[int, int, int, int]] = []
     for value in label_values:
         angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
@@ -4807,10 +4821,10 @@ def _arc_labeled_layout_metrics(w: dict, parent_w: int | None, parent_h: int | N
         angle_rad = math.radians(angle_deg)
         c = math.cos(angle_rad)
         s_m = math.sin(angle_rad)
-        x1 = cx + (r - tick_len) * c
-        y1 = cy + (r - tick_len) * s_m
-        x2 = cx + r * c
-        y2 = cy + r * s_m
+        x1 = cx + (outer_r - tick_len) * c
+        y1 = cy + (outer_r - tick_len) * s_m
+        x2 = cx + (outer_r + tick_len) * c
+        y2 = cy + (outer_r + tick_len) * s_m
         for px, py in ((x1, y1), (x2, y2)):
             ix0 = int(math.floor(px - tw2))
             iy0 = int(math.floor(py - tw2))

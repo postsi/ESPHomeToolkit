@@ -72,13 +72,20 @@ export function arcLabeledYamlMetrics(w: WidgetLikeArc, parentW: number | null, 
 
   const cx = wVal / 2;
   const cy = hVal / 2;
-  const r = Math.min(wVal, hVal) / 2;
+  const arcWidthProp = Math.floor(Number(props.arc_width ?? 0));
+  const trackW =
+    arcWidthProp > 0
+      ? Math.max(1, Math.min(16, arcWidthProp))
+      : Math.max(4, Math.min(16, Math.floor(Math.min(wVal, hVal) / 8)));
+  const half = Math.min(wVal, hVal) / 2;
+  const rMid = Math.max(trackW / 2 + 1, half - trackW / 2 - 2);
+  const outerR = rMid + trackW / 2;
   const tickLenAuto = Math.max(2, Math.min(6, Math.min(wVal, hVal) / 40));
   const tickLengthStyle = Math.max(0, Math.floor(Number(style.tick_length ?? 0)));
   const tickLen = tickLengthStyle > 0 ? Math.max(2, Math.min(48, tickLengthStyle)) : tickLenAuto;
   const tickWidth = Math.max(1, Math.min(16, Number(style.tick_width ?? 0) || 3));
   const labelOffset = Math.max(4, Math.min(20, Math.min(wVal, hVal) / 10));
-  const labelR = r + labelOffset;
+  const labelR = outerR + labelOffset;
   const minInt = Math.ceil(minVal);
   const maxInt = Math.floor(maxVal);
   const tickValues: number[] = [];
@@ -92,8 +99,7 @@ export function arcLabeledYamlMetrics(w: WidgetLikeArc, parentW: number | null, 
   const configuredFontPx = fontPxFromId(labelFont, 14);
   const labelFontSizeExplicit = Math.floor(Number(style.label_font_size ?? 0));
   const labelFontSize = Math.max(8, Math.min(28, labelFontSizeExplicit || configuredFontPx));
-  const extraV = Math.max(12, Math.ceil(labelFontSize * 0.65));
-  const labelH = labelFontSize + extraV;
+  const labelH = labelFontSize + Math.max(10, Math.ceil(labelFontSize * 0.5));
 
   type Box = { lx: number; ly: number; box: number; lh: number };
   const labelBoxes: Box[] = [];
@@ -126,10 +132,10 @@ export function arcLabeledYamlMetrics(w: WidgetLikeArc, parentW: number | null, 
     const angleRad = (angleDeg * Math.PI) / 180;
     const c = Math.cos(angleRad);
     const sm = Math.sin(angleRad);
-    const x1 = cx + (r - tickLen) * c;
-    const y1 = cy + (r - tickLen) * sm;
-    const x2 = cx + r * c;
-    const y2 = cy + r * sm;
+    const x1 = cx + (outerR - tickLen) * c;
+    const y1 = cy + (outerR - tickLen) * sm;
+    const x2 = cx + (outerR + tickLen) * c;
+    const y2 = cy + (outerR + tickLen) * sm;
     for (const [px, py] of [
       [x1, y1],
       [x2, y2],

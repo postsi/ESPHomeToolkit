@@ -105,7 +105,9 @@
           "y": 68,
           "w": 50,
           "h": 20,
-          "props": {},
+          "props": {
+            "text": "label"
+          },
           "style": {
             "text_color": 16777215,
             "border_color": "color.border"

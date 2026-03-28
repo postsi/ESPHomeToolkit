@@ -12,8 +12,22 @@ When the user wants **designer vs Mac simulator parity**, **per-widget checks**,
 1. **Fixture / canvas** — Project JSON places widget(s) on the parity screen (`jc1060p470_esp32p4_1024x600`, 1024×600).
 2. **Designer PNG** — Playwright loads `?etd_parity=1&etd_fixture=…` and exports the Konva canvas (`e2e/parity-pipeline.spec.ts`).
 3. **Mac sim** — `parity_prepare_mac.py` POSTs the same project to HA `mac_sim/enqueue`; Mac agent runs ESPHome SDL; Quartz capture writes `tools/mac_esphome_sim_agent/parity_snapshots/<fixture>.png`.
-4. **Compare** — Snapshot HTTP server + `pixelmatch` vs designer export; artifacts under `frontend/test-results/parity/` on mismatch.
+4. **Compare** — Snapshot HTTP server + `pixelmatch` vs designer export; artifacts under `frontend/test-results/parity/` (**PNG + JSON on every run**, not only on failure — see `e2e/parity-pipeline.spec.ts`).
 5. **On failure** — Read **compile/agent** evidence and **diff PNGs**, fix **that** layer (compiler, canvas, or capture), **rerun the same fixture** until green, then move on.
+
+## Visual triage (how the agent “sees” designer vs sim)
+
+Playwright **perceptual** mode can **PASS** while full-res images still disagree (fonts, layout, overlap, clipping). To turn PNGs into a **bug list before coding**:
+
+1. **Run** `npm run parity:mac` (or `… -- --fixtures <name>`) so files exist under `frontend/test-results/parity/`.
+2. **Read image files with the Read tool** (same as any asset path):
+   - **Start with** `<fixture>-composite.png` — one image: **TL designer, TR sim**, BL/BR diagnostic panels (`parity-pipeline.spec.ts` documents layout).
+   - Then `<fixture>-designer.png` and `<fixture>-sim.png` if you need detail.
+   - Use `<fixture>-diff.png` to see **where** pixels disagree.
+3. **Read** `<fixture>-result.json` — note `fullResDiffPixelsRelaxed`, `coarseDiffRatio`, and `passed`. High full-res diff + `passed: true` means **tighten the gate** (`PARITY_COARSE_MAX_RATIO`, or `PARITY_MODE=strict` for that fixture) once you care about visual parity, not just coarse pass.
+4. **Write a short discrepancy list** (layout vs text vs colors vs clipping vs z-order) **then** search the compiler/canvas for those widgets — do not skip straight to code without naming what the images show.
+
+Optional: user attaches or `@`-references the PNG paths in chat; the agent still **Read**s them so the session has pixels in context.
 
 ## Per-widget batch (repo automation)
 
@@ -43,7 +57,7 @@ Quartz capture + Playwright `pixelmatch` still run **on the Mac** (`npm run pari
 Before saying a run **succeeded**, the agent must **not** rely on “no output” alone:
 
 - **HTTP:** `GET /api/esptoolkit/mac_sim/last_report` — use `report.log_tail` / `report.ok` / `received_at`; if stale vs the job you just enqueued, poll again or check the Mac agent is dequeuing (prior stuck `esphome run` blocks the queue).
-- **Disk:** `frontend/test-results/parity/<fixture>-result.json` and `*-diff.png` when pixel compare fails.
+- **Disk:** `frontend/test-results/parity/<fixture>-result.json` and `*-{designer,sim,diff,composite}.png` (present on pass too). On failure, **also** visually triage composite/designer/sim as above.
 - **Exit code** of `parity:mac` / `parity:mac:widgets` / `parity_prepare_mac.py`.
 
 Prefer **`local_http`** for HA when available; otherwise `curl` with `ESPTOOLKIT_HA_TOKEN` if needed.

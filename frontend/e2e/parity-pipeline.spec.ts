@@ -6,7 +6,8 @@
  *   pass when coarseDiffRatio <= PARITY_COARSE_MAX_RATIO (default 0.12).
  * - strict: identical pixels — threshold 0, max 0 (override with PARITY_PIXEL_THRESHOLD / PARITY_MAX_DIFF_PIXELS).
  *
- * On mismatch: writes test-results/parity/<fixture>-{diff,designer,sim}.png and <fixture>-result.json
+ * Always writes test-results/parity/<fixture>-{diff,designer,sim,composite}.png and <fixture>-result.json
+ *   (set PARITY_SKIP_PARITY_PNGS=1 to skip PNGs and only write JSON — e.g. large CI matrix).
  * Subset: PARITY_FIXTURE_NAMES=comma,separated (must match ESPTOOLKIT_PARITY_FIXTURES for mac prepare).
  */
 import { test, expect } from "@playwright/test";
@@ -187,7 +188,14 @@ function writeParityResult(
   fs.mkdirSync(PARITY_OUT, { recursive: true });
   const rel = (name: string) => path.join("test-results", "parity", name);
   const base = path.join(PARITY_OUT, fixture);
-  if (!passed) {
+  const skipPngs = ["1", "true", "yes"].includes((process.env.PARITY_SKIP_PARITY_PNGS ?? "").trim().toLowerCase());
+  const artifactRels = [
+    rel(`${fixture}-diff.png`),
+    rel(`${fixture}-designer.png`),
+    rel(`${fixture}-sim.png`),
+    rel(`${fixture}-composite.png`),
+  ];
+  if (!skipPngs) {
     fs.writeFileSync(`${base}-diff.png`, Buffer.from(PNG.sync.write(diff)));
     fs.writeFileSync(`${base}-designer.png`, Buffer.from(PNG.sync.write(designer)));
     fs.writeFileSync(`${base}-sim.png`, Buffer.from(PNG.sync.write(simPng)));
@@ -206,14 +214,7 @@ function writeParityResult(
         width: designer.width,
         height: designer.height,
         compositeLayout: `${designer.width * 2}×${designer.height * 2}: TL designer, TR sim, BL per-channel sum (clamped), BR max(|ΔR|,|ΔG|,|ΔB|)×6 grayscale`,
-        artifactsOnFailure: passed
-          ? []
-          : [
-              rel(`${fixture}-diff.png`),
-              rel(`${fixture}-designer.png`),
-              rel(`${fixture}-sim.png`),
-              rel(`${fixture}-composite.png`),
-            ],
+        artifacts: skipPngs ? [] : artifactRels,
         playwrightJson: rel("playwright-report.json"),
         nextStep:
           "Edit Canvas/compiler (or capture/crop); rerun: cd frontend && npm run parity:mac (or npm run test:parity if snapshots already exist).",

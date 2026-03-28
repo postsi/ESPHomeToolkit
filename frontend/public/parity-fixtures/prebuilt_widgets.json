@@ -14,7 +14,7 @@
       "name": "Main",
       "widgets": [
         {
-          "id": "prebuilt_group_f59252",
+          "id": "prebuilt_group_85bef8",
           "type": "container",
           "x": 10,
           "y": 12,
@@ -28,7 +28,7 @@
           }
         },
         {
-          "id": "battery_body_dded17",
+          "id": "battery_body_2b2b00",
           "type": "container",
           "x": 0,
           "y": 2,
@@ -39,10 +39,10 @@
             "bg_color": 3355443,
             "radius": 4
           },
-          "parent_id": "prebuilt_group_f59252"
+          "parent_id": "prebuilt_group_85bef8"
         },
         {
-          "id": "battery_tip_e458ce",
+          "id": "battery_tip_f200aa",
           "type": "container",
           "x": 44,
           "y": 6,
@@ -53,10 +53,10 @@
             "bg_color": 3355443,
             "radius": 2
           },
-          "parent_id": "prebuilt_group_f59252"
+          "parent_id": "prebuilt_group_85bef8"
         },
         {
-          "id": "battery_fill_74cb74",
+          "id": "battery_fill_55ed03",
           "type": "bar",
           "x": 4,
           "y": 6,
@@ -71,10 +71,10 @@
             "bg_color": 1973790,
             "radius": 3
           },
-          "parent_id": "prebuilt_group_f59252"
+          "parent_id": "prebuilt_group_85bef8"
         },
         {
-          "id": "battery_lbl_bb0418",
+          "id": "battery_lbl_f0d49c",
           "type": "label",
           "x": 56,
           "y": 0,
@@ -86,10 +86,10 @@
           "style": {
             "text_color": 8947848
           },
-          "parent_id": "prebuilt_group_f59252"
+          "parent_id": "prebuilt_group_85bef8"
         },
         {
-          "id": "prebuilt_group_9209d7",
+          "id": "prebuilt_group_afbf74",
           "type": "container",
           "x": 344,
           "y": 12,
@@ -102,7 +102,7 @@
           }
         },
         {
-          "id": "wifi_bar_9ea201",
+          "id": "wifi_bar_6ed38c",
           "type": "bar",
           "x": 0,
           "y": 18,
@@ -117,10 +117,10 @@
             "bg_color": 1973790,
             "radius": 2
           },
-          "parent_id": "prebuilt_group_9209d7"
+          "parent_id": "prebuilt_group_afbf74"
         },
         {
-          "id": "wifi_bar_ef6849",
+          "id": "wifi_bar_21b061",
           "type": "bar",
           "x": 12,
           "y": 12,
@@ -135,10 +135,10 @@
             "bg_color": 1973790,
             "radius": 2
           },
-          "parent_id": "prebuilt_group_9209d7"
+          "parent_id": "prebuilt_group_afbf74"
         },
         {
-          "id": "wifi_bar_d622e7",
+          "id": "wifi_bar_32c832",
           "type": "bar",
           "x": 24,
           "y": 6,
@@ -153,10 +153,10 @@
             "bg_color": 1973790,
             "radius": 2
           },
-          "parent_id": "prebuilt_group_9209d7"
+          "parent_id": "prebuilt_group_afbf74"
         },
         {
-          "id": "wifi_bar_fd72a3",
+          "id": "wifi_bar_cacc33",
           "type": "bar",
           "x": 36,
           "y": 0,
@@ -171,10 +171,10 @@
             "bg_color": 1973790,
             "radius": 2
           },
-          "parent_id": "prebuilt_group_9209d7"
+          "parent_id": "prebuilt_group_afbf74"
         },
         {
-          "id": "prebuilt_group_2264be",
+          "id": "prebuilt_group_dda352",
           "type": "container",
           "x": 678,
           "y": 12,
@@ -187,7 +187,7 @@
           }
         },
         {
-          "id": "wifi_fan_arc_6b6e36",
+          "id": "wifi_fan_arc_7cb598",
           "type": "arc",
           "x": 16,
           "y": 16,
@@ -205,10 +205,10 @@
           "style": {
             "bg_color": 1973790
           },
-          "parent_id": "prebuilt_group_2264be"
+          "parent_id": "prebuilt_group_dda352"
         },
         {
-          "id": "wifi_fan_arc_a5651c",
+          "id": "wifi_fan_arc_34fc93",
           "type": "arc",
           "x": 12,
           "y": 12,
@@ -226,10 +226,10 @@
           "style": {
             "bg_color": 1973790
           },
-          "parent_id": "prebuilt_group_2264be"
+          "parent_id": "prebuilt_group_dda352"
         },
         {
-          "id": "wifi_fan_arc_51cefd",
+          "id": "wifi_fan_arc_9d2b73",
           "type": "arc",
           "x": 8,
           "y": 8,
@@ -247,10 +247,10 @@
           "style": {
             "bg_color": 1973790
           },
-          "parent_id": "prebuilt_group_2264be"
+          "parent_id": "prebuilt_group_dda352"
         },
         {
-          "id": "wifi_fan_arc_e62584",
+          "id": "wifi_fan_arc_ab9eba",
           "type": "arc",
           "x": 4,
           "y": 4,
@@ -268,10 +268,10 @@
           "style": {
             "bg_color": 1973790
           },
-          "parent_id": "prebuilt_group_2264be"
+          "parent_id": "prebuilt_group_dda352"
         },
         {
-          "id": "wifi_fan_arc_ef2c48",
+          "id": "wifi_fan_arc_5bcfa0",
           "type": "arc",
           "x": 0,
           "y": 0,
@@ -289,10 +289,10 @@
           "style": {
             "bg_color": 1973790
           },
-          "parent_id": "prebuilt_group_2264be"
+          "parent_id": "prebuilt_group_dda352"
         },
         {
-          "id": "color_picker_707289",
+          "id": "color_picker_3866f9",
           "type": "color_picker",
           "x": 10,
           "y": 44,
@@ -307,7 +307,7 @@
           }
         },
         {
-          "id": "white_picker_0988ee",
+          "id": "white_picker_d4c90c",
           "type": "white_picker",
           "x": 344,
           "y": 46,
@@ -322,7 +322,7 @@
           }
         },
         {
-          "id": "spinbox2_95fc63",
+          "id": "spinbox2_a1bda0",
           "type": "spinbox2",
           "x": 678,
           "y": 68,
@@ -347,7 +347,7 @@
           "events": {}
         },
         {
-          "id": "ip_2f40db",
+          "id": "ip_2d0f4e",
           "type": "label",
           "x": 10,
           "y": 88,
@@ -362,7 +362,7 @@
           }
         },
         {
-          "id": "hostname_ffcfe4",
+          "id": "hostname_dd46a4",
           "type": "label",
           "x": 344,
           "y": 90,
@@ -377,7 +377,7 @@
           }
         },
         {
-          "id": "prebuilt_group_58889c",
+          "id": "prebuilt_group_12687c",
           "type": "container",
           "x": 10,
           "y": 120,
@@ -390,7 +390,7 @@
           }
         },
         {
-          "id": "ha_conn_b5e25c",
+          "id": "ha_conn_59b327",
           "type": "container",
           "x": 0,
           "y": 0,
@@ -401,10 +401,10 @@
             "bg_color": 1973790,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_58889c"
+          "parent_id": "prebuilt_group_12687c"
         },
         {
-          "id": "ha_conn_led_7339d7",
+          "id": "ha_conn_led_aa3592",
           "type": "led",
           "x": 8,
           "y": 8,
@@ -413,10 +413,10 @@
           "props": {
             "color": 8947848
           },
-          "parent_id": "prebuilt_group_58889c"
+          "parent_id": "prebuilt_group_12687c"
         },
         {
-          "id": "ha_conn_lbl_bb06e4",
+          "id": "ha_conn_lbl_2aef12",
           "type": "label",
           "x": 28,
           "y": 6,
@@ -428,10 +428,10 @@
           "style": {
             "text_color": 8947848
           },
-          "parent_id": "prebuilt_group_58889c"
+          "parent_id": "prebuilt_group_12687c"
         },
         {
-          "id": "clock_9c3730",
+          "id": "clock_2c6d80",
           "type": "label",
           "x": 344,
           "y": 122,
@@ -446,7 +446,7 @@
           }
         },
         {
-          "id": "prebuilt_group_39a49e",
+          "id": "prebuilt_group_658672",
           "type": "container",
           "x": 678,
           "y": 124,
@@ -459,7 +459,7 @@
           }
         },
         {
-          "id": "date_b86100",
+          "id": "date_3ff61c",
           "type": "label",
           "x": 0,
           "y": 0,
@@ -472,10 +472,10 @@
             "text_color": 8947848,
             "text_font": "montserrat_14"
           },
-          "parent_id": "prebuilt_group_39a49e"
+          "parent_id": "prebuilt_group_658672"
         },
         {
-          "id": "time_89fbcd",
+          "id": "time_2ba6d4",
           "type": "label",
           "x": 0,
           "y": 24,
@@ -488,10 +488,10 @@
             "text_color": 11184810,
             "text_font": "montserrat_24"
           },
-          "parent_id": "prebuilt_group_39a49e"
+          "parent_id": "prebuilt_group_658672"
         },
         {
-          "id": "prebuilt_group_1eafc0",
+          "id": "prebuilt_group_352ad7",
           "type": "container",
           "x": 344,
           "y": 158,
@@ -504,7 +504,7 @@
           }
         },
         {
-          "id": "ct_label_b12b26",
+          "id": "ct_label_1588d8",
           "type": "label",
           "x": 0,
           "y": 0,
@@ -516,10 +516,10 @@
           "style": {
             "text_color": 8947848
           },
-          "parent_id": "prebuilt_group_1eafc0"
+          "parent_id": "prebuilt_group_352ad7"
         },
         {
-          "id": "ct_slider_eae0e0",
+          "id": "ct_slider_c54675",
           "type": "slider",
           "x": 0,
           "y": 20,
@@ -534,10 +534,10 @@
             "bg_color": 3355443,
             "radius": 4
           },
-          "parent_id": "prebuilt_group_1eafc0"
+          "parent_id": "prebuilt_group_352ad7"
         },
         {
-          "id": "section_9ed84e",
+          "id": "section_301393",
           "type": "label",
           "x": 10,
           "y": 160,
@@ -551,7 +551,7 @@
           }
         },
         {
-          "id": "divider_ae51a8",
+          "id": "divider_8f8499",
           "type": "container",
           "x": 678,
           "y": 180,
@@ -564,7 +564,7 @@
           }
         },
         {
-          "id": "prebuilt_group_30ad14",
+          "id": "prebuilt_group_0ced44",
           "type": "container",
           "x": 678,
           "y": 190,
@@ -577,7 +577,7 @@
           }
         },
         {
-          "id": "progress_bar_5514c0",
+          "id": "progress_bar_43c40f",
           "type": "bar",
           "x": 0,
           "y": 0,
@@ -592,10 +592,10 @@
             "bg_color": 3355443,
             "radius": 4
           },
-          "parent_id": "prebuilt_group_30ad14"
+          "parent_id": "prebuilt_group_0ced44"
         },
         {
-          "id": "progress_lbl_69ec1d",
+          "id": "progress_lbl_522d03",
           "type": "label",
           "x": 164,
           "y": 0,
@@ -607,10 +607,10 @@
           "style": {
             "text_color": 8947848
           },
-          "parent_id": "prebuilt_group_30ad14"
+          "parent_id": "prebuilt_group_0ced44"
         },
         {
-          "id": "arc_labeled_32f4fc",
+          "id": "arc_labeled_6bf7ea",
           "type": "arc_labeled",
           "x": 10,
           "y": 194,
@@ -638,7 +638,7 @@
           }
         },
         {
-          "id": "led_a2a843",
+          "id": "led_d02253",
           "type": "led",
           "x": 344,
           "y": 210,
@@ -647,7 +647,7 @@
           "props": {}
         },
         {
-          "id": "back_btn_936928",
+          "id": "back_btn_efc7d4",
           "type": "button",
           "x": 678,
           "y": 222,
@@ -662,7 +662,7 @@
           }
         },
         {
-          "id": "prebuilt_group_0d33e7",
+          "id": "prebuilt_group_c50fb6",
           "type": "container",
           "x": 344,
           "y": 242,
@@ -675,7 +675,7 @@
           }
         },
         {
-          "id": "screensaver_911243",
+          "id": "screensaver_f2609f",
           "type": "container",
           "x": 0,
           "y": 0,
@@ -689,12 +689,12 @@
             "bg_color": 1973790,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_0d33e7"
+          "parent_id": "prebuilt_group_c50fb6"
         },
         {
-          "id": "screensaver_lbl_74ccda",
+          "id": "screensaver_lbl_7bd856",
           "type": "label",
-          "parent_id": "prebuilt_group_0d33e7",
+          "parent_id": "prebuilt_group_c50fb6",
           "x": 8,
           "y": 4,
           "w": 120,
@@ -708,7 +708,7 @@
           }
         },
         {
-          "id": "page_ind_f5f171",
+          "id": "page_ind_bf2022",
           "type": "label",
           "x": 678,
           "y": 266,
@@ -722,7 +722,7 @@
           }
         },
         {
-          "id": "prebuilt_group_e796b8",
+          "id": "prebuilt_group_b742b3",
           "type": "container",
           "x": 344,
           "y": 278,
@@ -735,7 +735,7 @@
           }
         },
         {
-          "id": "nav_bg_9c8d2b",
+          "id": "nav_bg_8f37f8",
           "type": "container",
           "x": 0,
           "y": 0,
@@ -746,10 +746,10 @@
             "bg_color": 1973790,
             "radius": 8
           },
-          "parent_id": "prebuilt_group_e796b8"
+          "parent_id": "prebuilt_group_b742b3"
         },
         {
-          "id": "nav_prev_31c11d",
+          "id": "nav_prev_d889e3",
           "type": "button",
           "x": 8,
           "y": 6,
@@ -762,10 +762,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_e796b8"
+          "parent_id": "prebuilt_group_b742b3"
         },
         {
-          "id": "nav_home_70704d",
+          "id": "nav_home_7b48f0",
           "type": "button",
           "x": 72,
           "y": 6,
@@ -778,10 +778,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_e796b8"
+          "parent_id": "prebuilt_group_b742b3"
         },
         {
-          "id": "nav_next_34d602",
+          "id": "nav_next_83abf4",
           "type": "button",
           "x": 136,
           "y": 6,
@@ -794,10 +794,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_e796b8"
+          "parent_id": "prebuilt_group_b742b3"
         },
         {
-          "id": "countdown_11239c",
+          "id": "countdown_9c2a9b",
           "type": "label",
           "x": 678,
           "y": 298,
@@ -811,7 +811,7 @@
           }
         },
         {
-          "id": "badge_d0ec9e",
+          "id": "badge_725770",
           "type": "label",
           "x": 10,
           "y": 322,
@@ -827,7 +827,7 @@
           }
         },
         {
-          "id": "spacer_e28450",
+          "id": "spacer_769d05",
           "type": "container",
           "x": 344,
           "y": 330,
@@ -839,7 +839,7 @@
           }
         },
         {
-          "id": "icon_c2a86f",
+          "id": "icon_b5bcbd",
           "type": "label",
           "x": 678,
           "y": 334,
@@ -853,7 +853,7 @@
           }
         },
         {
-          "id": "scroll_txt_5ee048",
+          "id": "scroll_txt_8ffde6",
           "type": "label",
           "x": 10,
           "y": 358,
@@ -867,7 +867,7 @@
           }
         },
         {
-          "id": "prebuilt_group_1aa0d7",
+          "id": "prebuilt_group_fa0f11",
           "type": "container",
           "x": 344,
           "y": 362,
@@ -880,7 +880,7 @@
           }
         },
         {
-          "id": "keypad_bb5234",
+          "id": "keypad_d98f31",
           "type": "container",
           "x": 0,
           "y": 0,
@@ -891,10 +891,10 @@
             "bg_color": 1973790,
             "radius": 8
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_0_025c23",
+          "id": "kp_0_61f806",
           "type": "button",
           "x": 6,
           "y": 6,
@@ -907,10 +907,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_1_b892fe",
+          "id": "kp_1_f3a044",
           "type": "button",
           "x": 56,
           "y": 6,
@@ -923,10 +923,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_2_ef6426",
+          "id": "kp_2_b4a02c",
           "type": "button",
           "x": 106,
           "y": 6,
@@ -939,10 +939,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_3_056d7e",
+          "id": "kp_3_8ea7db",
           "type": "button",
           "x": 6,
           "y": 52,
@@ -955,10 +955,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_4_01ebab",
+          "id": "kp_4_80e359",
           "type": "button",
           "x": 56,
           "y": 52,
@@ -971,10 +971,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_5_95af25",
+          "id": "kp_5_437174",
           "type": "button",
           "x": 106,
           "y": 52,
@@ -987,10 +987,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_6_8b2868",
+          "id": "kp_6_20de6d",
           "type": "button",
           "x": 6,
           "y": 98,
@@ -1003,10 +1003,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_7_70524e",
+          "id": "kp_7_d34a55",
           "type": "button",
           "x": 56,
           "y": 98,
@@ -1019,10 +1019,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_8_16c560",
+          "id": "kp_8_5b63c9",
           "type": "button",
           "x": 106,
           "y": 98,
@@ -1035,10 +1035,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_9_cecd12",
+          "id": "kp_9_8e2e71",
           "type": "button",
           "x": 6,
           "y": 144,
@@ -1051,10 +1051,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_10_480231",
+          "id": "kp_10_b27150",
           "type": "button",
           "x": 56,
           "y": 144,
@@ -1067,10 +1067,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "kp_11_dc1c40",
+          "id": "kp_11_afc5a3",
           "type": "button",
           "x": 106,
           "y": 144,
@@ -1083,10 +1083,10 @@
             "bg_color": 3355443,
             "radius": 6
           },
-          "parent_id": "prebuilt_group_1aa0d7"
+          "parent_id": "prebuilt_group_fa0f11"
         },
         {
-          "id": "list_menu_bb0b1e",
+          "id": "list_menu_2b8406",
           "type": "dropdown",
           "x": 678,
           "y": 382,

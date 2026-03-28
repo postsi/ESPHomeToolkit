@@ -15,8 +15,8 @@
       "type": "arc_labeled",
       "parent_id": "container_19d2e042",
       "model_rect": { "x": 19, "y": 18, "w": 120, "h": 120 },
-      "yaml_rect_page": { "x": 142, "y": 41, "w": 217, "h": 193 },
-      "note": "YAML wrapper 217×193 vs model 120×120; place siblings using expanded footprint or extra gap"
+      "yaml_rect_page": { "x": 144, "y": 44, "w": 213, "h": 187 },
+      "note": "YAML wrapper 213×187 vs model 120×120; place siblings using expanded footprint or extra gap"
     },
     {
       "id": "grimwood_all_thermostats_temperature_2",
@@ -44,11 +44,11 @@
     }
   ],
   "overlaps": [
-    { "a": "container_19d2e042", "b": "grimwood_all_thermostats_temperature", "intersection_px": 26076 },
+    { "a": "container_19d2e042", "b": "grimwood_all_thermostats_temperature", "intersection_px": 25599 },
     { "a": "container_19d2e042", "b": "grimwood_all_thermostats_temperature_2", "intersection_px": 4400 },
     { "a": "container_19d2e042", "b": "label_b855f78c", "intersection_px": 1200 },
     { "a": "container_19d2e042", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 1000 },
-    { "a": "grimwood_all_thermostats_temperature", "b": "grimwood_all_thermostats_temperature_2", "intersection_px": 2860 },
+    { "a": "grimwood_all_thermostats_temperature", "b": "grimwood_all_thermostats_temperature_2", "intersection_px": 2530 },
     { "a": "grimwood_all_thermostats_temperature", "b": "label_b855f78c", "intersection_px": 1200 },
     { "a": "grimwood_all_thermostats_temperature", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 1000 },
     { "a": "label_b855f78c", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 540 }
