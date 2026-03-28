@@ -1,56 +1,141 @@
 {
   "page_index": 0,
-  "display": { "w": 480, "h": 480 },
+  "display": {
+    "w": 480,
+    "h": 480
+  },
   "widgets": [
     {
       "id": "container_19d2e042",
       "type": "container",
       "parent_id": null,
-      "model_rect": { "x": 170, "y": 70, "w": 159, "h": 179 },
-      "yaml_rect_page": { "x": 170, "y": 70, "w": 159, "h": 179 },
+      "model_rect": {
+        "x": 170,
+        "y": 70,
+        "w": 159,
+        "h": 179
+      },
+      "yaml_rect_page": {
+        "x": 170,
+        "y": 70,
+        "w": 159,
+        "h": 179
+      },
       "note": null
     },
     {
       "id": "grimwood_all_thermostats_temperature",
       "type": "arc_labeled",
       "parent_id": "container_19d2e042",
-      "model_rect": { "x": 19, "y": 18, "w": 120, "h": 120 },
-      "yaml_rect_page": { "x": 144, "y": 44, "w": 213, "h": 187 },
-      "note": "YAML wrapper 213×187 vs model 120×120; place siblings using expanded footprint or extra gap"
+      "model_rect": {
+        "x": 19,
+        "y": 18,
+        "w": 120,
+        "h": 120
+      },
+      "yaml_rect_page": {
+        "x": 138,
+        "y": 38,
+        "w": 225,
+        "h": 199
+      },
+      "note": "YAML wrapper 225×199 vs model 120×120; place siblings using expanded footprint or extra gap"
     },
     {
       "id": "grimwood_all_thermostats_temperature_2",
       "type": "spinbox2",
       "parent_id": "container_19d2e042",
-      "model_rect": { "x": 24, "y": 138, "w": 110, "h": 40 },
-      "yaml_rect_page": { "x": 194, "y": 208, "w": 110, "h": 40 },
+      "model_rect": {
+        "x": 24,
+        "y": 138,
+        "w": 110,
+        "h": 40
+      },
+      "yaml_rect_page": {
+        "x": 194,
+        "y": 208,
+        "w": 110,
+        "h": 40
+      },
       "note": null
     },
     {
       "id": "label_b855f78c",
       "type": "label",
       "parent_id": "container_19d2e042",
-      "model_rect": { "x": 39, "y": 68, "w": 60, "h": 20 },
-      "yaml_rect_page": { "x": 209, "y": 138, "w": 60, "h": 20 },
+      "model_rect": {
+        "x": 39,
+        "y": 68,
+        "w": 60,
+        "h": 20
+      },
+      "yaml_rect_page": {
+        "x": 209,
+        "y": 138,
+        "w": 60,
+        "h": 20
+      },
       "note": null
     },
     {
       "id": "grimwood_all_thermostats_current_temperature",
       "type": "label",
       "parent_id": "container_19d2e042",
-      "model_rect": { "x": 72, "y": 68, "w": 50, "h": 20 },
-      "yaml_rect_page": { "x": 242, "y": 138, "w": 50, "h": 20 },
+      "model_rect": {
+        "x": 72,
+        "y": 68,
+        "w": 50,
+        "h": 20
+      },
+      "yaml_rect_page": {
+        "x": 242,
+        "y": 138,
+        "w": 50,
+        "h": 20
+      },
       "note": null
     }
   ],
   "overlaps": [
-    { "a": "container_19d2e042", "b": "grimwood_all_thermostats_temperature", "intersection_px": 25599 },
-    { "a": "container_19d2e042", "b": "grimwood_all_thermostats_temperature_2", "intersection_px": 4400 },
-    { "a": "container_19d2e042", "b": "label_b855f78c", "intersection_px": 1200 },
-    { "a": "container_19d2e042", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 1000 },
-    { "a": "grimwood_all_thermostats_temperature", "b": "grimwood_all_thermostats_temperature_2", "intersection_px": 2530 },
-    { "a": "grimwood_all_thermostats_temperature", "b": "label_b855f78c", "intersection_px": 1200 },
-    { "a": "grimwood_all_thermostats_temperature", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 1000 },
-    { "a": "label_b855f78c", "b": "grimwood_all_thermostats_current_temperature", "intersection_px": 540 }
+    {
+      "a": "container_19d2e042",
+      "b": "grimwood_all_thermostats_temperature",
+      "intersection_px": 26553
+    },
+    {
+      "a": "container_19d2e042",
+      "b": "grimwood_all_thermostats_temperature_2",
+      "intersection_px": 4400
+    },
+    {
+      "a": "container_19d2e042",
+      "b": "label_b855f78c",
+      "intersection_px": 1200
+    },
+    {
+      "a": "container_19d2e042",
+      "b": "grimwood_all_thermostats_current_temperature",
+      "intersection_px": 1000
+    },
+    {
+      "a": "grimwood_all_thermostats_temperature",
+      "b": "grimwood_all_thermostats_temperature_2",
+      "intersection_px": 3190
+    },
+    {
+      "a": "grimwood_all_thermostats_temperature",
+      "b": "label_b855f78c",
+      "intersection_px": 1200
+    },
+    {
+      "a": "grimwood_all_thermostats_temperature",
+      "b": "grimwood_all_thermostats_current_temperature",
+      "intersection_px": 1000
+    },
+    {
+      "a": "label_b855f78c",
+      "b": "grimwood_all_thermostats_current_temperature",
+      "intersection_px": 540
+    }
   ]
 }

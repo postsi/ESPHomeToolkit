@@ -150,7 +150,7 @@ export function arcLabeledYamlMetrics(w: WidgetLikeArc, parentW: number | null, 
       maxY = Math.max(maxY, iy1);
     }
   }
-  const pad = 22;
+  const pad = 28;
   const containerW = Math.max(wVal, maxX - minX + 2 * pad);
   const containerH = Math.max(hVal, maxY - minY + 2 * pad);
   const ox = pad - minX;

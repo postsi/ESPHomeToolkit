@@ -3358,6 +3358,17 @@ def _emit_widget_from_schema(
         out.append(f"{body_indent}    x: {props.get('align_to_x', 0)}\n")
         out.append(f"{body_indent}    y: {props.get('align_to_y', 0)}\n")
 
+    # Card-like containers: show bg_color on device (scrollable lvgl obj can look transparent; bg_opa ensures fill).
+    if root_key == "container":
+        joined_so_far = "".join(out)
+        style_vals = widget.get("style") or {}
+        bc = style_vals.get("bg_color")
+        if bc is not None and _hex_color_for_yaml(bc) is not None:
+            if "bg_opa:" not in joined_so_far:
+                out.append(f"{body_indent}bg_opa: COVER\n")
+            if "scrollable:" not in joined_so_far:
+                out.append(f"{body_indent}scrollable: false\n")
+
     # Style parts and nested blocks: any schema section that is a dict of field defs (not props/style/events)
     _skip = {"props", "style", "events", "type", "title", "esphome", "groups"}
     for part_section, part_fields in (schema or {}).items():
@@ -3906,8 +3917,9 @@ def _emit_spinbox2_yaml(
     row_h = _spinbox2_emitted_height(w)
     btn_w = max(28, min(64, w_val // 4))
     lbl_w = max(20, w_val - 2 * btn_w)
-    lbl_h = max(font_px + 6, row_h - 2)
-    lbl_y = max(0, (row_h - lbl_h) // 2)
+    # Match Canvas spinbox2 value Text: full row height + verticalAlign middle (LVGL: use full height + CENTER).
+    lbl_h = row_h
+    lbl_y = 0
     mul = float(10**dec) if dec > 0 else 0.0
     step_lit = f"{step:.8f}".rstrip("0").rstrip(".")
     if not step_lit or step_lit == "-":
@@ -4834,7 +4846,8 @@ def _arc_labeled_layout_metrics(w: dict, parent_w: int | None, parent_h: int | N
             max_x = max(max_x, ix1)
             min_y = min(min_y, iy0)
             max_y = max(max_y, iy1)
-    pad = 22
+    # Extra margin so top-of-arc scale labels are not clipped by LVGL container bounds.
+    pad = 28
     container_w = max(w_val, max_x - min_x + 2 * pad)
     container_h = max(h_val, max_y - min_y + 2 * pad)
     ox = pad - min_x
@@ -5194,6 +5207,17 @@ def _compile_lvgl_pages_schema_driven(
                 w_arc = dict(w)
                 w_arc["x"] = arc_off_x
                 w_arc["y"] = arc_off_y
+                # Default knob + indicator to match designer Canvas when unset (ESPHome defaults read as blue / wrong thickness cues).
+                _kn = dict(w_arc.get("knob") or {})
+                if _kn.get("bg_color") in (None, "", 0):
+                    _kn["bg_color"] = 0xE2E8F0
+                if not _kn.get("radius") or int(_kn.get("radius") or 0) in (0, 0x7FFF):
+                    _kn["radius"] = 6
+                w_arc["knob"] = _kn
+                _ind = dict(w_arc.get("indicator") or {})
+                if _ind.get("bg_color") in (None, "", 0):
+                    _ind["bg_color"] = 0x10B981
+                w_arc["indicator"] = _ind
                 raw_arc = _emit_widget_from_schema(w_arc, schema, ab_list, parent_w, parent_h, option_maps)
                 ci = indent + "    "
                 ce = indent + "      "
@@ -5205,6 +5229,7 @@ def _compile_lvgl_pages_schema_driven(
                     f"{ci}y: {y_val - arc_off_y}\n",
                     f"{ci}width: {container_w}\n",
                     f"{ci}height: {container_h}\n",
+                    f"{ci}scrollable: false\n",
                     f"{ci}widgets:\n",
                 ]
                 for ln in raw_arc.splitlines(True):
@@ -5219,8 +5244,8 @@ def _compile_lvgl_pages_schema_driven(
                     s = math.sin(angle_rad)
                     x1 = cx + (r - tick_len) * c
                     y1 = cy + (r - tick_len) * s
-                    x2 = cx + r * c
-                    y2 = cy + r * s
+                    x2 = cx + (r + tick_len) * c
+                    y2 = cy + (r + tick_len) * s
                     pts = [f"{int(round(x1))},{int(round(y1))}", f"{int(round(x2))},{int(round(y2))}"]
                     line_id = f"{wid}_tick_{i}"
                     out_parts.append(f"{ce}- line:\n")
