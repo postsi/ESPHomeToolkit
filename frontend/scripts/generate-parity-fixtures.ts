@@ -253,6 +253,7 @@ function scrubGlyphs(widgets: any[]) {
   }
 }
 
+/** Lay out prebuilt widget trees on a page: only translate root positions — never scale w/h. */
 function buildPrebuiltProject(): Record<string, unknown> {
   const gap = 8;
   const colXs = [10, 344, 678];
@@ -303,29 +304,26 @@ function buildEntitySmallClimateProject(): Record<string, unknown> {
     device?: { screen?: { width?: number; height?: number }; hardware_recipe_id?: string };
     pages?: { page_id?: string; name?: string; widgets?: any[] }[];
   };
-  const sw = Number(raw.device?.screen?.width) || 480;
-  const sh = Number(raw.device?.screen?.height) || 480;
-  const sx = PARITY_SCREEN_W / sw;
-  const sy = PARITY_SCREEN_H / sh;
-  const pages = (raw.pages ?? []).map((p) => ({
-    ...p,
-    widgets: (p.widgets ?? []).map((w: any) => ({
-      ...w,
-      x: Number(w.x ?? 0) * sx,
-      y: Number(w.y ?? 0) * sy,
-      w: Number(w.w ?? 0) * sx,
-      h: Number(w.h ?? 0) * sy,
-    })),
-  }));
+  const dev = raw.device ?? {};
+  const screen = dev.screen ?? {};
+  const sw = Number(screen.width) || 480;
+  const sh = Number(screen.height) || 480;
+  const recipeId =
+    typeof dev.hardware_recipe_id === "string" && dev.hardware_recipe_id.trim()
+      ? dev.hardware_recipe_id.trim()
+      : PARITY_RECIPE_ID;
+
   return {
     ...raw,
     model_version: 1,
     disp_bg_color: PARITY_DISP_BG,
     device: {
-      screen: { width: PARITY_SCREEN_W, height: PARITY_SCREEN_H },
-      hardware_recipe_id: PARITY_RECIPE_ID,
+      ...dev,
+      screen: { width: sw, height: sh },
+      hardware_recipe_id: recipeId,
     },
-    pages,
+    /** Same geometry as entitybuilder-project-min — never scale to parity screen size. */
+    pages: raw.pages ?? [],
   };
 }
 
@@ -335,7 +333,7 @@ function main() {
   fs.writeFileSync(path.join(outDir, "prebuilt_widgets.json"), JSON.stringify(buildPrebuiltProject(), null, 2));
   fs.writeFileSync(path.join(outDir, "entity_small_climate.json"), JSON.stringify(buildEntitySmallClimateProject(), null, 2));
   console.log(
-    `Wrote standard_widgets, prebuilt_widgets, entity_small_climate (${PARITY_RECIPE_ID} ${PARITY_SCREEN_W}x${PARITY_SCREEN_H}) →`,
+    `Wrote standard_widgets, prebuilt_widgets (${PARITY_RECIPE_ID} ${PARITY_SCREEN_W}x${PARITY_SCREEN_H}), entity_small_climate (source device, no geometry scaling) →`,
     outDir
   );
   if (process.argv.includes("--per-widget")) {

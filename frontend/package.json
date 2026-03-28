@@ -34,6 +34,7 @@
     "generate:parity-fixtures": "tsx scripts/generate-parity-fixtures.ts",
     "generate:parity-widget-fixtures": "tsx scripts/generate-parity-fixtures.ts --per-widget",
     "test:parity": "playwright test e2e/parity-pipeline.spec.ts",
+    "test:parity:strict": "PARITY_MODE=strict playwright test e2e/parity-pipeline.spec.ts",
     "parity:mac": "bash ../scripts/run-designer-mac-parity.sh",
     "parity:mac:widgets": "bash ../scripts/parity_widget_cycle.sh",
     "test:watch": "vitest"

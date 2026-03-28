@@ -1,10 +1,10 @@
 {
   "device": {
     "screen": {
-      "width": 1024,
-      "height": 600
+      "width": 480,
+      "height": 480
     },
-    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+    "hardware_recipe_id": "guition_s3_4848s040_480x480"
   },
   "pages": [
     {
@@ -14,10 +14,10 @@
         {
           "id": "container_19d2e042",
           "type": "container",
-          "x": 362.6666666666667,
-          "y": 87.5,
-          "w": 340.6429177244145,
-          "h": 223.75,
+          "x": 170,
+          "y": 70,
+          "w": 159.67636768331928,
+          "h": 179,
           "props": {},
           "style": {
             "bg_color": 1973790,
@@ -27,10 +27,10 @@
         {
           "id": "grimwood_all_thermostats_temperature",
           "type": "arc_labeled",
-          "x": 40.8281255288739,
-          "y": 22.5,
-          "w": 256,
-          "h": 150,
+          "x": 19.13818384165964,
+          "y": 18,
+          "w": 120,
+          "h": 120,
           "props": {
             "min_value": 5,
             "max_value": 25,
@@ -58,10 +58,10 @@
         {
           "id": "grimwood_all_thermostats_temperature_2",
           "type": "spinbox2",
-          "x": 51.49479219554056,
-          "y": 172.5,
-          "w": 234.66666666666666,
-          "h": 50,
+          "x": 24.13818384165964,
+          "y": 138,
+          "w": 110,
+          "h": 40,
           "props": {
             "value": 15,
             "min_value": 5,
@@ -84,10 +84,10 @@
         {
           "id": "label_b855f78c",
           "type": "label",
-          "x": 83.49479219554057,
-          "y": 85,
-          "w": 128,
-          "h": 25,
+          "x": 39.13818384165964,
+          "y": 68,
+          "w": 60,
+          "h": 20,
           "props": {
             "text": "Act:"
           },
@@ -101,10 +101,10 @@
         {
           "id": "grimwood_all_thermostats_current_temperature",
           "type": "label",
-          "x": 153.89479219554056,
-          "y": 85,
-          "w": 106.66666666666667,
-          "h": 25,
+          "x": 72.13818384165964,
+          "y": 68,
+          "w": 50,
+          "h": 20,
           "props": {},
           "style": {
             "text_color": 16777215,
