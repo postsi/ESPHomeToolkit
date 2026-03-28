@@ -3368,6 +3368,8 @@ def _emit_widget_from_schema(
                 out.append(f"{body_indent}bg_opa: COVER\n")
             if "scrollable:" not in joined_so_far:
                 out.append(f"{body_indent}scrollable: false\n")
+            if "clip_children:" not in joined_so_far:
+                out.append(f"{body_indent}clip_children: false\n")
 
     # Style parts and nested blocks: any schema section that is a dict of field defs (not props/style/events)
     _skip = {"props", "style", "events", "type", "title", "esphome", "groups"}
@@ -4871,6 +4873,7 @@ def _arc_labeled_layout_metrics(w: dict, parent_w: int | None, parent_h: int | N
         "tick_values": tick_values,
         "label_values": label_values,
         "label_boxes": label_boxes,
+        "track_w": int(track_w),
     }
 
 
@@ -5207,6 +5210,10 @@ def _compile_lvgl_pages_schema_driven(
                 w_arc = dict(w)
                 w_arc["x"] = arc_off_x
                 w_arc["y"] = arc_off_y
+                _props_arc = dict(w.get("props") or {})
+                if _props_arc.get("arc_width") in (None, 0, ""):
+                    _props_arc["arc_width"] = int(met.get("track_w") or 8)
+                w_arc["props"] = _props_arc
                 # Default knob + indicator to match designer Canvas when unset (ESPHome defaults read as blue / wrong thickness cues).
                 _kn = dict(w_arc.get("knob") or {})
                 if _kn.get("bg_color") in (None, "", 0):

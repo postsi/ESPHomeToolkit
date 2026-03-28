@@ -13,7 +13,8 @@
       "rotation": "rotation",
       "adjustable": "adjustable",
       "mode": "mode",
-      "change_rate": "change_rate"
+      "change_rate": "change_rate",
+      "arc_width": "arc_width"
     },
     "style": {
       "bg_color": "bg_color",
@@ -35,7 +36,8 @@
     "rotation": { "type": "number", "title": "Rotation (°)", "min": -360, "max": 360, "default": 0 },
     "adjustable": { "type": "boolean", "title": "Adjustable", "default": false },
     "mode": { "type": "enum", "title": "Mode", "values": ["NORMAL", "REVERSE", "SYMMETRICAL"], "default": "NORMAL" },
-    "change_rate": { "type": "number", "title": "Change rate", "min": 1, "max": 7200, "default": 720 }
+    "change_rate": { "type": "number", "title": "Change rate", "min": 1, "max": 7200, "default": 720 },
+    "arc_width": { "type": "number", "title": "Track width (px)", "min": 1, "max": 32, "default": 0, "description": "0 = auto from widget size" }
   },
   "style": {
     "bg_color": { "type": "color", "title": "Background", "default": "color.bg" },
@@ -67,7 +69,7 @@
     "on_release": { "type": "yaml_block", "title": "on_release", "default": "" }
   },
   "groups": {
-    "Value & range": { "section": "props", "keys": ["min_value", "max_value", "value", "adjustable"] },
+    "Value & range": { "section": "props", "keys": ["min_value", "max_value", "value", "adjustable", "arc_width"] },
     "Arc angles": { "section": "props", "keys": ["rotation", "start_angle", "end_angle", "mode", "change_rate"] },
     "Tick labels": { "section": "style", "keys": ["tick_interval", "label_interval", "tick_color", "tick_width", "tick_length", "label_font_size", "label_text_color", "label_text_font"] },
     "Knob": { "section": "knob", "keys": ["bg_color", "radius", "width", "height", "pad_right"] },
