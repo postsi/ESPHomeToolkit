@@ -9,7 +9,7 @@
    ```bash
    cd tools/mac_esphome_sim_agent
    source .venv/bin/activate   # or your venv
-   python ha_agent_client.py --ha-url http://YOUR_HA:8123 --token-file ~/.esptoolkit_mac_sim_token
+   python ha_agent_client.py --ha-url http://grimwoodha:8123 --token-file ~/.esptoolkit_mac_sim_token
    ```
 
 3. **Parity capture deps** on that Mac:
@@ -18,11 +18,11 @@
    pip install -r tools/mac_esphome_sim_agent/requirements-parity.txt
    ```
 
-4. **Env** (device must exist under that entry; compile must succeed for the fixture project):
+4. **Env** (device must exist under that entry; compile must succeed for the fixture project). Easiest: copy `scripts/parity-local.env.example` → `scripts/.parity-local.env` (gitignored), or:
 
    ```bash
-   export ESPTOOLKIT_HA_URL='http://YOUR_HA:8123'
-   export ESPTOOLKIT_ENTRY_ID='your_config_entry_uuid'
+   export ESPTOOLKIT_HA_URL='http://grimwoodha:8123'
+   export ESPTOOLKIT_ENTRY_ID='your_config_entry_uuid'   # optional if single EspToolkit entry
    export ESPTOOLKIT_PARITY_DEVICE_ID='your_device_id'
    # optional:
    export ESPTOOLKIT_HA_TOKEN='long_lived_access_token'

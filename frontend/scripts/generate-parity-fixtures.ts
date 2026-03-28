@@ -15,6 +15,8 @@ const outDir = path.join(root, "public", "parity-fixtures");
 const PARITY_RECIPE_ID = "jc1060p470_esp32p4_1024x600";
 const PARITY_SCREEN_W = 1024;
 const PARITY_SCREEN_H = 600;
+/** Page + preview background for parity (compiler page bg; must match App parity Canvas dispBgColor). */
+const PARITY_DISP_BG = "#000000";
 
 /** Matches custom_components/esptoolkit/api/views.py PALETTE_WIDGET_TYPES ∪ EXTRA_WIDGET_TYPES (incl. spinbox2). */
 const STANDARD_TYPES = [
@@ -172,6 +174,23 @@ function minimalStandard(type: string, id: string, x: number, y: number, w: numb
   return base;
 }
 
+/** One standard widget on the parity screen (for isolate-and-fix compile/compare loops). */
+function buildSingleWidgetProject(type: string): Record<string, unknown> {
+  const w = 280;
+  const h = 160;
+  const x = Math.floor((PARITY_SCREEN_W - w) / 2);
+  const y = Math.floor((PARITY_SCREEN_H - h) / 2);
+  return {
+    model_version: 1,
+    disp_bg_color: PARITY_DISP_BG,
+    device: {
+      screen: { width: PARITY_SCREEN_W, height: PARITY_SCREEN_H },
+      hardware_recipe_id: PARITY_RECIPE_ID,
+    },
+    pages: [{ page_id: "main", name: "Main", widgets: [minimalStandard(type, `std_${type}`, x, y, w, h)] }],
+  };
+}
+
 function buildStandardProject(): Record<string, unknown> {
   const pad = 12;
   const cols = 6;
@@ -190,6 +209,7 @@ function buildStandardProject(): Record<string, unknown> {
   });
   return {
     model_version: 1,
+    disp_bg_color: PARITY_DISP_BG,
     device: {
       screen: { width: PARITY_SCREEN_W, height: PARITY_SCREEN_H },
       hardware_recipe_id: PARITY_RECIPE_ID,
@@ -268,6 +288,7 @@ function buildPrebuiltProject(): Record<string, unknown> {
   }
   return {
     model_version: 1,
+    disp_bg_color: PARITY_DISP_BG,
     device: {
       screen: { width: PARITY_SCREEN_W, height: PARITY_SCREEN_H },
       hardware_recipe_id: PARITY_RECIPE_ID,
@@ -299,6 +320,7 @@ function buildEntitySmallClimateProject(): Record<string, unknown> {
   return {
     ...raw,
     model_version: 1,
+    disp_bg_color: PARITY_DISP_BG,
     device: {
       screen: { width: PARITY_SCREEN_W, height: PARITY_SCREEN_H },
       hardware_recipe_id: PARITY_RECIPE_ID,
@@ -316,6 +338,13 @@ function main() {
     `Wrote standard_widgets, prebuilt_widgets, entity_small_climate (${PARITY_RECIPE_ID} ${PARITY_SCREEN_W}x${PARITY_SCREEN_H}) →`,
     outDir
   );
+  if (process.argv.includes("--per-widget")) {
+    for (const t of STANDARD_TYPES) {
+      const name = `widget_${t}`;
+      fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify(buildSingleWidgetProject(t), null, 2));
+    }
+    console.log(`Wrote widget_<type>.json (${STANDARD_TYPES.length} files, ${PARITY_RECIPE_ID}) →`, outDir);
+  }
 }
 
 main();

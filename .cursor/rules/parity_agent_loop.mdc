@@ -1,0 +1,54 @@
+---
+description: Designer vs Mac LVGL parity — closed loop the agent must drive (widgets → PNGs → compare → fix → next).
+alwaysApply: true
+---
+
+# Parity / Mac sim: agent-driven loop
+
+When the user wants **designer vs Mac simulator parity**, **per-widget checks**, or **mac_sim / enqueue / ESPHome SDL** validation, treat it as a **machine loop**, not a one-shot manual checklist.
+
+## Intended cycle
+
+1. **Fixture / canvas** — Project JSON places widget(s) on the parity screen (`jc1060p470_esp32p4_1024x600`, 1024×600).
+2. **Designer PNG** — Playwright loads `?etd_parity=1&etd_fixture=…` and exports the Konva canvas (`e2e/parity-pipeline.spec.ts`).
+3. **Mac sim** — `parity_prepare_mac.py` POSTs the same project to HA `mac_sim/enqueue`; Mac agent runs ESPHome SDL; Quartz capture writes `tools/mac_esphome_sim_agent/parity_snapshots/<fixture>.png`.
+4. **Compare** — Snapshot HTTP server + `pixelmatch` vs designer export; artifacts under `frontend/test-results/parity/` on mismatch.
+5. **On failure** — Read **compile/agent** evidence and **diff PNGs**, fix **that** layer (compiler, canvas, or capture), **rerun the same fixture** until green, then move on.
+
+## Per-widget batch (repo automation)
+
+From `frontend`, after regenerating fixtures:
+
+```bash
+npm run generate:parity-fixtures && npm run generate:parity-widget-fixtures
+npm run parity:mac:widgets
+```
+
+`scripts/parity_widget_cycle.sh` runs **one widget per fixture** (`public/parity-fixtures/widget_<type>.json`), setting both `ESPTOOLKIT_PARITY_FIXTURES` and `PARITY_FIXTURE_NAMES` so prepare and Playwright stay aligned.
+
+For a **single** widget: `export ESPTOOLKIT_PARITY_FIXTURES=widget_label PARITY_FIXTURE_NAMES=widget_label` then `npm run parity:mac`.
+
+## HA API from Cursor (no shell env)
+
+When `ESPTOOLKIT_HA_URL` is unset in the agent terminal, **do not stop at “export env vars”**. Use MCP **`user-GrimwoodHATools`** tool **`local_http`** (read `mcps/user-GrimwoodHATools/tools/local_http.json` first):
+
+- `GET /api/esptoolkit/devices` — list devices; choose one whose `hardware_recipe_id` matches the parity fixture (e.g. `jc1060p470_esp32p4_1024x600`). **Never paste `api_key` / tokens into chat.**
+- `POST /api/esptoolkit/mac_sim/enqueue` with JSON body `{"device_id":"<id>","hardware_recipe_id":"…","project":{…}}` (same shape as `parity_prepare_mac.py`).
+- `GET /api/esptoolkit/mac_sim/last_report` (optional `?entry_id=…` if multiple EspToolkit entries).
+
+Quartz capture + Playwright `pixelmatch` still run **on the Mac** (`npm run parity:mac`); MCP covers **compile enqueue + status** from anywhere.
+
+## Mandatory verification after any sim-related run
+
+Before saying a run **succeeded**, the agent must **not** rely on “no output” alone:
+
+- **HTTP:** `GET /api/esptoolkit/mac_sim/last_report` — use `report.log_tail` / `report.ok` / `received_at`; if stale vs the job you just enqueued, poll again or check the Mac agent is dequeuing (prior stuck `esphome run` blocks the queue).
+- **Disk:** `frontend/test-results/parity/<fixture>-result.json` and `*-diff.png` when pixel compare fails.
+- **Exit code** of `parity:mac` / `parity:mac:widgets` / `parity_prepare_mac.py`.
+
+Prefer **`local_http`** for HA when available; otherwise `curl` with `ESPTOOLKIT_HA_TOKEN` if needed.
+
+## Do not
+
+- Declare success without checking **last_report** (when HA is in the loop) and **parity artifacts** / exit code.
+- Skip straight to “the next widget” while the current fixture still fails compile or pixel compare.

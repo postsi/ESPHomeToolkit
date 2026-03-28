@@ -1,5 +1,6 @@
 {
   "model_version": 1,
+  "disp_bg_color": "#000000",
   "device": {
     "screen": {
       "width": 1024,

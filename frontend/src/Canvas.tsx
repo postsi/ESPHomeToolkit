@@ -261,7 +261,7 @@ export default function Canvas({
       document.documentElement.removeAttribute("data-etd-parity-ready");
       delete g.__ETD_EXPORT_CANVAS_PNG__;
     };
-  }, [parityCaptureMode, widgets, width, height]);
+  }, [parityCaptureMode, widgets, width, height, dispBgColor]);
 
   const selectedSingleGroupContainer = useMemo(() => {
     if (selectedIds.length !== 1) return null;
@@ -389,7 +389,7 @@ export default function Canvas({
     const shadowOfsY = Number(s.shadow_ofs_y ?? 0);
     const shadowCol = toFillColor(s.shadow_color, "#000000");
     const shadowOpa = Number(s.shadow_opa ?? 100) / 100;
-    const textColor = toFillColor(s.text_color ?? p.text_color, "#e5e7eb");
+    const textColor = toFillColor(s.text_color ?? p.text_color, "#e2e8f0");
     // Arc children in a group: transparent base so concentric rings don't cover each other.
     const isArcChild = !!(w.type && String(w.type).toLowerCase().includes("arc") && w.parent_id);
     // Standalone arc/arc_labeled: transparent base so only the arc track and labels are visible.
@@ -1960,6 +1960,17 @@ export default function Canvas({
       }}
     >
       <Layer>
+        {/* Parity: Stage.style.background is CSS-only — toDataURL() would miss it vs LVGL page bg. */}
+        {parityCaptureMode && (
+          <Rect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fill={/^#[0-9a-fA-F]{6}$/.test(dispBgColor || "") ? dispBgColor! : "#0b0f14"}
+            listening={false}
+          />
+        )}
         {gridLines()}
         {(() => {
           // List order = z-order (first = back, last = front). Sort roots by index so draw order matches.

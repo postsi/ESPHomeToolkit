@@ -8,11 +8,16 @@ Requires (same machine as ha_agent_client.py):
   - pip install -r tools/mac_esphome_sim_agent/requirements-parity.txt (Quartz capture).
 
 Env (or flags):
-  ESPTOOLKIT_HA_URL          e.g. http://homeassistant.local:8123
-  ESPTOOLKIT_ENTRY_ID        config entry id for EspToolkit
-  ESPTOOLKIT_PARITY_DEVICE_ID  existing device_id in that entry (recipe must allow compile)
-  ESPTOOLKIT_HA_TOKEN        optional long-lived HA token (Bearer)
-  ESPTOOLKIT_HA_INSECURE_SSL 1 for self-signed HTTPS
+  ESPTOOLKIT_HA_URL            e.g. http://grimwoodha:8123
+  ESPTOOLKIT_PARITY_DEVICE_ID  existing device_id (recipe must allow compile), e.g. yellow_p4 for JC1060
+  ESPTOOLKIT_ENTRY_ID          optional; omit if only one EspToolkit entry (HA uses active entry)
+  ESPTOOLKIT_HA_TOKEN          optional long-lived HA token (Bearer)
+  ESPTOOLKIT_HA_INSECURE_SSL   1 for self-signed HTTPS
+
+  PARITY_CAPTURE_STABILIZE_S   seconds to wait after SDL window appears before Quartz grab (default 0.85).
+  PARITY_CAPTURE_STRICT_SDL    if 1, only match windows whose owner/title hints Python/ESPHome/SDL.
+
+Local file (sourced by run-designer-mac-parity.sh): scripts/.parity-local.env — see scripts/parity-local.env.example
 """
 from __future__ import annotations
 
@@ -63,13 +68,18 @@ def screen_size(project: dict) -> tuple[int, int]:
 
 def post_enqueue(
     ha_url: str,
-    entry_id: str,
+    entry_id: str | None,
     device_id: str,
     project: dict,
     token: str | None,
     insecure: bool,
 ) -> dict:
-    url = f"{ha_url.rstrip('/')}/api/esptoolkit/mac_sim/enqueue?entry_id={urllib.parse.quote(entry_id, safe='')}"
+    base = f"{ha_url.rstrip('/')}/api/esptoolkit/mac_sim/enqueue"
+    eid = (entry_id or "").strip()
+    if eid:
+        url = f"{base}?entry_id={urllib.parse.quote(eid, safe='')}"
+    else:
+        url = base
     payload: dict = {"device_id": device_id, "project": project}
     rid = (project.get("device") or {}).get("hardware_recipe_id")
     if isinstance(rid, str) and rid.strip():
@@ -118,10 +128,11 @@ def main() -> None:
     p.add_argument("--capture-timeout", type=float, default=float(os.environ.get("ESPTOOLKIT_CAPTURE_TIMEOUT", "120")))
     args = p.parse_args()
 
-    if not args.ha_url or not args.entry_id or not args.device_id:
+    if not args.ha_url or not args.device_id:
         raise SystemExit(
-            "Set ESPTOOLKIT_HA_URL, ESPTOOLKIT_ENTRY_ID, ESPTOOLKIT_PARITY_DEVICE_ID "
-            "(or pass --ha-url --entry-id --device-id)"
+            "Set ESPTOOLKIT_HA_URL and ESPTOOLKIT_PARITY_DEVICE_ID "
+            "(or pass --ha-url --device-id). Optional: ESPTOOLKIT_ENTRY_ID. "
+            "Or create scripts/.parity-local.env — see scripts/parity-local.env.example"
         )
 
     if args.fixtures.strip().lower() == "all":
@@ -136,17 +147,36 @@ def main() -> None:
         print(f"[parity] ({i + 1}/{len(fixtures)}) fixture={name!r}", flush=True)
         proj = load_project(name)
         w, h = screen_size(proj)
-        r = post_enqueue(args.ha_url, args.entry_id, args.device_id, proj, args.token, args.insecure_ssl)
+        r = post_enqueue(
+            args.ha_url,
+            args.entry_id.strip() or None,
+            args.device_id,
+            proj,
+            args.token,
+            args.insecure_ssl,
+        )
         if not r.get("ok"):
             raise SystemExit(f"enqueue failed: {r}")
+        print(
+            f"[parity] enqueued OK; Mac agent should open SDL (~{w}×{h}). "
+            "Waiting for window to screenshot…",
+            flush=True,
+        )
         out = SNAP_DIR / f"{name}.png"
         try:
             wait_and_capture(w, h, out, timeout_s=args.capture_timeout)
-            print(f"[parity] wrote {out}", flush=True)
+            print(f"[parity] captured → {out}", flush=True)
         finally:
+            print(
+                "[parity] sending SIGINT to esphome (SDL window closes; normal — next job or Playwright can run)",
+                flush=True,
+            )
             kill_esphome_run()
 
-    print("[parity] done. Start parity_snapshot_server.py then: cd frontend && npm run test:parity", flush=True)
+    print(
+        "[parity] all captures done (run-designer-mac-parity.sh continues: snapshot server + Playwright)",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

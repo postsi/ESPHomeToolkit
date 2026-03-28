@@ -1,0 +1,46 @@
+{
+  "model_version": 1,
+  "disp_bg_color": "#000000",
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "std_arc_labeled",
+          "type": "arc_labeled",
+          "x": 372,
+          "y": 220,
+          "w": 280,
+          "h": 160,
+          "props": {
+            "min_value": 0,
+            "max_value": 100,
+            "value": 25,
+            "start_angle": 135,
+            "end_angle": 45,
+            "rotation": 0,
+            "mode": "NORMAL",
+            "adjustable": false
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6,
+            "tick_color": "#e2e8f0",
+            "tick_width": 2,
+            "label_text_color": "#e2e8f0"
+          }
+        }
+      ]
+    }
+  ]
+}

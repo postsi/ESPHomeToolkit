@@ -1,0 +1,34 @@
+{
+  "model_version": 1,
+  "disp_bg_color": "#000000",
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "std_white_picker",
+          "type": "white_picker",
+          "x": 372,
+          "y": 220,
+          "w": 280,
+          "h": 160,
+          "props": {
+            "value": 300
+          },
+          "style": {
+            "bg_color": 15260872,
+            "radius": 6
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -116,5 +116,6 @@
       ]
     }
   ],
-  "model_version": 1
+  "model_version": 1,
+  "disp_bg_color": "#000000"
 }

@@ -10,7 +10,7 @@ so the next job starts without waiting for the user to close SDL.
 Usage (after install-macos.sh):
   source .venv/bin/activate
   # Use http:// if your browser uses http:// for HA (typical on LAN); use https:// only when HA serves TLS.
-  python ha_agent_client.py --ha-url http://homeassistant.local:8123 --token-file ~/.esptoolkit_mac_sim_token
+  python ha_agent_client.py --ha-url http://grimwoodha:8123 --token-file ~/.esptoolkit_mac_sim_token
 
   # Debug: print the exact YAML before each esphome run (inspect line numbers from errors)
   python ha_agent_client.py ... --dump-yaml

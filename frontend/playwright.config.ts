@@ -21,10 +21,14 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
   },
   webServer: {
-    command: "npm run generate:parity-fixtures && npm run build:vite && vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    command:
+      "npm run generate:parity-fixtures && npm run generate:parity-widget-fixtures && npm run build:vite && vite preview --host 127.0.0.1 --port 4173 --strictPort",
     cwd: __dirname,
     url: "http://127.0.0.1:4173/api/esptoolkit/static/",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // So phase 3 isn’t silent while Vite builds / preview starts (can take 1–3+ min cold).
+    stdout: "inherit",
+    stderr: "inherit",
   },
 });

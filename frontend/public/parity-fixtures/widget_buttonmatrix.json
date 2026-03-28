@@ -1,0 +1,39 @@
+{
+  "model_version": 1,
+  "disp_bg_color": "#000000",
+  "device": {
+    "screen": {
+      "width": 1024,
+      "height": 600
+    },
+    "hardware_recipe_id": "jc1060p470_esp32p4_1024x600"
+  },
+  "pages": [
+    {
+      "page_id": "main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "std_buttonmatrix",
+          "type": "buttonmatrix",
+          "x": 372,
+          "y": 220,
+          "w": 280,
+          "h": 160,
+          "props": {
+            "map": [
+              "1 2",
+              "3 4"
+            ]
+          },
+          "style": {
+            "bg_color": 1976635,
+            "border_width": 1,
+            "border_color": 4674921,
+            "radius": 6
+          }
+        }
+      ]
+    }
+  ]
+}

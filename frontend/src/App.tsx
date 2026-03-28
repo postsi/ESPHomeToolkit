@@ -2951,7 +2951,11 @@ function nudgeSelected(dx: number, dy: number, step: number) {
           height={parityScreen.height}
           gridSize={8}
           showGrid={false}
-          dispBgColor="#000000"
+          dispBgColor={
+            /^#[0-9a-fA-F]{6}$/.test(String((project as any)?.disp_bg_color || ""))
+              ? String((project as any).disp_bg_color)
+              : "#000000"
+          }
           liveOverrides={{}}
           onSelect={() => {}}
           onSelectNone={() => {}}

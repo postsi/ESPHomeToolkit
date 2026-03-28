@@ -2,6 +2,7 @@
 """Find an on-screen SDL/LVGL-sized window and capture it to PNG (macOS, Quartz)."""
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -25,15 +26,45 @@ def _bounds_wh(bounds) -> tuple[float, float]:
     return float(bounds.get("Width", 0)), float(bounds.get("Height", 0))
 
 
+def _window_line(w: dict) -> str:
+    ow = w.get("kCGWindowOwnerName") or "?"
+    nm = w.get("kCGWindowName") or ""
+    b = w.get("kCGWindowBounds") or {}
+    bw, bh = _bounds_wh(b)
+    return f"owner={ow!r} title={nm!r} outer≈{int(bw)}×{int(bh)}"
+
+
+def window_dict_by_id(target_wid: int) -> dict | None:
+    for w in _quartz_windows():
+        try:
+            if int(w.get("kCGWindowNumber", 0)) == target_wid:
+                return w
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _looks_like_sdl_esphome(owner_l: str, name_l: str) -> bool:
+    if "python" in owner_l or "esphome" in owner_l:
+        return True
+    if "sdl" in name_l or "lvgl" in name_l or "esphome" in name_l:
+        return True
+    return False
+
+
 def find_window_id_for_display_size(
     want_w: int,
     want_h: int,
     *,
     w_slack: int = 12,
     h_slack: int = 120,
+    strict_sdl: bool = False,
 ) -> int | None:
     """
     Pick a top-level window whose outer size is close to the LVGL display (allow title bar on height).
+
+    strict_sdl: only consider windows whose owner/title hints at Python/ESPHome/SDL (avoids another
+    app that happens to be ~1024×600). If none match, returns None.
     """
     want_w = max(1, want_w)
     want_h = max(1, want_h)
@@ -57,6 +88,8 @@ def find_window_id_for_display_size(
                 continue
             owner = str(w.get("kCGWindowOwnerName") or "").lower()
             name = str(w.get("kCGWindowName") or "").lower()
+            if strict_sdl and not _looks_like_sdl_esphome(owner, name):
+                continue
             bonus = 0.0
             if "python" in owner or "esphome" in owner:
                 bonus -= 50
@@ -70,8 +103,25 @@ def find_window_id_for_display_size(
     return best[0] if best else None
 
 
+def _backing_store_looks_2x_logical(w: int, h: int, want_w: int, want_h: int) -> bool:
+    """Quartz often returns @2x pixels; window bounds are logical points. Halve before cropping."""
+    if w % 2 or h % 2:
+        return False
+    if not (want_w * 1.88 <= w <= want_w * 2.28):
+        return False
+    # Height: 2×(framebuffer + title bar) or 2×framebuffer only
+    h_min = int(want_h * 1.82) + 8
+    h_max = int(want_h * 2.55) + 260
+    return h_min <= h <= h_max
+
+
 def _normalize_snapshot_png(path: Path, want_w: int, want_h: int) -> None:
-    """Match designer export: logical WxH (crop title bar and/or downscale Retina)."""
+    """Match designer export: logical WxH (HiDPI halve, then crop macOS title bar).
+
+    Quartz returns backing-store pixels (often 2× logical on Retina). Cropping to want_w×want_h
+    without halving first zooms content ~2× vs the real simulator. Window chrome: skip title bar
+    on the *logical*-size image after halving.
+    """
     try:
         from PIL import Image
     except ImportError:
@@ -80,17 +130,37 @@ def _normalize_snapshot_png(path: Path, want_w: int, want_h: int) -> None:
     W, H = im.size
     if W == want_w and H == want_h:
         return
-    # Retina-ish: halve to logical size
+    for _ in range(3):
+        if not _backing_store_looks_2x_logical(W, H, want_w, want_h):
+            break
+        print(
+            f"[parity] HiDPI snapshot {W}×{H} → halving to match device logical px ({want_w}×{want_h} content)",
+            flush=True,
+        )
+        im = im.resize((W // 2, H // 2), Image.Resampling.LANCZOS)
+        W, H = im.size
+    if W == want_w and H == want_h:
+        im.save(path)
+        return
+    # Exact 2× framebuffer, no title in bitmap (rare)
     if abs(W - want_w * 2) <= 4 and abs(H - want_h * 2) <= 4:
         im.resize((want_w, want_h), Image.Resampling.LANCZOS).save(path)
         return
     if W >= want_w and H >= want_h:
-        for tb in range(0, min(100, H - want_h + 1), 2):
-            box = (0, tb, want_w, tb + want_h)
+        left_off = (W - want_w) // 2 if W > want_w else 0
+        extra_top = H - want_h
+        # Prefer skipping exactly the title-bar band (client flush to bottom of window).
+        if 8 <= extra_top <= 120:
+            box = (left_off, extra_top, left_off + want_w, extra_top + want_h)
             if box[2] <= W and box[3] <= H:
                 im.crop(box).save(path)
                 return
-        # Center crop
+        # Try larger top insets first (title bar), then smaller — never prefer tb=0 while a deeper inset fits.
+        for tb in range(min(120, H - want_h), -1, -1):
+            box = (left_off, tb, left_off + want_w, tb + want_h)
+            if box[2] <= W and box[3] <= H:
+                im.crop(box).save(path)
+                return
         cx, cy = (W - want_w) // 2, (H - want_h) // 2
         im.crop((cx, cy, cx + want_w, cy + want_h)).save(path)
 
@@ -128,10 +198,43 @@ def wait_and_capture(
     timeout_s: float = 120.0,
     poll_s: float = 1.5,
 ) -> None:
+    strict = os.environ.get("PARITY_CAPTURE_STRICT_SDL", "").strip().lower() in ("1", "true", "yes")
+    stabilize = float(os.environ.get("PARITY_CAPTURE_STABILIZE_S", "0.85"))
     deadline = time.monotonic() + timeout_s
+    last_msg = 0.0
     while time.monotonic() < deadline:
-        wid = find_window_id_for_display_size(want_w, want_h)
+        now = time.monotonic()
+        if now - last_msg >= 15.0:
+            remain = max(0.0, deadline - now)
+            print(
+                f"[parity] still waiting for ~{want_w}×{want_h} SDL window ({remain:.0f}s left)…",
+                flush=True,
+            )
+            last_msg = now
+        wid = find_window_id_for_display_size(want_w, want_h, strict_sdl=strict)
         if wid:
+            wd = window_dict_by_id(wid)
+            if wd:
+                print(f"[parity] capture target: {_window_line(wd)}", flush=True)
+                ol = str(wd.get("kCGWindowOwnerName") or "").lower()
+                if any(x in ol for x in ("chrome", "safari", "firefox", "cursor", "electron")):
+                    print(
+                        "[parity] warning: window owner looks like a browser/app — "
+                        "if the PNG is wrong, set PARITY_CAPTURE_STRICT_SDL=1",
+                        flush=True,
+                    )
+            if stabilize > 0:
+                print(
+                    f"[parity] stabilizing {stabilize}s for LVGL first frame (was grabbing too early)…",
+                    flush=True,
+                )
+                time.sleep(stabilize)
+                wid2 = find_window_id_for_display_size(want_w, want_h, strict_sdl=strict)
+                if wid2:
+                    wid = wid2
+                    wd2 = window_dict_by_id(wid)
+                    if wd2:
+                        print(f"[parity] capture target after wait: {_window_line(wd2)}", flush=True)
             try:
                 capture_window_to_png(wid, out, want_w, want_h)
                 if out.is_file() and out.stat().st_size > 200:
