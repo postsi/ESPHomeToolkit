@@ -19,3 +19,20 @@ export function fontPxFromId(fontId: string | number | undefined | null, default
   }
   return defaultPx;
 }
+
+/** Match views.py::_spinbox2_emitted_height (row container height in YAML). */
+export function spinbox2EmittedRowHeight(w: {
+  h?: number;
+  props?: Record<string, unknown>;
+  style?: Record<string, unknown>;
+}): number {
+  const hVal = Math.floor(Number(w.h ?? 48));
+  const props = w.props || {};
+  const style = w.style || {};
+  const raw = String(style.text_font ?? props.font ?? "").trim();
+  const fontPx = fontPxFromId(raw || undefined, 14);
+  const borderW = Math.floor(Number(style.border_width ?? 1) || 0);
+  const outlineW = Math.floor(Number(style.outline_width ?? 0) || 0);
+  const edge = Math.max(0, borderW, outlineW);
+  return Math.max(hVal, fontPx + 22 + 2 * edge);
+}

@@ -3,7 +3,24 @@ import packageJson from "../package.json";
 import Canvas from "./Canvas";
 import { resolveDeviceScreen } from "./deviceScreen";
 import { usePreviewFontResolver } from "./usePreviewFontResolver";
-import {listRecipes, compileYaml, parseYamlSyntax, listEntities, getEntity, importRecipe, updateRecipeLabel, deleteRecipe, cloneRecipe, exportRecipe, listSavedEntityWidgets, getSavedEntityWidget, saveEntityWidget, deleteSavedEntityWidget, previewWidgetYaml} from "./lib/api";
+import {
+  listRecipes,
+  compileYaml,
+  parseYamlSyntax,
+  listEntities,
+  getEntity,
+  importRecipe,
+  updateRecipeLabel,
+  deleteRecipe,
+  cloneRecipe,
+  exportRecipe,
+  listSavedEntityWidgets,
+  getSavedEntityWidget,
+  saveEntityWidget,
+  deleteSavedEntityWidget,
+  previewWidgetYaml,
+  type LayoutAuditResult,
+} from "./lib/api";
 import { collectWidgetIds, updateSectionsWidgetRef } from "./projectSections";
 import { CONTROL_TEMPLATES, type ControlTemplate } from "./controls";
 import { PREBUILT_WIDGETS, type PrebuiltWidget } from "./prebuiltWidgets";
@@ -518,6 +535,9 @@ async function onUploadAssetFile(file: File) {
   const [compileWarnings, setCompileWarnings] = useState<Array<{ type: string; section?: string; widget_id?: string }>>([]);
   const [autoCompile, setAutoCompile] = useState<boolean>(true);
   const [compileBusy, setCompileBusy] = useState<boolean>(false);
+  const [layoutAuditBusy, setLayoutAuditBusy] = useState<boolean>(false);
+  const [layoutAudit, setLayoutAudit] = useState<LayoutAuditResult | null>(null);
+  const [layoutAuditErr, setLayoutAuditErr] = useState<string>("");
   const [validateYamlBusy, setValidateYamlBusy] = useState<boolean>(false);
   const [validateYamlResult, setValidateYamlResult] = useState<{ ok: boolean; stdout?: string; stderr?: string; error?: string } | null>(null);
   const [exportBusy, setExportBusy] = useState<boolean>(false);
@@ -2614,6 +2634,23 @@ function nudgeSelected(dx: number, dy: number, step: number) {
     }
   }
 
+  async function runLayoutAudit() {
+    if (!project || !selectedDevice) return;
+    setLayoutAuditBusy(true);
+    setLayoutAuditErr("");
+    setLayoutAudit(null);
+    try {
+      const result = await compileYaml(selectedDevice, project as any, { includeLayoutAudit: true });
+      setCompiledYaml(result?.yaml ?? "");
+      setCompileWarnings(result?.warnings ?? []);
+      setLayoutAudit(result.layout_audit ?? null);
+    } catch (e: any) {
+      setLayoutAuditErr(String(e?.message || e));
+    } finally {
+      setLayoutAuditBusy(false);
+    }
+  }
+
   // When Full YAML modal opens, compile and show result
   useEffect(() => {
     if (!fullYamlOpen) return;
@@ -4207,6 +4244,15 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                   <div className="section">
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
                       <button className="secondary" disabled={compileBusy || !project} onClick={refreshCompile}>{compileBusy ? "Compiling…" : "Refresh"}</button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={layoutAuditBusy || compileBusy || !project}
+                        title="Compare model boxes to YAML footprints (arc_labeled wrapper, spinbox2 height) and list overlaps"
+                        onClick={runLayoutAudit}
+                      >
+                        {layoutAuditBusy ? "Auditing…" : "Layout audit"}
+                      </button>
                       <button className="secondary" disabled={!compiledYaml} onClick={async () => {
                           if (!compiledYaml) return;
                           try {
@@ -4246,6 +4292,61 @@ function nudgeSelected(dx: number, dy: number, step: number) {
                       </button>
                     </div>
                     {compileErr && <div className="toast error" style={{ marginBottom: 8 }}>Compile error: {compileErr}</div>}
+                    {layoutAuditErr && <div className="toast error" style={{ marginBottom: 8 }}>Layout audit: {layoutAuditErr}</div>}
+                    {layoutAudit && layoutAudit.overlaps && layoutAudit.overlaps.length > 0 && (
+                      <div className="toast error" style={{ marginBottom: 8 }}>
+                        <strong>YAML footprint overlaps ({layoutAudit.overlaps.length})</strong>
+                        <ul style={{ margin: "8px 0 0 18px", padding: 0 }}>
+                          {layoutAudit.overlaps.map((o) => (
+                            <li key={`${o.a}-${o.b}`}>
+                              {o.a} ↔ {o.b} — {o.intersection_px}px²
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          Pairs use page-absolute rectangles as emitted (padding, align, arc_labeled wrapper size, spinbox2 row height). Overlap here usually matches on-device stacking.
+                        </div>
+                      </div>
+                    )}
+                    {layoutAudit && (!layoutAudit.overlaps || layoutAudit.overlaps.length === 0) && !layoutAudit.error && (
+                      <div className="toast" style={{ marginBottom: 8, background: "rgba(80,200,120,0.12)", border: "1px solid rgba(80,200,120,0.35)" }}>
+                        Layout audit: no 2D overlaps between emitted widget footprints on this page.
+                      </div>
+                    )}
+                    {layoutAudit && (
+                      <div className="section" style={{ marginBottom: 12 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                          <span className="muted">Audit JSON</span>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(JSON.stringify(layoutAudit, null, 2));
+                                setToast({ type: "ok", msg: "Layout audit copied" });
+                              } catch {
+                                setToast({ type: "error", msg: "Copy failed" });
+                              }
+                            }}
+                          >
+                            Copy JSON
+                          </button>
+                        </div>
+                        <pre
+                          style={{
+                            margin: 0,
+                            maxHeight: 220,
+                            overflow: "auto",
+                            fontSize: 11,
+                            padding: 8,
+                            background: "var(--etd-panel-bg, #111)",
+                            borderRadius: 6,
+                          }}
+                        >
+                          {JSON.stringify(layoutAudit, null, 2)}
+                        </pre>
+                      </div>
+                    )}
                     {compileWarnings.length > 0 && (
                       <div className="toast" style={{ marginBottom: 8, background: "rgba(250,200,80,0.15)", border: "1px solid rgba(250,200,80,0.4)" }}>
                         Component references missing widgets: {compileWarnings.map((w) => w.section && w.widget_id ? `${w.section} → widget "${w.widget_id}"` : w.type).join("; ")}. Remove or fix in Components, or delete the block.

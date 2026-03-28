@@ -3902,9 +3902,8 @@ def _emit_spinbox2_yaml(
     font_px = _font_px_from_id(text_font, 14)
     border_w = int(style.get("border_width", 1) or 0)
     outline_w = int(style.get("outline_width", 0) or 0)
-    edge = max(0, border_w, outline_w)
     # Row height: font line box + room for borders/outlines so +/- buttons are not clipped at bottom/top.
-    row_h = max(h_val, font_px + 22 + 2 * edge)
+    row_h = _spinbox2_emitted_height(w)
     btn_w = max(28, min(64, w_val // 4))
     lbl_w = max(20, w_val - 2 * btn_w)
     lbl_h = max(font_px + 6, row_h - 2)
@@ -4682,6 +4681,289 @@ def _project_display_dimensions(project: dict) -> tuple[int, int]:
     return 480, 320
 
 
+def _style_pad_lvgl(style: dict | None) -> tuple[int, int, int, int]:
+    """LVGL-style padding (pad_all when side missing)."""
+    s = style or {}
+    try:
+        pa = int(s.get("pad_all") or 0)
+    except (TypeError, ValueError):
+        pa = 0
+
+    def _one(key: str) -> int:
+        try:
+            v = s.get(key)
+            if v is None:
+                return pa
+            return int(v)
+        except (TypeError, ValueError):
+            return pa
+
+    return _one("pad_left"), _one("pad_right"), _one("pad_top"), _one("pad_bottom")
+
+
+def _apply_align_lvgl(
+    x_val: int,
+    y_val: int,
+    w_val: int,
+    h_val: int,
+    align: str,
+    parent_w: int | None,
+    parent_h: int | None,
+) -> tuple[int, int]:
+    if not align or align == "TOP_LEFT" or parent_w is None or parent_h is None:
+        return x_val, y_val
+    pw2, ph2 = parent_w // 2, parent_h // 2
+    if align == "CENTER":
+        return x_val + w_val // 2 - pw2, y_val + h_val // 2 - ph2
+    if align == "TOP_MID":
+        return x_val + w_val // 2 - pw2, y_val
+    if align == "TOP_RIGHT":
+        return x_val + w_val - parent_w, y_val
+    if align == "LEFT_MID":
+        return x_val, y_val + h_val // 2 - ph2
+    if align == "RIGHT_MID":
+        return x_val + w_val - parent_w, y_val + h_val // 2 - ph2
+    if align == "BOTTOM_LEFT":
+        return x_val, y_val + h_val - parent_h
+    if align == "BOTTOM_MID":
+        return x_val + w_val // 2 - pw2, y_val + h_val - parent_h
+    if align == "BOTTOM_RIGHT":
+        return x_val + w_val - parent_w, y_val + h_val - parent_h
+    return x_val, y_val
+
+
+def _spinbox2_emitted_height(w: dict) -> int:
+    props = dict(w.get("props") or {})
+    style = dict(w.get("style") or {})
+    h_val = int(w.get("h", 48))
+    text_font = str(style.get("text_font") or props.get("font") or "").strip() or None
+    font_px = _font_px_from_id(text_font, 14)
+    border_w = int(style.get("border_width", 1) or 0)
+    outline_w = int(style.get("outline_width", 0) or 0)
+    edge = max(0, border_w, outline_w)
+    return max(h_val, font_px + 22 + 2 * edge)
+
+
+def _arc_labeled_layout_metrics(w: dict, parent_w: int | None, parent_h: int | None) -> dict:
+    """Numeric geometry shared by YAML emit and layout audit (wrapper size vs model w×h)."""
+    x_val = int(w.get("x", 0))
+    y_val = int(w.get("y", 0))
+    w_val = int(w.get("w", 100))
+    h_val = int(w.get("h", 50))
+    props = w.get("props") or {}
+    style = w.get("style") or {}
+    align = str(props.get("align", "TOP_LEFT") or "TOP_LEFT").strip().upper()
+    x_val, y_val = _apply_align_lvgl(x_val, y_val, w_val, h_val, align, parent_w, parent_h)
+    rot = float(props.get("rotation", 0))
+    start_angle = float(props.get("start_angle", 135))
+    end_angle = float(props.get("end_angle", 45))
+    mode = str(props.get("mode", "NORMAL")).strip().upper()
+    min_val = float(props.get("min_value", 0))
+    max_val = float(props.get("max_value", 100))
+    tick_interval = max(1, int(style.get("tick_interval") or props.get("tick_interval") or 1))
+    label_interval = max(1, int(style.get("label_interval") or props.get("label_interval") or 2))
+    label_font = (style.get("label_text_font") or style.get("text_font") or props.get("font") or "").strip() or None
+    cx = w_val / 2.0
+    cy = h_val / 2.0
+    r = min(w_val, h_val) / 2.0
+    tick_len_auto = max(2, min(6, min(w_val, h_val) / 40.0))
+    tick_length_style = max(0, int(style.get("tick_length") or 0))
+    tick_len = max(2, min(48, tick_length_style)) if tick_length_style > 0 else tick_len_auto
+    tick_width = max(1, min(16, int(style.get("tick_width") or 0) or 3))
+    label_offset = max(4, min(20, min(w_val, h_val) / 10.0))
+    label_r = r + label_offset
+    min_int = int(math.ceil(min_val))
+    max_int = int(math.floor(max_val))
+    tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
+    label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
+    configured_font_px = _font_px_from_id(label_font, 14)
+    label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
+    extra_v = max(12, int(math.ceil(label_font_size * 0.65)))
+    label_h = label_font_size + extra_v
+    label_boxes: list[tuple[int, int, int, int]] = []
+    for value in label_values:
+        angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
+        angle_rad = math.radians(angle_deg)
+        lx = cx + label_r * math.cos(angle_rad)
+        ly = cy + label_r * math.sin(angle_rad)
+        text = str(value)
+        box = max(28, int(math.ceil(len(text) * label_font_size * 0.78)) + 12)
+        half = box / 2
+        lx_int = int(round(lx - half))
+        ly_int = int(round(ly - label_h / 2))
+        label_boxes.append((lx_int, ly_int, box, label_h))
+    min_x = 0
+    max_x = w_val
+    min_y = 0
+    max_y = h_val
+    for (lx_int, ly_int, box, lh) in label_boxes:
+        min_x = min(min_x, lx_int)
+        max_x = max(max_x, lx_int + box)
+        min_y = min(min_y, ly_int)
+        max_y = max(max_y, ly_int + lh)
+    tw2 = max(1, (tick_width + 1) // 2)
+    for value in tick_values:
+        angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
+        angle_rad = math.radians(angle_deg)
+        c = math.cos(angle_rad)
+        s_m = math.sin(angle_rad)
+        x1 = cx + (r - tick_len) * c
+        y1 = cy + (r - tick_len) * s_m
+        x2 = cx + r * c
+        y2 = cy + r * s_m
+        for px, py in ((x1, y1), (x2, y2)):
+            ix0 = int(math.floor(px - tw2))
+            iy0 = int(math.floor(py - tw2))
+            ix1 = int(math.ceil(px + tw2))
+            iy1 = int(math.ceil(py + tw2))
+            min_x = min(min_x, ix0)
+            max_x = max(max_x, ix1)
+            min_y = min(min_y, iy0)
+            max_y = max(max_y, iy1)
+    pad = 22
+    container_w = max(w_val, max_x - min_x + 2 * pad)
+    container_h = max(h_val, max_y - min_y + 2 * pad)
+    ox = pad - min_x
+    oy = pad - min_y
+    arc_off_x = int(round(ox))
+    arc_off_y = int(round(oy))
+    return {
+        "x_val": x_val,
+        "y_val": y_val,
+        "w_val": w_val,
+        "h_val": h_val,
+        "container_w": container_w,
+        "container_h": container_h,
+        "arc_off_x": arc_off_x,
+        "arc_off_y": arc_off_y,
+        "cx": cx,
+        "cy": cy,
+        "r": r,
+        "tick_len": tick_len,
+        "tick_width": tick_width,
+        "tick_values": tick_values,
+        "label_values": label_values,
+        "label_boxes": label_boxes,
+    }
+
+
+def _layout_audit_for_project(project: dict, page_index: int = 0) -> dict:
+    """Page-absolute rectangles as LVGL will see them (padding, align, arc_labeled wrapper, spinbox2 row height)."""
+    pages = project.get("pages") or []
+    if not isinstance(pages, list) or page_index < 0 or page_index >= len(pages):
+        return {"error": "invalid_page", "widgets": [], "overlaps": [], "notes": []}
+    page = pages[page_index]
+    if not isinstance(page, dict):
+        return {"error": "invalid_page", "widgets": [], "overlaps": [], "notes": []}
+    raw = page.get("widgets") or []
+    if not isinstance(raw, list):
+        raw = []
+    all_widgets = [
+        w
+        for w in raw
+        if isinstance(w, dict) and w.get("id") and not str(w.get("id") or "").strip().startswith("screensaver_")
+    ]
+    disp_w, disp_h = _project_display_dimensions(project)
+    kids: dict[str, list[dict]] = {}
+    for w in all_widgets:
+        pid = str(w.get("parent_id") or "")
+        if pid:
+            kids.setdefault(pid, []).append(w)
+
+    entries: list[dict] = []
+
+    def walk(w: dict, parent_outer_x: int, parent_outer_y: int, parent: dict | None, pfull_w: int, pfull_h: int) -> None:
+        pl, _, pt, _ = _style_pad_lvgl(parent.get("style") if parent else None)
+        content_ox = parent_outer_x + pl
+        content_oy = parent_outer_y + pt
+        props = w.get("props") or {}
+        wtype = w.get("type")
+        x0, y0 = int(w.get("x", 0)), int(w.get("y", 0))
+        ww, hh = int(w.get("w", 100)), int(w.get("h", 50))
+        align = str(props.get("align", "TOP_LEFT") or "TOP_LEFT").strip().upper()
+        xa, ya = _apply_align_lvgl(x0, y0, ww, hh, align, pfull_w, pfull_h)
+        wid = str(w.get("id") or "")
+
+        if wtype == "arc_labeled":
+            met = _arc_labeled_layout_metrics(w, pfull_w, pfull_h)
+            ct_x = met["x_val"] - met["arc_off_x"]
+            ct_y = met["y_val"] - met["arc_off_y"]
+            ox = content_ox + ct_x
+            oy = content_oy + ct_y
+            cw, ch = met["container_w"], met["container_h"]
+            entries.append(
+                {
+                    "id": wid,
+                    "type": wtype,
+                    "parent_id": w.get("parent_id"),
+                    "model_rect": {"x": x0, "y": y0, "w": ww, "h": hh},
+                    "yaml_rect_page": {"x": ox, "y": oy, "w": cw, "h": ch},
+                    "note": f"YAML wrapper {cw}×{ch} vs model {ww}×{hh}; place siblings using expanded footprint or extra gap",
+                }
+            )
+            outer_x, outer_y = ox, oy
+        elif wtype == "spinbox2":
+            row_h = _spinbox2_emitted_height(w)
+            ox = content_ox + xa
+            oy = content_oy + ya
+            note = None if row_h == hh else f"YAML height {row_h}px (model h {hh}px)"
+            entries.append(
+                {
+                    "id": wid,
+                    "type": wtype,
+                    "parent_id": w.get("parent_id"),
+                    "model_rect": {"x": x0, "y": y0, "w": ww, "h": hh},
+                    "yaml_rect_page": {"x": ox, "y": oy, "w": ww, "h": row_h},
+                    "note": note,
+                }
+            )
+            outer_x, outer_y = ox, oy
+        else:
+            ox = content_ox + xa
+            oy = content_oy + ya
+            entries.append(
+                {
+                    "id": wid,
+                    "type": str(wtype),
+                    "parent_id": w.get("parent_id"),
+                    "model_rect": {"x": x0, "y": y0, "w": ww, "h": hh},
+                    "yaml_rect_page": {"x": ox, "y": oy, "w": ww, "h": hh},
+                    "note": None,
+                }
+            )
+            outer_x, outer_y = ox, oy
+
+        pw_i, ph_i = int(w.get("w", 100)), int(w.get("h", 50))
+        for c in kids.get(wid, []):
+            walk(c, outer_x, outer_y, w, pw_i, ph_i)
+
+    for root in [x for x in all_widgets if not x.get("parent_id")]:
+        walk(root, 0, 0, None, disp_w, disp_h)
+
+    overlaps: list[dict] = []
+    for i, a in enumerate(entries):
+        ra = a["yaml_rect_page"]
+        for b in entries[i + 1 :]:
+            rb = b["yaml_rect_page"]
+            if ra["x"] < rb["x"] + rb["w"] and ra["x"] + ra["w"] > rb["x"] and ra["y"] < rb["y"] + rb["h"] and ra["y"] + ra["h"] > rb["y"]:
+                ix0, iy0 = max(ra["x"], rb["x"]), max(ra["y"], rb["y"])
+                ix1, iy1 = min(ra["x"] + ra["w"], rb["x"] + rb["w"]), min(ra["y"] + ra["h"], rb["y"] + rb["h"])
+                area = max(0, ix1 - ix0) * max(0, iy1 - iy0)
+                overlaps.append({"a": a["id"], "b": b["id"], "intersection_px": area})
+
+    notes = [
+        "yaml_rect_page: page-absolute box as emitted (padding + align + composite widgets).",
+        "arc_labeled and spinbox2 often differ from model w×h; overlaps here usually match on-device overlap.",
+    ]
+    return {
+        "page_index": page_index,
+        "display": {"w": disp_w, "h": disp_h},
+        "widgets": entries,
+        "overlaps": overlaps,
+        "notes": notes,
+    }
+
+
 def _compile_lvgl_pages_schema_driven(
     project: dict,
     cpicker_defaults: list[tuple[str, str, int]] | None = None,
@@ -4861,43 +5143,9 @@ def _compile_lvgl_pages_schema_driven(
                 raw = _emit_spinbox2_yaml(w, indent, ab_list, parent_w, parent_h, option_maps)
             elif wtype == "arc_labeled":
                 # Emit container with arc + line widgets (ticks) + label widgets (scale numbers) so they appear on device.
-                x_val = int(w.get("x", 0))
-                y_val = int(w.get("y", 0))
-                w_val = int(w.get("w", 100))
-                h_val = int(w.get("h", 50))
+                met = _arc_labeled_layout_metrics(w, parent_w, parent_h)
                 props = w.get("props") or {}
                 style = w.get("style") or {}
-                align = str(props.get("align", "TOP_LEFT") or "TOP_LEFT").strip().upper()
-                if align and align != "TOP_LEFT" and parent_w is not None and parent_h is not None:
-                    pw2, ph2 = parent_w // 2, parent_h // 2
-                    if align == "CENTER":
-                        x_val = x_val + w_val // 2 - pw2
-                        y_val = y_val + h_val // 2 - ph2
-                    elif align == "TOP_MID":
-                        x_val = x_val + w_val // 2 - pw2
-                    elif align == "TOP_RIGHT":
-                        x_val = x_val + w_val - parent_w
-                    elif align == "LEFT_MID":
-                        y_val = y_val + h_val // 2 - ph2
-                    elif align == "RIGHT_MID":
-                        x_val = x_val + w_val - parent_w
-                        y_val = y_val + h_val // 2 - ph2
-                    elif align == "BOTTOM_LEFT":
-                        y_val = y_val + h_val - parent_h
-                    elif align == "BOTTOM_MID":
-                        x_val = x_val + w_val // 2 - pw2
-                        y_val = y_val + h_val - parent_h
-                    elif align == "BOTTOM_RIGHT":
-                        x_val = x_val + w_val - parent_w
-                        y_val = y_val + h_val - parent_h
-                rot = float(props.get("rotation", 0))
-                start_angle = float(props.get("start_angle", 135))
-                end_angle = float(props.get("end_angle", 45))
-                mode = str(props.get("mode", "NORMAL")).strip().upper()
-                min_val = float(props.get("min_value", 0))
-                max_val = float(props.get("max_value", 100))
-                tick_interval = max(1, int(style.get("tick_interval") or props.get("tick_interval") or 1))
-                label_interval = max(1, int(style.get("label_interval") or props.get("label_interval") or 2))
                 label_color = style.get("label_text_color") or style.get("text_color") or 0xFFFFFF
                 if isinstance(label_color, str):
                     label_color = _hex_color_for_yaml(label_color) or 0xFFFFFF
@@ -4907,72 +5155,28 @@ def _compile_lvgl_pages_schema_driven(
                     tick_color = _hex_color_for_yaml(tick_color) or 0xFFFFFF
                 tick_color = int(tick_color) & 0xFFFFFF
                 label_font = (style.get("label_text_font") or style.get("text_font") or props.get("font") or "").strip() or None
-                cx = w_val / 2.0
-                cy = h_val / 2.0
-                r = min(w_val, h_val) / 2.0
-                tick_len_auto = max(2, min(6, min(w_val, h_val) / 40.0))
-                tick_length_style = max(0, int(style.get("tick_length") or 0))
-                tick_len = max(2, min(48, tick_length_style)) if tick_length_style > 0 else tick_len_auto
-                tick_width = max(1, min(16, int(style.get("tick_width") or 0) or 3))
-                label_offset = max(4, min(20, min(w_val, h_val) / 10.0))
-                label_r = r + label_offset
-                min_int = int(math.ceil(min_val))
-                max_int = int(math.floor(max_val))
-                tick_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % tick_interval == 0]
-                label_values = [v for v in range(min_int, max_int + 1) if (v - min_int) % label_interval == 0]
-                configured_font_px = _font_px_from_id(label_font, 14)
-                label_font_size = max(8, min(28, int(style.get("label_font_size") or 0) or configured_font_px))
-                # Extra line height + width for LVGL font bearings (esp. top-of-arc numerals).
-                extra_v = max(12, int(math.ceil(label_font_size * 0.65)))
-                label_h = label_font_size + extra_v
-                # Compute label positions and bounding box so container can be expanded to avoid clipping
-                label_boxes = []
-                for i, value in enumerate(label_values):
-                    angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
-                    angle_rad = math.radians(angle_deg)
-                    lx = cx + label_r * math.cos(angle_rad)
-                    ly = cy + label_r * math.sin(angle_rad)
-                    text = str(value)
-                    box = max(28, int(math.ceil(len(text) * label_font_size * 0.78)) + 12)
-                    half = box / 2
-                    lx_int = int(round(lx - half))
-                    ly_int = int(round(ly - label_h / 2))
-                    label_boxes.append((lx_int, ly_int, box, label_h))
-                min_x = 0
-                max_x = w_val
-                min_y = 0
-                max_y = h_val
-                for (lx_int, ly_int, box, lh) in label_boxes:
-                    min_x = min(min_x, lx_int)
-                    max_x = max(max_x, lx_int + box)
-                    min_y = min(min_y, ly_int)
-                    max_y = max(max_y, ly_int + lh)
-                tw2 = max(1, (tick_width + 1) // 2)
-                for value in tick_values:
-                    angle_deg = _value_to_angle_deg(rot, start_angle, end_angle, mode, min_val, max_val, float(value))
-                    angle_rad = math.radians(angle_deg)
-                    c = math.cos(angle_rad)
-                    s_m = math.sin(angle_rad)
-                    x1 = cx + (r - tick_len) * c
-                    y1 = cy + (r - tick_len) * s_m
-                    x2 = cx + r * c
-                    y2 = cy + r * s_m
-                    for px, py in ((x1, y1), (x2, y2)):
-                        ix0 = int(math.floor(px - tw2))
-                        iy0 = int(math.floor(py - tw2))
-                        ix1 = int(math.ceil(px + tw2))
-                        iy1 = int(math.ceil(py + tw2))
-                        min_x = min(min_x, ix0)
-                        max_x = max(max_x, ix1)
-                        min_y = min(min_y, iy0)
-                        max_y = max(max_y, iy1)
-                pad = 22
-                container_w = max(w_val, max_x - min_x + 2 * pad)
-                container_h = max(h_val, max_y - min_y + 2 * pad)
-                ox = pad - min_x
-                oy = pad - min_y
-                arc_off_x = int(round(ox))
-                arc_off_y = int(round(oy))
+                x_val = met["x_val"]
+                y_val = met["y_val"]
+                w_val = met["w_val"]
+                h_val = met["h_val"]
+                container_w = met["container_w"]
+                container_h = met["container_h"]
+                arc_off_x = met["arc_off_x"]
+                arc_off_y = met["arc_off_y"]
+                cx = met["cx"]
+                cy = met["cy"]
+                r = met["r"]
+                tick_len = met["tick_len"]
+                tick_width = met["tick_width"]
+                tick_values = met["tick_values"]
+                label_values = met["label_values"]
+                label_boxes = met["label_boxes"]
+                rot = float(props.get("rotation", 0))
+                start_angle = float(props.get("start_angle", 135))
+                end_angle = float(props.get("end_angle", 45))
+                mode = str(props.get("mode", "NORMAL")).strip().upper()
+                min_val = float(props.get("min_value", 0))
+                max_val = float(props.get("max_value", 100))
                 w_arc = dict(w)
                 w_arc["x"] = arc_off_x
                 w_arc["y"] = arc_off_y
@@ -6711,10 +6915,24 @@ class CompileView(HomeAssistantView):
                 recipe_override = body.get("hardware_recipe_id").strip()
 
         mode = "preview" if (project_override is not None or recipe_override is not None) else "stored"
-        yaml_text, warnings = await hass.async_add_executor_job(
-            _sync_compile_device_yaml, hass, device, project_override, recipe_override
+        include_audit = isinstance(body, dict) and bool(body.get("include_layout_audit"))
+        try:
+            audit_page = int((body or {}).get("layout_audit_page", 0) or 0)
+        except (TypeError, ValueError):
+            audit_page = 0
+
+        def _compile_job():
+            y, wn = _sync_compile_device_yaml(hass, device, project_override, recipe_override)
+            return y, wn
+
+        yaml_text, warnings = await hass.async_add_executor_job(_compile_job)
+        layout_audit = None
+        if include_audit:
+            proj = project_override if isinstance(project_override, dict) else (device.project or {})
+            layout_audit = await hass.async_add_executor_job(_layout_audit_for_project, proj, audit_page)
+        return self.json(
+            {"ok": True, "yaml": yaml_text, "warnings": warnings, "mode": mode, "layout_audit": layout_audit}
         )
-        return self.json({"ok": True, "yaml": yaml_text, "warnings": warnings, "mode": mode})
 
 
 class ValidateYamlView(HomeAssistantView):

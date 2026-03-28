@@ -3,6 +3,9 @@
  * Kept in one module so we can unit-test all canvas behavior (e.g. resize handle bug).
  */
 
+import { arcLabeledYamlMetrics } from "./arcLabeledYamlMetrics";
+import { spinbox2EmittedRowHeight } from "./fontMetrics";
+
 export type WidgetLike = {
   id: string;
   x: number;
@@ -289,6 +292,97 @@ export function parentInfo(
   return { ax: pax, ay: pay, pw, ph };
 }
 
+/**
+ * Match views.py::_apply_align_lvgl / schema geometry: non-TOP_LEFT uses parent OUTER w×h.
+ * Coordinates are in parent content space (caller adds parent content origin on screen).
+ */
+export function lvglEmittedOriginInParent(
+  x: number,
+  y: number,
+  wVal: number,
+  hVal: number,
+  align: string,
+  parentOw: number | null,
+  parentOh: number | null
+): { x: number; y: number } {
+  const a = String(align || "TOP_LEFT").trim().toUpperCase();
+  if (!a || a === "TOP_LEFT" || parentOw == null || parentOh == null) return { x, y };
+  const pw = Math.floor(parentOw);
+  const ph = Math.floor(parentOh);
+  const pw2 = Math.floor(pw / 2);
+  const ph2 = Math.floor(ph / 2);
+  const wv = Math.floor(wVal);
+  const hv = Math.floor(hVal);
+  const w2 = Math.floor(wVal / 2);
+  const h2 = Math.floor(hVal / 2);
+  if (a === "CENTER") return { x: x + w2 - pw2, y: y + h2 - ph2 };
+  if (a === "TOP_MID") return { x: x + w2 - pw2, y };
+  if (a === "TOP_RIGHT") return { x: x + wv - pw, y };
+  if (a === "LEFT_MID") return { x, y: y + h2 - ph2 };
+  if (a === "RIGHT_MID") return { x: x + wv - pw, y: y + h2 - ph2 };
+  if (a === "BOTTOM_LEFT") return { x, y: y + hv - ph };
+  if (a === "BOTTOM_MID") return { x: x + w2 - pw2, y: y + hv - ph };
+  if (a === "BOTTOM_RIGHT") return { x: x + wv - pw, y: y + hv - ph };
+  return { x, y };
+}
+
+/** Inverse of lvglEmittedOriginInParent: screen-emitted TL in parent content → model top-left x,y. */
+export function modelTopLeftFromEmittedOrigin(
+  lvx: number,
+  lvy: number,
+  wVal: number,
+  hVal: number,
+  align: string,
+  parentOw: number | null,
+  parentOh: number | null
+): { x: number; y: number } {
+  const a = String(align || "TOP_LEFT").trim().toUpperCase();
+  if (!a || a === "TOP_LEFT" || parentOw == null || parentOh == null) return { x: lvx, y: lvy };
+  const pw = Math.floor(parentOw);
+  const ph = Math.floor(parentOh);
+  const pw2 = Math.floor(pw / 2);
+  const ph2 = Math.floor(ph / 2);
+  const wv = Math.floor(wVal);
+  const hv = Math.floor(hVal);
+  const w2 = Math.floor(wVal / 2);
+  const h2 = Math.floor(hVal / 2);
+  if (a === "CENTER") return { x: lvx - w2 + pw2, y: lvy - h2 + ph2 };
+  if (a === "TOP_MID") return { x: lvx - w2 + pw2, y: lvy };
+  if (a === "TOP_RIGHT") return { x: lvx - wv + pw, y: lvy };
+  if (a === "LEFT_MID") return { x: lvx, y: lvy - h2 + ph2 };
+  if (a === "RIGHT_MID") return { x: lvx - wv + pw, y: lvy - h2 + ph2 };
+  if (a === "BOTTOM_LEFT") return { x: lvx, y: lvy - hv + ph };
+  if (a === "BOTTOM_MID") return { x: lvx - w2 + pw2, y: lvy - hv + ph };
+  if (a === "BOTTOM_RIGHT") return { x: lvx - wv + pw, y: lvy - hv + ph };
+  return { x: lvx, y: lvy };
+}
+
+/** Box select / overlap: preview size matches YAML for composites. */
+export function widgetFootprintForSelection(
+  w: WidgetLike,
+  widgetById: Map<string, WidgetLike>,
+  width: number,
+  height: number
+): { ax: number; ay: number; w: number; h: number } {
+  if (w.type === "arc_labeled") {
+    const pinf = parentInfo(w, widgetById, width, height);
+    const m = arcLabeledYamlMetrics(w, pinf.pw, pinf.ph);
+    const pco = parentContentOriginScreen(w, widgetById, width, height);
+    return {
+      ax: pco.ax + m.x_val - m.arc_off_x,
+      ay: pco.ay + m.y_val - m.arc_off_y,
+      w: m.container_w,
+      h: m.container_h,
+    };
+  }
+  if (String(w.type || "").toLowerCase() === "spinbox2") {
+    const { ax, ay } = absPos(w, widgetById, width, height);
+    return { ax, ay, w: w.w || 100, h: spinbox2EmittedRowHeight(w) };
+  }
+  const { ax, ay } = absPos(w, widgetById, width, height);
+  return { ax, ay, w: w.w || 100, h: w.h || 50 };
+}
+
 /** Widget top-left in canvas coords (for rendering and hit-test). */
 export function absPos(
   w: WidgetLike,
@@ -299,46 +393,17 @@ export function absPos(
   const { ax: pax, ay: pay, pw, ph } = parentInfo(w, widgetById, width, height);
   let baseAx = pax;
   let baseAy = pay;
-  let effPw = pw;
-  let effPh = ph;
   if (w.parent_id) {
     const par = widgetById.get(w.parent_id);
     if (par) {
-      const { pl, pr, pt, pb } = padFromStyle(par.style as Record<string, unknown> | undefined);
+      const { pl, pt } = padFromStyle(par.style as Record<string, unknown> | undefined);
       baseAx = pax + pl;
       baseAy = pay + pt;
-      effPw = Math.max(0, pw - pl - pr);
-      effPh = Math.max(0, ph - pt - pb);
     }
   }
   const align = String((w.props || {}).align ?? "TOP_LEFT").toUpperCase();
-  const x = w.x;
-  const y = w.y;
   const ww = w.w || 100;
   const hh = w.h || 50;
-  if (align === "TOP_LEFT" || !align) return { ax: baseAx + x, ay: baseAy + y };
-  const pw2 = effPw / 2;
-  const ph2 = effPh / 2;
-  let ox = 0;
-  let oy = 0;
-  if (align === "CENTER") {
-    ox = x + ww / 2 - pw2;
-    oy = y + hh / 2 - ph2;
-  } else if (align === "TOP_MID") ox = x + ww / 2 - pw2;
-  else if (align === "TOP_RIGHT") ox = x + ww - effPw;
-  else if (align === "LEFT_MID") oy = y + hh / 2 - ph2;
-  else if (align === "RIGHT_MID") {
-    ox = x + ww - effPw;
-    oy = y + hh / 2 - ph2;
-  } else if (align === "BOTTOM_LEFT") oy = y + hh - effPh;
-  else if (align === "BOTTOM_MID") {
-    ox = x + ww / 2 - pw2;
-    oy = y + hh - effPh;
-  } else if (align === "BOTTOM_RIGHT") {
-    ox = x + ww - effPw;
-    oy = y + hh - effPh;
-  }
-  const centerX = baseAx + pw2 + ox;
-  const centerY = baseAy + ph2 + oy;
-  return { ax: centerX - ww / 2, ay: centerY - hh / 2 };
+  const em = lvglEmittedOriginInParent(w.x, w.y, ww, hh, align, pw, ph);
+  return { ax: baseAx + em.x, ay: baseAy + em.y };
 }

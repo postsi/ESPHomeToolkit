@@ -18,9 +18,13 @@ import {
   padFromStyle,
   layoutInt,
   containerTransformKonvaId,
+  lvglEmittedOriginInParent,
+  modelTopLeftFromEmittedOrigin,
+  widgetFootprintForSelection,
 } from "./canvasUtils";
+import { arcLabeledYamlMetrics } from "./arcLabeledYamlMetrics";
+import { spinbox2EmittedRowHeight } from "./fontMetrics";
 import { effectiveLongMode, konvaLongModeTextProps } from "./lvglCanvasParity";
-import { fontPxFromId } from "./fontMetrics";
 
 type Widget = {
   id: string;
@@ -150,10 +154,8 @@ export default function Canvas({
     const minY = Math.min(startY, endY);
     const maxY = Math.max(startY, endY);
     const topLevel = widgets.filter((w) => !w.parent_id);
-    const items = topLevel.map((w) => {
-      const { ax, ay } = absPos(w);
-      return { id: w.id, ax, ay, w: w.w || 100, h: w.h || 50 };
-    });
+    const byId = new Map(widgets.map((w) => [w.id, w]));
+    const items = topLevel.map((w) => widgetFootprintForSelection(w, byId, width, height));
     const idsInBox = widgetsInSelectionRect(minX, maxX, minY, maxY, items);
     setSelectionBox(null);
     if (idsInBox.length > 0) {
@@ -162,7 +164,7 @@ export default function Canvas({
     } else {
       onSelectNone();
     }
-  }, [selectionBox, widgets, onSelect, onSelectNone]);
+  }, [selectionBox, widgets, onSelect, onSelectNone, width, height]);
 
   React.useEffect(() => {
     if (!selectionBox) return;
@@ -283,14 +285,53 @@ export default function Canvas({
     isSel: boolean,
     opts?: { localPosition?: boolean; contentPad?: { x: number; y: number } }
   ) => {
-    const padOff = opts?.contentPad ?? { x: 0, y: 0 };
-    const { ax, ay } = opts?.localPosition
-      ? { ax: w.x + padOff.x, ay: w.y + padOff.y }
-      : absPos(w);
-    const override = simulationMode ? { ...liveOverrides[w.id], ...simOverrides?.[w.id] } : liveOverrides[w.id];
-    // Preview targets LVGL parity via lvglCanvasParity + shared font resolver (Montserrat / uploaded TTF).
+    const pinf0 = parentInfoUtil(w, widgetById, width, height);
+    const arcYamlMetrics = w.type === "arc_labeled" ? arcLabeledYamlMetrics(w, pinf0.pw, pinf0.ph) : null;
     const p = w.props || {};
     const s = w.style || {};
+    const alignStr = String(p.align ?? "TOP_LEFT").toUpperCase();
+    const ww0 = w.w || 100;
+    const hh0 = w.h || 50;
+    const padOff = opts?.contentPad ?? { x: 0, y: 0 };
+    let ax: number;
+    let ay: number;
+    if (opts?.localPosition) {
+      if (arcYamlMetrics) {
+        const em = lvglEmittedOriginInParent(w.x, w.y, ww0, hh0, alignStr, pinf0.pw, pinf0.ph);
+        ax = padOff.x + em.x - arcYamlMetrics.arc_off_x;
+        ay = padOff.y + em.y - arcYamlMetrics.arc_off_y;
+      } else {
+        ax = w.x + padOff.x;
+        ay = w.y + padOff.y;
+      }
+    } else {
+      const ap = absPos(w);
+      ax = ap.ax;
+      ay = ap.ay;
+      if (arcYamlMetrics) {
+        const pco = parentContentOriginScreenUtil(w, widgetById, width, height);
+        ax = pco.ax + arcYamlMetrics.x_val - arcYamlMetrics.arc_off_x;
+        ay = pco.ay + arcYamlMetrics.y_val - arcYamlMetrics.arc_off_y;
+      }
+    }
+    const arcInnerOffX = arcYamlMetrics?.arc_off_x ?? 0;
+    const arcInnerOffY = arcYamlMetrics?.arc_off_y ?? 0;
+    /** Screen top-left of draggable/transform node → model x,y (accounts for LVGL align + arc_labeled YAML wrapper). */
+    const modelXYFromScreenTL = (nx: number, ny: number) => {
+      const pco = parentContentOrigin(w);
+      const alignM = String((w.props || {}).align ?? "TOP_LEFT").toUpperCase();
+      const wwM = w.w || 100;
+      const hhM = w.h || 50;
+      let lvx = nx - pco.ax;
+      let lvy = ny - pco.ay;
+      if (w.type === "arc_labeled" && arcYamlMetrics) {
+        lvx += arcYamlMetrics.arc_off_x;
+        lvy += arcYamlMetrics.arc_off_y;
+      }
+      return modelTopLeftFromEmittedOrigin(lvx, lvy, wwM, hhM, alignM, pinf0.pw, pinf0.ph);
+    };
+    const override = simulationMode ? { ...liveOverrides[w.id], ...simOverrides?.[w.id] } : liveOverrides[w.id];
+    // Preview targets LVGL parity via lvglCanvasParity + shared font resolver (Montserrat / uploaded TTF).
     const title = (override?.text !== undefined ? override.text : (p.text ?? p.label ?? p.name ?? w.type)) as string;
 
     // Style helpers (schema-driven properties land in `style`). Support LVGL extras:
@@ -338,14 +379,10 @@ export default function Canvas({
     const outlinePad = Number(s.outline_pad ?? 0);
     const outlineColor = toFillColor(s.outline_color, "#374151");
     const outlineOpa = Number(s.outline_opa ?? 0) / 100;
-    // Spinbox2: row height must match views.py::_emit_spinbox2_yaml (font id + border default 1), not previewFont() size.
     const isSpinbox2Widget = String(w.type || "").toLowerCase() === "spinbox2";
-    const sbBorderForRow = Number(s.border_width ?? p.border_width ?? 1);
-    const sbEdgeForRow = Math.max(0, sbBorderForRow, outlineW);
-    const sbFontPxForRow = fontPxFromId(fontId, 14);
-    const spinbox2LayoutH = isSpinbox2Widget ? Math.max(w.h, sbFontPxForRow + 16 + 2 * sbEdgeForRow) : w.h;
-    const layoutW = w.w;
-    const layoutH = isSpinbox2Widget ? spinbox2LayoutH : w.h;
+    const spinbox2LayoutH = isSpinbox2Widget ? spinbox2EmittedRowHeight(w) : w.h;
+    const layoutW = arcYamlMetrics ? arcYamlMetrics.container_w : w.w;
+    const layoutH = arcYamlMetrics ? arcYamlMetrics.container_h : isSpinbox2Widget ? spinbox2LayoutH : w.h;
     const radius = Math.min(layoutInt(radiusRaw), Math.floor(layoutW / 2), Math.floor(layoutH / 2));
     const transformAngle = Number(s.transform_angle ?? 0);
     const transformZoom = Number(s.transform_zoom ?? 100) / 100;
@@ -417,8 +454,8 @@ export default function Canvas({
         lastSimValueRef.current[w.id] = rounded;
         onSimulateUpdate(w.id, { value: rounded });
       } else if (w.type === "arc" || w.type === "arc_labeled") {
-        const cx = ax + w.w / 2;
-        const cy = ay + w.h / 2;
+        const cx = ax + arcInnerOffX + w.w / 2;
+        const cy = ay + arcInnerOffY + w.h / 2;
         const angle = Math.atan2(pos.y - cy, pos.x - cx) * (180 / Math.PI);
         const pointerDeg = angle < 0 ? angle + 360 : angle;
         const rot = Number(p.rotation ?? 0);
@@ -509,10 +546,7 @@ export default function Canvas({
           const nx = alt ? node.x() : snap(node.x(), gridSize);
           const ny = alt ? node.y() : snap(node.y(), gridSize);
 
-          // For parented widgets, node.x/node.y are absolute; store coords relative to parent's content box (LVGL).
-          const pco = parentContentOrigin(w);
-          const modelX = nx - pco.ax;
-          const modelY = ny - pco.ay;
+          const { x: modelX, y: modelY } = modelXYFromScreenTL(nx, ny);
 
           const start = dragStartRef.current[w.id] || { x: w.x, y: w.y };
           const dx = modelX - start.x;
@@ -572,10 +606,16 @@ export default function Canvas({
             ];
             onChangeMany(patches, true);
           } else {
-            const pco = parentContentOrigin(w);
-            const modelX = xx - pco.ax;
-            const modelY = yy - pco.ay;
-            onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
+            const { x: modelX, y: modelY } = modelXYFromScreenTL(xx, yy);
+            const patch: Partial<Widget> = { x: modelX, y: modelY };
+            if (w.type === "arc_labeled" && arcYamlMetrics && baseW > 0 && baseH > 0) {
+              patch.w = Math.max(20, Math.round((w.w || 100) * (ww / baseW)));
+              patch.h = Math.max(20, Math.round((w.h || 50) * (hh / baseH)));
+            } else {
+              patch.w = ww;
+              patch.h = hh;
+            }
+            onChangeMany([{ id: w.id, patch }], true);
           }
           setResizeAtLimit(false);
         }}
@@ -738,9 +778,7 @@ export default function Canvas({
               const alt = !!e.evt.altKey;
               const nx = alt ? dragNode.x() : snap(dragNode.x(), gridSize);
               const ny = alt ? dragNode.y() : snap(dragNode.y(), gridSize);
-              const pco = parentContentOrigin(w);
-              const modelX = nx - pco.ax;
-              const modelY = ny - pco.ay;
+              const { x: modelX, y: modelY } = modelXYFromScreenTL(nx, ny);
               const start = dragStartRef.current[w.id] || { x: w.x, y: w.y };
               const dx = modelX - start.x;
               const dy = modelY - start.y;
@@ -825,10 +863,16 @@ export default function Canvas({
                   ];
                   onChangeMany(patches, true);
                 } else {
-                  const pco = parentContentOrigin(w);
-                  const modelX = xx - pco.ax;
-                  const modelY = yy - pco.ay;
-                  onChangeMany([{ id: w.id, patch: { x: modelX, y: modelY, w: ww, h: hh } }], true);
+                  const { x: modelX, y: modelY } = modelXYFromScreenTL(xx, yy);
+                  const patch: Partial<Widget> = { x: modelX, y: modelY };
+                  if (w.type === "arc_labeled" && arcYamlMetrics && baseW > 0 && baseH > 0) {
+                    patch.w = Math.max(20, Math.round((w.w || 100) * (ww / baseW)));
+                    patch.h = Math.max(20, Math.round((w.h || 50) * (hh / baseH)));
+                  } else {
+                    patch.w = ww;
+                    patch.h = hh;
+                  }
+                  onChangeMany([{ id: w.id, patch }], true);
                 }
                 const innerDone = containerShellInnerRefs.current.get(w.id);
                 innerDone?.scaleX(1);
@@ -1030,8 +1074,8 @@ export default function Canvas({
 
     if (type.includes("arc") || type.includes("gauge") || type === "meter") {
       // LVGL/Canvas convention: 0°=right, 90°=bottom, 180°=left, 270°=top; angles increase clockwise.
-      const cx = ax + w.w / 2;
-      const cy = ay + w.h / 2;
+      const cx = ax + arcInnerOffX + w.w / 2;
+      const cy = ay + arcInnerOffY + w.h / 2;
       // Use arc_width from props when set (e.g. WiFi fan rings); else default track thickness.
       const arcWidthProp = Number(p.arc_width ?? 0);
       const trackW = arcWidthProp > 0

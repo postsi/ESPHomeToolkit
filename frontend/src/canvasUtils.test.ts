@@ -331,14 +331,15 @@ describe("canvasUtils", () => {
       expect(pos).toEqual({ ax: 22, ay: 28 });
     });
 
-    it("CENTER align uses parent position and child size for placement", () => {
+    it("CENTER align matches compiler (parent outer w×h, child in content space)", () => {
       const root: WidgetLike = { id: "r", x: 100, y: 100, w: 200, h: 100 };
       const child: WidgetLike = { id: "c", x: 0, y: 0, w: 80, h: 40, parent_id: "r", props: { align: "CENTER" } };
       byId.set("r", root);
       byId.set("c", child);
       const pos = absPos(child, byId, w, h);
-      expect(pos.ax).toBe(100);
-      expect(pos.ay).toBe(100);
+      // Emitted x = 0 + 40 - 100 = -60, y = 0 + 20 - 50 = -30 relative to parent content; parent TL (100,100) → (40, 70).
+      expect(pos.ax).toBe(40);
+      expect(pos.ay).toBe(70);
     });
   });
 });

@@ -9,17 +9,59 @@ export async function listRecipes(): Promise<any[]> {
 
 export type CompileWarning = { type: string; section?: string; widget_id?: string };
 
-export type CompileResult = { yaml: string; warnings?: CompileWarning[] };
+export type LayoutAuditWidget = {
+  id: string;
+  type: string;
+  parent_id?: string;
+  model_rect: { x: number; y: number; w: number; h: number };
+  yaml_rect_page: { x: number; y: number; w: number; h: number };
+  note?: string | null;
+};
 
-export async function compileYaml(deviceId: string, project?: any): Promise<CompileResult> {
+export type LayoutAuditResult = {
+  page_index: number;
+  display: { w: number; h: number };
+  widgets: LayoutAuditWidget[];
+  overlaps: Array<{ a: string; b: string; intersection_px: number }>;
+  notes: string[];
+  error?: string;
+};
+
+export type CompileResult = {
+  yaml: string;
+  warnings?: CompileWarning[];
+  layout_audit?: LayoutAuditResult | null;
+};
+
+export type CompileYamlOptions = {
+  /** Ask server for page-absolute YAML footprints + overlap pairs (same math as compiler). */
+  includeLayoutAudit?: boolean;
+  layoutAuditPage?: number;
+};
+
+export async function compileYaml(
+  deviceId: string,
+  project?: any,
+  opts?: CompileYamlOptions
+): Promise<CompileResult> {
+  const body: Record<string, unknown> = {};
+  if (project) body.project = project;
+  if (opts?.includeLayoutAudit) {
+    body.include_layout_audit = true;
+    body.layout_audit_page = opts.layoutAuditPage ?? 0;
+  }
   const r = await fetch(`/api/esptoolkit/devices/${deviceId}/compile`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(project ? { project } : {}),
+    body: JSON.stringify(Object.keys(body).length ? body : project ? { project } : {}),
   });
   if (!r.ok) throw new Error(`compile failed: ${r.status}`);
   const data = await r.json();
-  return { yaml: data.yaml ?? "", warnings: data.warnings ?? [] };
+  return {
+    yaml: data.yaml ?? "",
+    warnings: data.warnings ?? [],
+    layout_audit: data.layout_audit ?? undefined,
+  };
 }
 
 /** Remove LVGL component blocks that reference deleted widgets. Returns cleaned project and list of removed refs. */
